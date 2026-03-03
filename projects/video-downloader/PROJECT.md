@@ -8,7 +8,7 @@ A professional media downloader UI built for the **Energidi** platform. Allows u
 
 ## Status
 
-`IN PROGRESS` — UI prototype complete. Backend integration pending.
+`IN PROGRESS` — UI prototype v5 complete. Backend integration pending.
 
 ---
 
@@ -26,8 +26,8 @@ A professional media downloader UI built for the **Energidi** platform. Allows u
 
 ## Features Completed
 
-- [x] 3-column layout — Preview / Config / Queue
-- [x] Sticky topbar with nav, status pill, queue counter
+- [x] 2-column layout — Preview / Config (queue removed in v5)
+- [x] Sticky topbar with nav and status pill
 - [x] URL input bar with shake animation on empty submit
 - [x] Analyze button with 2-phase loading (preview → formats)
 - [x] Skeleton shimmer loader for resolution grid
@@ -37,17 +37,16 @@ A professional media downloader UI built for the **Energidi** platform. Allows u
 - [x] Codec badge per resolution button (AV1, H.264, etc.)
 - [x] Download mode tabs — Video + Audio / Audio Only / Clip / Trim
 - [x] Clip mode — highlights Time Range card with blue glow + pulsing ACTIVE badge
+- [x] Video editor trimmer — draggable start/end handles over thumbnail strip with live timecodes and ruler
 - [x] Format chips — dynamic per mode (video vs audio formats)
-- [x] Time range inputs (Start / End)
 - [x] Output section — folder path, filename, toggles (Metadata / Subtitles / Thumbnail / Chapters)
-- [x] Queue panel with status dots (done / pending / active)
-- [x] Storage card with usage bar
+- [x] Toggle tooltips — each option explained inline via hover
 - [x] Download action bar — real-time size + label updates on selection change
 - [x] Live progress card — speed, ETA, downloaded, total
 - [x] Progress completes with green success state
 - [x] "Powered by Energidi" branded footer with session counter, engine version, source count
+- [x] Improved text contrast throughout (muted colors legible on dark background)
 - [x] Responsive breakpoints (1100px, 900px)
-- [x] 4 demo videos cycling via "Try demo" button
 
 ---
 
@@ -64,7 +63,7 @@ A professional media downloader UI built for the **Energidi** platform. Allows u
 
 ## Pending / Next Steps
 
-- [ ] Python backend integration (yt-dlp extract_info() → real format list)
+- [ ] Python backend integration (yt-dlp `extract_info()` → real format list)
 - [ ] Real URL parsing and platform detection
 - [ ] FFmpeg post-processing (merge streams, trim clips)
 - [ ] Settings page (theme, default path, concurrent downloads)
@@ -77,19 +76,22 @@ A professional media downloader UI built for the **Energidi** platform. Allows u
 
 ## File Reference
 
-| File                  | Description                        |
-|-----------------------|------------------------------------|
-| `downloader_v4.html`  | Latest UI build (current)          |
-| `downloader_v3.html`  | Previous iteration (3-col layout)  |
+| File                  | Description                              |
+|-----------------------|------------------------------------------|
+| `downloader_v5.html`  | Latest UI build (current)                |
+| `downloader_v4.html`  | 3-col layout with queue + storage        |
+| `downloader_v3.html`  | Previous iteration (3-col layout)        |
 
 ---
 
 ## Key Decisions
 
-- Resolution grid is data-driven — maps 1:1 to yt-dlp's formats array in the real backend.
-- "Powered by Energidi" in footer and status pill — all yt-dlp branding replaced.
-- Clip mode activates the Time Range section visually to guide user attention.
-- Two-phase analyze — preview loads first (~350ms), then format probe completes (~1.3s), mimicking real network latency.
+- **Resolution grid is data-driven** — maps 1:1 to yt-dlp's `formats` array in the real backend.
+- **"Powered by Energidi"** in footer and status pill — all yt-dlp branding replaced.
+- **Clip mode** activates the Time Range section visually to guide user attention.
+- **Video editor trimmer** replaces plain text inputs — draggable handles over a thumbnail strip with live timecodes.
+- **Two-phase analyze** — preview loads first (~350ms), then format probe completes (~1.3s), mimicking real network latency.
+- **Queue and Storage removed in v5** — simplified to focus on single-download flow.
 
 ---
 
@@ -97,7 +99,7 @@ A professional media downloader UI built for the **Energidi** platform. Allows u
 
 - Fonts loaded from Google Fonts CDN — requires internet for correct rendering.
 - All colors use CSS custom properties for easy theming.
-- No framework dependencies — ships as a single .html file.
+- No framework dependencies — ships as a single `.html` file.
 
 ---
 
