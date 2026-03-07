@@ -1,0 +1,8 @@
+{
+  "name": "risk-scan",
+  "description": "Scan a Claude Code skill for security risks before or after installation",
+  "version": "1.0.0",
+  "author": {
+    "name": "Gidi Abramovich"
+  }
+}
