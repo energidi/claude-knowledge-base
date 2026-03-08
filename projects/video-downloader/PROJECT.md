@@ -8,7 +8,7 @@ A professional media downloader built for the **Energidi** platform. Allows user
 
 ## Status
 
-`IN PROGRESS` — UI v5 + Python backend operational. PyInstaller packaging pending.
+`COMPLETE` — UI v5 + Python backend operational. PyInstaller build config ready with icon and windowless exe.
 
 ---
 
@@ -22,7 +22,7 @@ A professional media downloader built for the **Energidi** platform. Allows user
 | Backend    | Python + FastAPI + uvicorn        |
 | Downloader | yt-dlp                            |
 | Processing | FFmpeg                            |
-| Packaging  | PyInstaller (planned)             |
+| Packaging  | PyInstaller                       |
 
 ---
 
@@ -62,7 +62,7 @@ Server binds to `127.0.0.1` only. Never exposed to the network.
 - [x] 2-column layout — Preview / Config (queue removed in v5)
 - [x] Sticky topbar with nav and Energidi status pill
 - [x] URL input bar with shake animation on empty submit
-- [x] Analyze button — calls real `/analyze` endpoint (previously 2-phase mock)
+- [x] Analyze button — calls real `/analyze` endpoint
 - [x] Skeleton shimmer loader during analysis
 - [x] Dynamic resolution grid — availability driven by yt-dlp format list
 - [x] Unavailable resolutions shown as disabled/dashed with tooltip
@@ -88,28 +88,18 @@ Server binds to `127.0.0.1` only. Never exposed to the network.
 - [x] `main.py` — entry point: finds free port, opens browser, starts uvicorn
 - [x] `start.bat` — double-click launcher, starts server minimized, opens browser automatically
 - [x] `requirements.txt` — pinned dependencies
-- [x] `build.spec` — PyInstaller config for single-file `FETCH.exe`
+- [x] `build.spec` — PyInstaller config for single-file `FETCH.exe` (windowless, with icon)
+- [x] `assets/fetch.ico` — app icon, 16/32/48px, auto-generated (no external dependencies)
 - [x] Real platform detection from URL
-- [x] Real resolution + codec extraction from yt-dlp `formats` array
+- [x] Real resolution + codec extraction from yt-dlp formats array
 - [x] Audio-only detection (e.g. SoundCloud forces Audio Only mode)
-- [x] Format selector prefers `mp4+m4a` streams — prevents leftover `.webm` fragments
+- [x] Format selector prefers mp4+m4a streams — prevents leftover `.webm` fragments
 - [x] FFmpeg post-processing: container conversion, audio extraction, metadata embed, thumbnail embed
+- [x] Subtitle embed via `--embed-subs` — subtitles written into container, no stray `.vtt` files
 - [x] Clip/trim via yt-dlp `download_ranges` + `force_keyframes_at_cuts`
 - [x] Thread-safe download registry with per-ID progress state
-- [x] Progress hook supports both old and new yt-dlp key formats
-- [x] Native Windows folder picker via Shell32 `ctypes` — no PowerShell, no tkinter dependency
+- [x] Native Windows folder picker via Shell32 ctypes — no PowerShell, no tkinter dependency
 - [x] Subtitle errors (429 rate limit) handled silently — do not abort download
-
----
-
-## Demo Sources (Simulated — pre-backend)
-
-| Platform    | Max Resolution | Notes                       |
-|-------------|---------------|-----------------------------|
-| YouTube     | 4K (2160p)    | All 5 resolutions available |
-| Vimeo       | 1080p         | 4K and 360p unavailable     |
-| Twitter / X | 720p          | Capped by platform          |
-| SoundCloud  | Audio only    | Forces Audio Only mode      |
 
 ---
 
@@ -120,29 +110,28 @@ Server binds to `127.0.0.1` only. Never exposed to the network.
 - [ ] History tab with persistent download log
 - [ ] Concurrent queue processing with concurrency control
 - [ ] Error states for geo-blocked, private, and rate-limited videos
-- [ ] PyInstaller packaging for Windows distribution (`FETCH.exe`)
 
 ---
 
 ## File Reference
 
-| File                 | Description                                       |
-|----------------------|---------------------------------------------------|
-| `downloader_v5.html` | Latest UI build — wired to real backend (current) |
-| `downloader.py`      | yt-dlp + FFmpeg wrapper, all download logic       |
-| `server.py`          | FastAPI server, all HTTP routes + SSE             |
-| `main.py`            | Entry point — starts server, opens browser        |
-| `start.bat`          | Double-click launcher — starts server minimized   |
-| `requirements.txt`   | Python dependencies                               |
-| `build.spec`         | PyInstaller config for FETCH.exe                  |
-| `downloader_v4.html` | 3-col layout with queue + storage                 |
-| `downloader_v3.html` | Previous iteration (3-col layout)                 |
+| File                      | Description                                       |
+|---------------------------|---------------------------------------------------|
+| `downloader_v5.html`      | Latest UI build — wired to real backend (current) |
+| `downloader.py`           | yt-dlp + FFmpeg wrapper, all download logic       |
+| `server.py`               | FastAPI server, all HTTP routes + SSE             |
+| `main.py`                 | Entry point — starts server, opens browser        |
+| `start.bat`               | Double-click launcher — starts server minimized   |
+| `requirements.txt`        | Python dependencies                               |
+| `build.spec`              | PyInstaller config for FETCH.exe                  |
+| `assets/fetch.ico`        | App icon (16/32/48px BMP ICO, FETCH branding)     |
+| `assets/generate_icon.py` | Icon generator — run once, no external deps       |
 
 ---
 
 ## Key Decisions
 
-- **Resolution grid is data-driven** — maps 1:1 to yt-dlp's `formats` array. No hardcoded resolutions.
+- **Resolution grid is data-driven** — maps 1:1 to yt-dlp formats array. No hardcoded resolutions.
 - **Format selector prefers mp4+m4a** — avoids WebM intermediates, single output file guaranteed.
 - **"Powered by Energidi"** in footer and status pill — all yt-dlp branding replaced.
 - **FastAPI + SSE** for progress streaming — no polling, no WebSockets needed.
@@ -152,6 +141,9 @@ Server binds to `127.0.0.1` only. Never exposed to the network.
 - **Queue and Storage removed in v5** — simplified to focus on single-download flow.
 - **Folder picker uses Shell32 ctypes** — no PowerShell or tkinter dependency, works under corporate security restrictions.
 - **No framework dependencies** — UI ships as a single `.html` file.
+- **Subtitles use `--embed-subs`** — embedded directly into the container, no separate `.vtt` files created.
+- **Windowless exe** — `console=False` in PyInstaller config hides the terminal in the distributed build.
+- **Icon generated programmatically** — `generate_icon.py` uses only Python stdlib (struct), no Pillow required.
 
 ---
 
@@ -171,14 +163,24 @@ Double-click start.bat
 # Or from terminal: py main.py
 ```
 
+### Build FETCH.exe
+
+```
+# 1. Generate the icon (one-time)
+py assets/generate_icon.py
+
+# 2. Build
+pyinstaller build.spec
+# Output: dist/FETCH.exe
+```
+
 ---
 
 ## Notes
 
 - Fonts loaded from Google Fonts CDN — requires internet for correct rendering.
 - All colors use CSS custom properties for easy theming.
-- To stop the server: Task Manager → find `py.exe` → End Task.
-- `console=True` in `build.spec` — set to `False` to hide terminal in release build.
+- To stop the server: Task Manager → find py.exe → End Task.
 
 ---
 
