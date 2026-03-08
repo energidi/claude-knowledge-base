@@ -150,10 +150,35 @@ async def browse_folder():
     return {"path": path}
 
 
+class FramesRequest(BaseModel):
+    url: str
+    count: int = 8
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        v = v.strip()
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
+
+
 @app.post("/analyze")
 def analyze(req: AnalyzeRequest):
     try:
         return downloader.analyze(req.url)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@app.post("/frames")
+async def get_frames(req: FramesRequest):
+    try:
+        loop = asyncio.get_event_loop()
+        frames = await loop.run_in_executor(
+            None, lambda: downloader.extract_frames(req.url, req.count)
+        )
+        return {"frames": frames}
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
 

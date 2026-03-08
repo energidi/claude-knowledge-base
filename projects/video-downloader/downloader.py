@@ -189,6 +189,72 @@ def analyze(url: str) -> dict:
     }
 
 
+# ── Frame extraction ──────────────────────────────────────────────────────────
+
+def _pick_stream_url(info: dict) -> Optional[str]:
+    """Return a direct video stream URL from yt-dlp info dict."""
+    if info.get("url"):
+        return info["url"]
+    for f in reversed(info.get("formats") or []):
+        if f.get("vcodec") not in (None, "none") and f.get("url"):
+            return f["url"]
+    return None
+
+
+def extract_frames(url: str, count: int = 8) -> list:
+    """Extract evenly-spaced preview frames. Returns list of base64 JPEG data URIs."""
+    import subprocess, base64, tempfile, shutil as _shutil
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if _shutil.which("ffmpeg") is None:
+        return []
+
+    ydl_opts = {
+        "quiet": True, "no_warnings": True, "skip_download": True, "noplaylist": True,
+        "format": "best[height<=480][ext=mp4]/best[height<=480]/best",
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    duration = float(info.get("duration") or 0)
+    if duration < 1:
+        return []
+
+    stream_url = _pick_stream_url(info)
+    if not stream_url:
+        return []
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="fetch_frames_"))
+
+    def _one(i: int, t: float) -> tuple:
+        out = tmp_dir / f"f{i:02d}.jpg"
+        try:
+            subprocess.run(
+                ["ffmpeg", "-ss", f"{t:.2f}", "-i", stream_url,
+                 "-frames:v", "1", "-vf", "scale=160:-1",
+                 "-q:v", "5", str(out), "-y", "-hide_banner", "-loglevel", "error"],
+                timeout=15, check=False,
+            )
+            if out.exists():
+                return i, "data:image/jpeg;base64," + base64.b64encode(out.read_bytes()).decode()
+        except Exception:
+            pass
+        return i, ""
+
+    timestamps = [duration * (i + 0.5) / count for i in range(count)]
+    results = [""] * count
+    try:
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futures = {ex.submit(_one, i, t): i for i, t in enumerate(timestamps)}
+            for fut in as_completed(futures):
+                idx, data = fut.result()
+                results[idx] = data
+    finally:
+        _shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return results
+
+
 # ── Download registry ─────────────────────────────────────────────────────────
 
 _downloads: dict[str, dict] = {}

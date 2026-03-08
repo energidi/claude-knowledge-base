@@ -105,7 +105,8 @@ Server binds to `127.0.0.1` only. Never exposed to the network.
 
 ## Pending / Next Steps
 
-- [ ] FFmpeg must be installed and on PATH for merging and trimming to work
+- [x] FFmpeg installed on PATH (user ran `winget install Gyan.FFmpeg`)
+- [x] **Trimmer scrubber frame preview** — real video frames extracted via ffmpeg (4 parallel workers, 8 frames), served as base64 JPEG via `POST /frames`. Strip updates from placeholder to real frames after analyze. Scrub preview popup appears above handle while dragging, showing the frame at the current timecode.
 - [ ] Settings page (theme, default output path, concurrent downloads)
 - [ ] History tab with persistent download log
 - [ ] Concurrent queue processing with concurrency control

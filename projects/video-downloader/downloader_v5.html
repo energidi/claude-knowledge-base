@@ -145,6 +145,10 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .trim-handle.dragging .handle-tooltip{opacity:1}
 .trimmer-ruler{display:flex;justify-content:space-between;margin-top:4px}
 .ruler-label{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted)}
+.scrub-preview{position:absolute;bottom:calc(100% + 10px);transform:translateX(-50%);width:140px;border-radius:7px;overflow:hidden;opacity:0;pointer-events:none;transition:opacity .12s;box-shadow:0 4px 16px rgba(0,0,0,.7);border:1px solid var(--border2);z-index:20;background:var(--surface2)}
+.scrub-preview img{width:100%;display:block}
+.scrub-preview-tc{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;color:var(--text);text-align:center;padding:4px 0;background:var(--surface3)}
+.scrub-preview.visible{opacity:1}
 .out-path{display:flex;gap:8px;margin-bottom:10px}
 .path-box{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 14px;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted2);display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden}
 .browse-btn{background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:10px 16px;color:var(--text);font-family:'Syne',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
@@ -281,6 +285,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
           </div>
           <div class="trimmer-track" id="trimmerTrack">
             <div class="thumb-strip" id="thumbStrip"></div>
+            <div class="scrub-preview" id="scrubPreview"><img id="scrubPreviewImg" src="" alt=""><div class="scrub-preview-tc" id="scrubPreviewTC">00:00</div></div>
             <div class="trim-overlay-left" id="overlayLeft" style="width:0%"></div>
             <div class="trim-overlay-right" id="overlayRight" style="width:0%"></div>
             <div class="trim-selection" id="trimSelection" style="left:0%;width:100%"></div>
@@ -322,7 +327,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
             <div class="tog" onclick="toggleMe(this)" data-key="subtitles">
               <div class="tog-track"><div class="tog-thumb"></div></div>
               <div class="tog-lbl">Subtitles</div><div class="tog-info">?</div>
-              <div class="tog-tooltip">Downloads available captions or subtitles (.srt / .vtt) alongside the video file.</div>
+              <div class="tog-tooltip">Downloads available captions or subtitles as a separate .srt file alongside the video.</div>
             </div>
             <div class="tog" onclick="toggleMe(this)" data-key="thumbnail">
               <div class="tog-track"><div class="tog-thumb"></div></div>
@@ -390,7 +395,7 @@ window.addEventListener('DOMContentLoaded', () => { loadDefaultPath(); setTimeou
 
 let currentVideo = null, currentMode = 'video';
 let trimStartPct = 0, trimEndPct = 100, totalDurationSec = 0;
-let sessionDlCount = 0;
+let sessionDlCount = 0, scrubFrames = [];
 
 function secsToTC(s) {
   s = Math.round(Math.max(0, s));
@@ -436,6 +441,7 @@ async function analyzeUrl() {
     else { tabs.forEach((t,i)=>t.classList.toggle('active',i===0)); currentMode='video'; setClipHighlight(false); }
     populateResolutions(data);
     initTrimmer(data.duration_sec, data.thumbnail);
+    loadFrames(val);
     document.getElementById('dlRow').style.display = 'flex';
     updateDlBar();
     document.getElementById('hgPanel').classList.add('visible');
@@ -517,7 +523,8 @@ function updateTrimmerUI() {
 }
 
 function initTrimmer(dur, thumb) {
-  totalDurationSec=dur||0; trimStartPct=0; trimEndPct=100;
+  totalDurationSec=dur||0; trimStartPct=0; trimEndPct=100; scrubFrames=[];
+  document.getElementById('scrubPreview').classList.remove('visible');
   document.getElementById('rulerEnd').textContent = secsToTC(dur);
   document.getElementById('rulerMid').textContent = secsToTC(dur/2);
   const strip=document.getElementById('thumbStrip'); strip.innerHTML='';
@@ -530,6 +537,24 @@ function initTrimmer(dur, thumb) {
   setupDrag('handleStart','start'); setupDrag('handleEnd','end');
 }
 
+async function loadFrames(url) {
+  scrubFrames = [];
+  const strip = document.getElementById('thumbStrip');
+  try {
+    const res = await fetch(`${API}/frames`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url, count:8})});
+    if (!res.ok) return;
+    const {frames} = await res.json();
+    scrubFrames = frames.filter(Boolean);
+    if (scrubFrames.length === 0) return;
+    strip.innerHTML = '';
+    frames.forEach(f => {
+      const d = document.createElement('div'); d.className = 'thumb-frame';
+      if (f) d.style.backgroundImage = `url(${f})`;
+      strip.appendChild(d);
+    });
+  } catch(e) { /* silent — keep placeholder */ }
+}
+
 function setupDrag(id, which) {
   const handle=document.getElementById(id), track=document.getElementById('trimmerTrack');
   function drag(x) {
@@ -538,12 +563,23 @@ function setupDrag(id, which) {
     if (which==='start') trimStartPct=Math.min(pct,trimEndPct-2);
     else trimEndPct=Math.max(pct,trimStartPct+2);
     updateTrimmerUI();
+    const activePct = which==='start' ? trimStartPct : trimEndPct;
+    const preview = document.getElementById('scrubPreview');
+    preview.style.left = activePct + '%';
+    const img = document.getElementById('scrubPreviewImg');
+    if (scrubFrames.length > 0) {
+      const idx = Math.min(scrubFrames.length-1, Math.round((activePct/100)*(scrubFrames.length-1)));
+      img.style.display = 'block'; img.src = scrubFrames[idx];
+    } else { img.style.display = 'none'; }
+    document.getElementById('scrubPreviewTC').textContent = secsToTC(totalDurationSec * activePct / 100);
+    preview.classList.add('visible');
   }
+  const hidePrev = () => document.getElementById('scrubPreview').classList.remove('visible');
   handle.onmousedown = e => { e.preventDefault(); handle.classList.add('dragging');
-    const mm=ev=>drag(ev.clientX), mu=()=>{handle.classList.remove('dragging');document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);};
+    const mm=ev=>drag(ev.clientX), mu=()=>{handle.classList.remove('dragging');hidePrev();document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);};
     document.addEventListener('mousemove',mm); document.addEventListener('mouseup',mu); };
   handle.ontouchstart = e => { e.preventDefault(); handle.classList.add('dragging');
-    const tm=ev=>drag(ev.touches[0].clientX), te=()=>{handle.classList.remove('dragging');document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',te);};
+    const tm=ev=>drag(ev.touches[0].clientX), te=()=>{handle.classList.remove('dragging');hidePrev();document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',te);};
     document.addEventListener('touchmove',tm,{passive:false}); document.addEventListener('touchend',te); };
 }
 
