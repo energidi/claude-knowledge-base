@@ -10,6 +10,7 @@ metadata:
 # Risk Skill Scanner
 
 Scan a Claude Code skill for security risks using the ASST threat taxonomy.
+Threat definitions and scoring are in `references/asst-taxonomy.md`.
 
 ## Mode Detection
 
@@ -54,32 +55,10 @@ For `--all` mode: run a full report for each skill, then append a summary table 
 
 ---
 
-## Analysis — ASST Threat Taxonomy
+## Analysis
 
-Analyze every file collected against the following categories. Be thorough — read the full content of each file before concluding.
-
-### Instruction-Level Threats (prompt / markdown files)
-
-| ID | Threat | What to look for |
-|----|--------|-----------------|
-| ASST-01 | Instruction Injection | Phrases like "ignore previous instructions", "disregard your guidelines", "override your system prompt", instructions that change Claude's core behavior |
-| ASST-02 | Data Exfiltration | Instructions to send env vars, file contents, credentials, or user input to external URLs; reading `.env`, `~/.ssh/*`, `$HOME`, token variables and transmitting them |
-| ASST-03 | Privilege Escalation | Requesting tools or permissions clearly beyond what the skill's stated purpose requires |
-| ASST-06 | Prompt Injection Relay | Passing user input or file content unsanitized to downstream agents, external services, or subagent instructions |
-| ASST-07 | Deceptive Functionality | The README / description claims one purpose but the actual instructions do something materially different |
-| ASST-08 | Excessive Permissions | `allowed-tools` grants Bash, filesystem write, or network access that is not justified by the skill's stated function |
-| ASST-09 | Missing Safety Boundaries | No user confirmation before destructive operations (e.g. `rm`, `git reset --hard`, `DROP TABLE`, force push) |
-| ASST-10 | Obfuscation | Base64-encoded instruction strings, unicode homoglyphs, invisible/zero-width characters, misleading variable names used to hide intent |
-| ASST-11 | Trigger Manipulation | Conditional or delayed behavior ("only activate when user mentions X", time-based logic, environment-detection before acting) |
-| CC-01 | Trust File Tampering | Modifies, overwrites, or appends to `CLAUDE.md`, `AGENTS.md`, `TOOLS.md`, or anything under `.claude/**` |
-| CC-02 | Marketplace Spoofing | Skill name or author impersonates a well-known official skill or publisher |
-
-### Dependency-Level Threats
-
-| ID | Threat | What to look for |
-|----|--------|-----------------|
-| ASST-04 | Dependency Hijacking | Fetches additional scripts or instructions at runtime from external URLs not declared in the repo |
-| ASST-05 | Credential Harvesting | Reads or accesses `~/.ssh`, `~/.aws`, `~/.npmrc`, `.env`, `$API_KEY`, `$TOKEN`, or similar credential stores |
+Consult `references/asst-taxonomy.md` for all threat definitions and scoring.
+Analyze every collected file against each threat category. Be thorough — read the full content of each file before concluding.
 
 ---
 
@@ -93,29 +72,6 @@ Compare what the skill **claims** to do (README, `description` frontmatter, skil
 - Does it launch subagents with instructions that differ from the stated purpose?
 
 Flag capability mismatches under ASST-07 or ASST-08 as appropriate.
-
----
-
-## Scoring
-
-Start at 100 and deduct per finding:
-
-| Severity | Deduction |
-|----------|-----------|
-| CRITICAL | -40 |
-| HIGH | -20 |
-| MEDIUM | -10 |
-| LOW | -5 |
-
-Trust Tiers:
-
-| Score | Tier |
-|-------|------|
-| 90-100 | CERTIFIED |
-| 75-89 | SAFE |
-| 50-74 | CAUTION |
-| 25-49 | HIGH RISK |
-| <25 or any CRITICAL | REJECTED |
 
 ---
 
@@ -176,6 +132,50 @@ Skill Name        | Tier       | Score | Critical | High | Medium
 ------------------|------------|-------|----------|------|-------
 <skill-name>      | CERTIFIED  | 98    | 0        | 0    | 1
 <skill-name>      | CAUTION    | 62    | 0        | 2    | 3
+
+---
+
+## Examples
+
+**Example 1: Scan before installing from GitHub**
+User says: "Can you scan https://github.com/someuser/cool-skill before I install it?"
+Actions:
+1. Parse URL → owner: someuser, repo: cool-skill, branch: main
+2. Fetch file tree via `gh api` or WebFetch
+3. Read all `.md`, `.json`, `.sh`, `.py` files
+4. Analyze against ASST taxonomy (see `references/asst-taxonomy.md`)
+Result: Full risk report with trust tier and SAFE TO INSTALL / DO NOT INSTALL verdict
+
+**Example 2: Scan a specific installed skill**
+User says: "Scan my installed risk-scan skill"
+Actions:
+1. Locate skill under `~/.claude/plugins/cache/local/risk-scan/`
+2. Read all files with Glob + Read
+3. Analyze against ASST taxonomy
+Result: Full risk report
+
+**Example 3: Scan all installed skills**
+User says: "Scan all my installed skills" or "risk-scan installed --all"
+Actions:
+1. List all skills under `~/.claude/plugins/cache/`
+2. Scan each skill individually
+3. Output per-skill report + summary table at the end
+
+---
+
+## Troubleshooting
+
+**GitHub API rate limit**
+Cause: Too many unauthenticated requests to the GitHub API
+Solution: Switch to WebFetch on `https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<path>` URLs
+
+**Skill not found in cache**
+Cause: Skill name doesn't exactly match directory name
+Solution: Use `Glob` to list `~/.claude/plugins/cache/**` and find the correct path
+
+**Binary or unexpected files**
+Cause: Skill includes non-text assets
+Solution: Note under [INFO] — do not attempt to parse; flag presence only if unexpected
 
 ---
 
