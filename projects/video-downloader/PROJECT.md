@@ -71,6 +71,7 @@ Server binds to `127.0.0.1` only. Never exposed to the network.
 - [x] Download mode tabs — Video + Audio / Audio Only / Clip / Trim
 - [x] Clip mode — highlights Time Range card with blue glow + pulsing ACTIVE badge
 - [x] Video editor trimmer — draggable start/end handles over thumbnail strip with live timecodes and ruler
+- [x] Trimmer scrub preview — `position:fixed` popup above handle while dragging, shows real frame at timecode (thumbnail fallback before frames load)
 - [x] Format chips — dynamic per mode (video vs audio formats)
 - [x] Output section — editable folder path with native Windows folder picker, filename input
 - [x] Toggle tooltips — Metadata / Subtitles / Thumbnail / Chapters explained inline via hover
@@ -95,8 +96,9 @@ Server binds to `127.0.0.1` only. Never exposed to the network.
 - [x] Audio-only detection (e.g. SoundCloud forces Audio Only mode)
 - [x] Format selector prefers mp4+m4a streams — prevents leftover `.webm` fragments
 - [x] FFmpeg post-processing: container conversion, audio extraction, metadata embed, thumbnail embed
-- [x] Subtitle embed via `--embed-subs` — subtitles written into container, no stray `.vtt` files
 - [x] Clip/trim via yt-dlp `download_ranges` + `force_keyframes_at_cuts`
+- [x] `POST /frames` endpoint — extracts 8 evenly-spaced frames via ffmpeg (4 parallel workers), returns base64 JPEG data URIs
+- [x] FFmpeg check at download start — surfaces clear error if not on PATH instead of silent audio-less output
 - [x] Thread-safe download registry with per-ID progress state
 - [x] Native Windows folder picker via Shell32 ctypes — no PowerShell, no tkinter dependency
 - [x] Subtitle errors (429 rate limit) handled silently — do not abort download

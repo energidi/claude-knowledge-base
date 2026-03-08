@@ -145,7 +145,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .trim-handle.dragging .handle-tooltip{opacity:1}
 .trimmer-ruler{display:flex;justify-content:space-between;margin-top:4px}
 .ruler-label{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted)}
-.scrub-preview{position:absolute;bottom:calc(100% + 10px);transform:translateX(-50%);width:140px;border-radius:7px;overflow:hidden;opacity:0;pointer-events:none;transition:opacity .12s;box-shadow:0 4px 16px rgba(0,0,0,.7);border:1px solid var(--border2);z-index:20;background:var(--surface2)}
+.scrub-preview{position:fixed;transform:translate(-50%,-100%);width:140px;border-radius:7px;overflow:hidden;opacity:0;pointer-events:none;transition:opacity .12s;box-shadow:0 4px 16px rgba(0,0,0,.7);border:1px solid var(--border2);z-index:9999;background:var(--surface2)}
 .scrub-preview img{width:100%;display:block}
 .scrub-preview-tc{font-family:'Space Mono',monospace;font-size:9px;font-weight:700;color:var(--text);text-align:center;padding:4px 0;background:var(--surface3)}
 .scrub-preview.visible{opacity:1}
@@ -565,11 +565,15 @@ function setupDrag(id, which) {
     updateTrimmerUI();
     const activePct = which==='start' ? trimStartPct : trimEndPct;
     const preview = document.getElementById('scrubPreview');
-    preview.style.left = activePct + '%';
+    const handleX = r.left + (activePct/100) * r.width;
+    preview.style.left = handleX + 'px';
+    preview.style.top = (r.top - 10) + 'px';
     const img = document.getElementById('scrubPreviewImg');
     if (scrubFrames.length > 0) {
       const idx = Math.min(scrubFrames.length-1, Math.round((activePct/100)*(scrubFrames.length-1)));
       img.style.display = 'block'; img.src = scrubFrames[idx];
+    } else if (currentVideo && currentVideo.thumbnail) {
+      img.style.display = 'block'; img.src = currentVideo.thumbnail;
     } else { img.style.display = 'none'; }
     document.getElementById('scrubPreviewTC').textContent = secsToTC(totalDurationSec * activePct / 100);
     preview.classList.add('visible');
