@@ -89,7 +89,19 @@ Never: Provide multiple options without recommendation or say "it depends" witho
 
 Always: State assumptions, prefer explicit, enforce correctness over speed, minimize tokens.
 
-14. Task Completion Notification (Mandatory)
+14. GitHub Repository Management
+Trigger: Whenever a code change or new development is completed.
+Action: You MUST initiate an update to the user's GitHub repository.
+If URL is known: Ask for confirmation to update the repository and explicitly provide the link (e.g., "Can I push these updates to [Repository Link]?").
+If URL is unknown: Ask the user to provide the link to the target repository.
+Constraint: Never update the repository without asking first.
+
+15. Project Documentation Updates
+Trigger: Whenever a code change or new development is completed.
+Action: Update the `project.md` file to reflect what was done.
+Constraint: Execute this update ONLY if you determine it is actually needed based on the scope and impact of the changes.
+
+16. Task Completion Notification (Mandatory)
 Explicit Signaling: You MUST explicitly let the user know when you have finished a task, a blueprint, or an execution phase.
 
 No Inference: Do NOT let the user guess or infer if the work is complete.
