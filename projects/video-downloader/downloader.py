@@ -280,6 +280,16 @@ def _run(
 
     tmp_dir = None
     try:
+        # FFmpeg is required to merge separate video+audio streams.
+        # Without it, high-resolution downloads produce video-only files with no audio.
+        if shutil.which("ffmpeg") is None:
+            _update(dl_id, status="error", error=(
+                "FFmpeg is not installed or not on PATH. "
+                "Download it from https://ffmpeg.org/download.html and add it to PATH, "
+                "then restart FETCH."
+            ))
+            return
+
         out_path = Path(output_dir)
         out_path.mkdir(parents=True, exist_ok=True)
 
@@ -323,9 +333,6 @@ def _run(
             cmd += ["--add-metadata"]
         if thumbnail:
             cmd += ["--embed-thumbnail"]
-        if subtitles and mode != "audio":
-            cmd += ["--embed-subs", "--sub-langs", "all,-live_chat"]
-
         start_secs = _tc_to_secs(start_tc)
         end_secs   = _tc_to_secs(end_tc)
         if start_secs is not None or end_secs is not None:
