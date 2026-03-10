@@ -1,0 +1,21 @@
+<template>
+    <div class="slds-m-around_medium">
+        <lightning-combobox
+            name="relatedList"
+            label="Select a Related List to Print"
+            placeholder="-- Select a Related List --"
+            value={selectedValue}
+            options={comboboxOptions}
+            onchange={handleChange}
+        ></lightning-combobox>
+
+        <div class="slds-m-top_medium">
+            <lightning-button
+                variant="brand"
+                label="Preview"
+                disabled={isPreviewDisabled}
+                onclick={handlePreview}
+            ></lightning-button>
+        </div>
+    </div>
+</template>

@@ -1,0 +1,64 @@
+<template>
+    <div class="table-container">
+        <template lwc:if={isLoading}>
+            <div class="slds-is-relative slds-m-around_large">
+                <lightning-spinner alternative-text="Loading records..." size="medium"></lightning-spinner>
+            </div>
+        </template>
+
+        <template lwc:elseif={hasError}>
+            <div class="slds-m-around_medium">
+                <lightning-formatted-rich-text value={errorMessage}></lightning-formatted-rich-text>
+            </div>
+        </template>
+
+        <template lwc:else>
+            <template lwc:if={isPopupBlocked}>
+                <div class="slds-notify slds-notify_alert slds-alert_warning slds-m-bottom_small" role="alert">
+                    <span class="slds-assistive-text">warning</span>
+                    Pop-ups are blocked by your browser. Please allow pop-ups for this site and click Print again.
+                </div>
+            </template>
+
+            <div class="slds-m-horizontal_medium slds-m-top_small record-count-note">
+                <template lwc:if={isAtMaxRecords}>
+                    <lightning-icon icon-name="utility:warning" size="x-small" class="slds-m-right_xx-small"></lightning-icon>
+                    Showing first 200 records (list may contain more).
+                </template>
+                <template lwc:else>
+                    Showing {recordCount} record(s).
+                </template>
+            </div>
+
+            <div class="slds-m-around_medium">
+                <template lwc:if={hasNoRecords}>
+                    <p class="slds-text-color_weak">No records found in this related list.</p>
+                </template>
+                <template lwc:else>
+                    <lightning-datatable
+                        key-field="Id"
+                        data={tableData}
+                        columns={tableColumns}
+                        hide-checkbox-column
+                        resize-column-disabled
+                    ></lightning-datatable>
+                </template>
+            </div>
+
+            <div class="slds-m-horizontal_medium slds-m-bottom_medium button-row">
+                <lightning-button
+                    label="Back"
+                    onclick={handleBack}
+                    class="slds-m-right_small"
+                ></lightning-button>
+                <lightning-button
+                    variant="brand"
+                    label="Print"
+                    icon-name="utility:print"
+                    onclick={handlePrint}
+                    disabled={hasNoRecords}
+                ></lightning-button>
+            </div>
+        </template>
+    </div>
+</template>
