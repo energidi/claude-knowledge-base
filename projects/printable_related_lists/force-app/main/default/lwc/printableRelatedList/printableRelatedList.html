@@ -8,7 +8,7 @@
 
         <template lwc:elseif={hasError}>
             <div class="slds-m-around_medium">
-                <lightning-formatted-rich-text value={errorMessage}></lightning-formatted-rich-text>
+                <p><strong>Error loading related lists:</strong> <lightning-formatted-text value={errorMessage}></lightning-formatted-text></p>
             </div>
         </template>
 

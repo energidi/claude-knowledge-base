@@ -48,8 +48,7 @@ export default class PrintableRelatedList extends LightningElement {
 
     get errorMessage() {
         if (!this.wireError) return '';
-        const msg = this.wireError.body?.message || this.wireError.message || 'Unknown error';
-        return `<p><strong>Error loading related lists:</strong> ${msg}</p>`;
+        return this.wireError.body?.message || this.wireError.message || 'Unknown error';
     }
 
     handleRelatedListSelect(event) {

@@ -99,7 +99,7 @@ export default class RelatedListTable extends LightningElement {
         const err = this._listInfoError || this._recordsError;
         if (!err) return '';
         const msg = err.body?.message || err.message || 'Unknown error';
-        return `<p><strong>Error loading records:</strong> ${msg}</p>`;
+        return `<p><strong>Error loading records:</strong> ${this._escapeHtml(msg)}</p>`;
     }
 
     get relatedListLabel() {

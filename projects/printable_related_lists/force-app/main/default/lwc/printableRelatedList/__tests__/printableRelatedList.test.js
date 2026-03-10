@@ -48,9 +48,9 @@ describe('printableRelatedList', () => {
             const el = createComponent();
             getRelatedListsInfoAdapter.error({ body: { message: 'Not authorized' } });
             await Promise.resolve();
-            const richText = el.shadowRoot.querySelector('lightning-formatted-rich-text');
-            expect(richText).not.toBeNull();
-            expect(richText.value).toContain('Not authorized');
+            const formattedText = el.shadowRoot.querySelector('lightning-formatted-text');
+            expect(formattedText).not.toBeNull();
+            expect(formattedText.value).toContain('Not authorized');
         });
 
         it('does not show the picker when wire errors', async () => {
