@@ -1,0 +1,44 @@
+<template>
+    <lightning-quick-action-panel header="Print Related List">
+        <template lwc:if={isLoading}>
+            <div class="slds-is-relative slds-m-around_large">
+                <lightning-spinner alternative-text="Loading related lists..." size="medium"></lightning-spinner>
+            </div>
+        </template>
+
+        <template lwc:elseif={hasError}>
+            <div class="slds-m-around_medium">
+                <p><strong>Error loading related lists:</strong> <lightning-formatted-text value={errorMessage}></lightning-formatted-text></p>
+            </div>
+        </template>
+
+        <template lwc:elseif={hasNoRelatedLists}>
+            <div class="slds-m-around_medium">
+                <p>This record has no related lists available.</p>
+            </div>
+        </template>
+
+        <template lwc:elseif={showPicker}>
+            <c-related-list-picker
+                related-lists={relatedLists}
+                onrelatedlistselect={handleRelatedListSelect}
+            ></c-related-list-picker>
+        </template>
+
+        <template lwc:elseif={showTable}>
+            <c-related-list-table
+                record-id={recordId}
+                object-api-name={objectApiName}
+                related-list-id={selectedRelatedListId}
+                ongoback={handleGoBack}
+            ></c-related-list-table>
+        </template>
+
+        <div slot="footer">
+            <lightning-button
+                label="Cancel"
+                onclick={handleCancel}
+            ></lightning-button>
+        </div>
+    </lightning-quick-action-panel>
+</template>

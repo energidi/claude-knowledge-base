@@ -1,0 +1,21 @@
+:host {
+    display: block;
+}
+
+.table-container {
+    min-height: 200px;
+}
+
+.record-count-note {
+    font-size: 12px;
+    color: #3e3e3c;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.button-row {
+    display: flex;
+    align-items: center;
+    margin-top: 12px;
+}
