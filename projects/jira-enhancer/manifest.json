@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "Jira Enhancer",
+  "version": "1.0.0",
+  "description": "Floating headers, quick copy, and smart search for Jira",
+
+  "permissions": [
+    "activeTab",
+    "clipboardWrite",
+    "storage"
+  ],
+
+  "host_permissions": [
+    "https://*.atlassian.net/*"
+  ],
+
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://*.atlassian.net/*"],
+      "js": ["lib/jira-selectors.js", "lib/dom-observer.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+
+  "commands": {
+    "open-search": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "Open Jira search modal"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
