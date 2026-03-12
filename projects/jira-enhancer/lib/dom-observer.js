@@ -76,4 +76,5 @@ class JiraDOMObserver {
   }
 }
 
-export default new JiraDOMObserver()
+// exported as global for content scripts
+window.DOMObserver = new JiraDOMObserver()

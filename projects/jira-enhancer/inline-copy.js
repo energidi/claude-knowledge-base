@@ -1,13 +1,10 @@
-import JiraSelectors from './lib/jira-selectors.js'
-import DOMObserver from './lib/dom-observer.js'
-
 class InlineCopyButtons {
   constructor() {
     this.injected = false
   }
 
   init() {
-    DOMObserver.register('inlineCopy', {
+    window.DOMObserver.register('inlineCopy', {
       onNavigate: () => this.reinject(),
       onDOMChange: () => this.injectIfNeeded()
     })
@@ -18,18 +15,19 @@ class InlineCopyButtons {
   injectIfNeeded() {
     if (this.injected) return
 
-    const keyElement = document.querySelector(JiraSelectors.ticketKey)
-    const titleElement = document.querySelector(JiraSelectors.ticketTitle)
+    const key = window.JiraSelectors.currentKey()
+    const titleElement = document.querySelector(window.JiraSelectors.ticketTitle)
 
-    if (keyElement && !keyElement.querySelector('.je-inline-copy')) {
-      this.addCopyButton(keyElement, 'key')
+    // Inject key copy button next to the title if we have a key and a title element
+    if (key && titleElement && !titleElement.parentElement.querySelector('.je-inline-copy[data-type="key"]')) {
+      this.addCopyButton(titleElement.parentElement, 'key')
     }
 
-    if (titleElement && !titleElement.parentElement.querySelector('.je-inline-copy')) {
+    if (titleElement && !titleElement.parentElement.querySelector('.je-inline-copy[data-type="title"]')) {
       this.addCopyButton(titleElement.parentElement, 'title')
     }
 
-    if (keyElement && titleElement) {
+    if (key && titleElement) {
       this.injected = true
     }
   }
@@ -37,6 +35,7 @@ class InlineCopyButtons {
   addCopyButton(container, type) {
     const btn = document.createElement('button')
     btn.className = 'je-inline-copy'
+    btn.dataset.type = type
     btn.title = `Copy ${type}`
     btn.innerHTML = `
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -51,9 +50,9 @@ class InlineCopyButtons {
 
       let text = ''
       if (type === 'key') {
-        text = document.querySelector(JiraSelectors.ticketKey)?.textContent.trim()
+        text = window.JiraSelectors.currentKey() || ''
       } else {
-        text = document.querySelector(JiraSelectors.ticketTitle)?.textContent.trim()
+        text = document.querySelector(window.JiraSelectors.ticketTitle)?.textContent.trim() || ''
       }
 
       if (text) {
@@ -77,4 +76,5 @@ class InlineCopyButtons {
   }
 }
 
-export default InlineCopyButtons
+// global for content scripts
+window.InlineCopyButtons = InlineCopyButtons

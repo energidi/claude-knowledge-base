@@ -1,14 +1,8 @@
-import JiraSelectors from './lib/jira-selectors.js'
-import DOMObserver from './lib/dom-observer.js'
-import FloatingHeader from './floating-header.js'
-import InlineCopyButtons from './inline-copy.js'
-import SearchModal from './search-modal.js'
-
 class JiraEnhancer {
   constructor() {
-    this.floatingHeader = new FloatingHeader()
-    this.inlineCopy = new InlineCopyButtons()
-    this.searchModal = new SearchModal()
+    this.floatingHeader = new window.FloatingHeader()
+    this.inlineCopy = new window.InlineCopyButtons()
+    this.searchModal = new window.SearchModal()
   }
 
   async init() {
@@ -18,13 +12,13 @@ class JiraEnhancer {
     }
 
     // Detect platform
-    JiraSelectors.detect()
+    window.JiraSelectors.detect()
 
     // Load settings
     const settings = await this.loadSettings()
 
     // Initialize DOM observer
-    DOMObserver.init()
+    window.DOMObserver.init()
 
     // Initialize features based on settings
     if (settings.enableFloatingHeader) {

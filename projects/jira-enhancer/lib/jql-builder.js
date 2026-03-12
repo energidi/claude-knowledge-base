@@ -20,7 +20,10 @@ class JQLBuilder {
     const primary = `${projectFilter}summary ~ "\\"${sanitized}\\""`
 
     // Strategy 2: AND-chained terms (fallback if exact match returns nothing)
-    const termClauses = terms.map(term => `summary ~ "${term}"`).join(' AND ')
+    // Guard: if all words were stop words, fall back to the full sanitized string
+    const termClauses = terms.length > 0
+      ? terms.map(term => `summary ~ "${term}"`).join(' AND ')
+      : `summary ~ "${sanitized}"`
     const fallback = `${projectFilter}${termClauses}`
 
     // Strategy 3: Broad text search (last resort)
@@ -66,8 +69,9 @@ class JQLBuilder {
    * Detect if input looks like a ticket key
    */
   isTicketKey(input) {
-    return /^[A-Z]{2,10}-?\d*$/i.test(input.trim())
+    return /^[A-Z]{2,10}-\d+$/i.test(input.trim())
   }
 }
 
-export default new JQLBuilder()
+// exported as global for content scripts
+window.JQLBuilder = new JQLBuilder()

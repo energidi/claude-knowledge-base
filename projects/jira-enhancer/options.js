@@ -24,6 +24,16 @@ document.addEventListener('DOMContentLoaded', () => {
       enableSearch: document.getElementById('enableSearch').checked
     }
 
+    // Validate serverUrl before saving
+    if (settings.serverUrl) {
+      try {
+        new URL(settings.serverUrl)
+      } catch {
+        showStatus('Invalid server URL — include https://', 'error')
+        return
+      }
+    }
+
     chrome.storage.sync.set(settings, () => {
       showStatus('Settings saved!', 'success')
 

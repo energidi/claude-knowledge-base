@@ -27,7 +27,7 @@
   "content_scripts": [
     {
       "matches": ["https://*.atlassian.net/*"],
-      "js": ["lib/jira-selectors.js", "lib/dom-observer.js", "content.js"],
+      "js": ["lib/jira-selectors.js", "lib/jql-builder.js", "lib/dom-observer.js", "floating-header.js", "inline-copy.js", "search-modal.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }

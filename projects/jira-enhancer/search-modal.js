@@ -1,106 +1,103 @@
 class SearchModal {
   constructor() {
-    this.modal = null
+    this.bar = null
     this.input = null
     this.results = null
     this.selectedIndex = -1
     this.searchResults = []
     this.debounceTimer = null
-    this.isOpen = false
   }
 
   init() {
-    this.createModal()
+    this.createBar()
     this.attachListeners()
 
-    // Listen for keyboard shortcut from background
+    // Ctrl+Shift+K focuses the search bar
     chrome.runtime.onMessage.addListener((request) => {
       if (request.action === 'openSearch') {
-        this.open()
+        this.focus()
       }
     })
 
-    // Also listen for direct keyboard events (backup)
     document.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'K') {
         e.preventDefault()
-        this.toggle()
+        this.focus()
       }
-
-      if (e.key === 'Escape' && this.isOpen) {
-        this.close()
+      if (e.key === 'Escape' && document.activeElement === this.input) {
+        this.input.blur()
+        this.closeDropdown()
       }
     })
   }
 
-  createModal() {
-    this.modal = document.createElement('div')
-    this.modal.id = 'je-search-modal'
-    this.modal.className = 'je-modal je-hidden'
-    this.modal.innerHTML = `
-      <div class="je-modal-backdrop"></div>
-      <div class="je-modal-container">
-        <div class="je-modal-header">
-          <div class="je-search-input-wrapper">
-            <svg class="je-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="m21 21-4.35-4.35"></path>
-            </svg>
-            <input type="text" class="je-search-input" placeholder="Search Jira tickets..." autocomplete="off" />
-            <span class="je-search-hint">ESC to close</span>
-          </div>
+  createBar() {
+    this.bar = document.createElement('div')
+    this.bar.id = 'je-search-bar'
+    this.bar.innerHTML = `
+      <div class="je-searchbar-input-wrapper">
+        <svg class="je-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+        <input type="text" class="je-searchbar-input" placeholder="Search Jira… (Ctrl+Shift+K)" autocomplete="off" />
+      </div>
+      <div class="je-searchbar-dropdown je-hidden">
+        <div class="je-results-list"></div>
+        <div class="je-results-empty je-hidden">No results found</div>
+        <div class="je-results-loading je-hidden">
+          <div class="je-spinner"></div>
+          Searching...
         </div>
-        <div class="je-modal-body">
-          <div class="je-results-container">
-            <div class="je-results-list"></div>
-            <div class="je-results-empty je-hidden">No results found</div>
-            <div class="je-results-loading je-hidden">
-              <div class="je-spinner"></div>
-              Searching...
-            </div>
-            <div class="je-results-error je-hidden"></div>
-          </div>
-        </div>
-        <div class="je-modal-footer">
-          <span class="je-footer-hint">
-            <kbd>↑</kbd><kbd>↓</kbd> Navigate
-            <kbd>Enter</kbd> Open
-            <kbd>Ctrl+Enter</kbd> Open in new tab
-          </span>
+        <div class="je-results-error je-hidden"></div>
+        <div class="je-searchbar-footer">
+          <kbd>↑</kbd><kbd>↓</kbd> Navigate &nbsp; <kbd>Enter</kbd> Open &nbsp; <kbd>Ctrl+Enter</kbd> New tab
         </div>
       </div>
     `
 
-    document.body.appendChild(this.modal)
+    document.body.appendChild(this.bar)
 
-    this.input = this.modal.querySelector('.je-search-input')
-    this.results = this.modal.querySelector('.je-results-list')
-    this.emptyState = this.modal.querySelector('.je-results-empty')
-    this.loadingState = this.modal.querySelector('.je-results-loading')
-    this.errorState = this.modal.querySelector('.je-results-error')
+    this.input = this.bar.querySelector('.je-searchbar-input')
+    this.dropdown = this.bar.querySelector('.je-searchbar-dropdown')
+    this.results = this.bar.querySelector('.je-results-list')
+    this.emptyState = this.bar.querySelector('.je-results-empty')
+    this.loadingState = this.bar.querySelector('.je-results-loading')
+    this.errorState = this.bar.querySelector('.je-results-error')
   }
 
   attachListeners() {
-    // Close on backdrop click
-    this.modal.querySelector('.je-modal-backdrop').addEventListener('click', () => {
-      this.close()
+    this.input.addEventListener('input', () => this.handleInput())
+    this.input.addEventListener('keydown', (e) => this.handleKeydown(e))
+    this.input.addEventListener('focus', () => {
+      if (this.searchResults.length > 0) {
+        this.dropdown.classList.remove('je-hidden')
+      } else if (this.input.value.trim().length === 0) {
+        this.loadRecent()
+      }
     })
 
-    // Input handling
-    this.input.addEventListener('input', () => {
-      this.handleInput()
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!this.bar.contains(e.target)) {
+        this.closeDropdown()
+      }
     })
+  }
 
-    // Keyboard navigation
-    this.input.addEventListener('keydown', (e) => {
-      this.handleKeydown(e)
-    })
+  focus() {
+    this.input.focus()
+    this.input.select()
   }
 
   handleInput() {
     const query = this.input.value.trim()
-
     clearTimeout(this.debounceTimer)
+
+    if (query.length === 0) {
+      this.loadRecent()
+      return
+    }
 
     if (query.length < 2) {
       this.clearResults()
@@ -114,24 +111,57 @@ class SearchModal {
     }, 300)
   }
 
+  loadRecent() {
+    this.showLoading()
+    clearTimeout(this.debounceTimer)
+    this.debounceTimer = setTimeout(() => this.search(''), 150)
+  }
+
   async search(query) {
-    const domain = window.location.hostname
-    const apiVersion = domain.includes('atlassian.net') ? '3' : '2'
+    const apiVersion = window.location.hostname.includes('atlassian.net') ? '3' : '2'
 
     try {
-      const response = await chrome.runtime.sendMessage({
-        action: 'search',
-        query,
-        domain,
-        apiVersion
-      })
-
-      if (response.error) {
-        this.showError(response.error)
-        return
+      let jql
+      if (!query) {
+        jql = 'ORDER BY updated DESC'
+      } else if (window.JQLBuilder.isTicketKey(query)) {
+        jql = window.JQLBuilder.buildKeySearch(query) + ' ORDER BY updated DESC'
+      } else {
+        const built = window.JQLBuilder.build(query)
+        jql = built.primary + built.orderBy
       }
 
-      this.searchResults = response.results
+      const url = `/rest/api/${apiVersion}/search?jql=${encodeURIComponent(jql)}&maxResults=10&fields=key,summary,status,assignee`
+
+      const response = await fetch(url, {
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      })
+
+      if (response.status === 401) { this.showError('AUTH_REQUIRED'); return }
+      if (!response.ok) { this.showError('API_ERROR:' + response.status); return }
+
+      const data = await response.json()
+
+      // If exact phrase returned nothing, retry with AND-chained terms
+      if (data.issues.length === 0 && query && !window.JQLBuilder.isTicketKey(query)) {
+        const built = window.JQLBuilder.build(query)
+        const fallbackUrl = `/rest/api/${apiVersion}/search?jql=${encodeURIComponent(built.fallback + built.orderBy)}&maxResults=10&fields=key,summary,status,assignee`
+        const fallbackResp = await fetch(fallbackUrl, { credentials: 'include', headers: { 'Accept': 'application/json' } })
+        if (fallbackResp.ok) {
+          const fallbackData = await fallbackResp.json()
+          data.issues = fallbackData.issues
+        }
+      }
+
+      this.searchResults = data.issues.map(issue => ({
+        key: issue.key,
+        summary: issue.fields.summary,
+        status: issue.fields.status?.name || 'Unknown',
+        statusCategory: issue.fields.status?.statusCategory?.key || 'undefined',
+        assignee: issue.fields.assignee?.displayName || 'Unassigned',
+        url: `/browse/${issue.key}`
+      }))
       this.renderResults()
 
     } catch (err) {
@@ -141,6 +171,7 @@ class SearchModal {
 
   renderResults() {
     this.hideLoading()
+    this.dropdown.classList.remove('je-hidden')
 
     if (this.searchResults.length === 0) {
       this.emptyState.classList.remove('je-hidden')
@@ -162,13 +193,10 @@ class SearchModal {
       </div>
     `).join('')
 
-    // Click handlers for results
     this.results.querySelectorAll('.je-result-item').forEach((item) => {
       item.addEventListener('click', (e) => {
-        const index = parseInt(item.dataset.index)
-        this.openResult(index, e.ctrlKey || e.metaKey)
+        this.openResult(parseInt(item.dataset.index), e.ctrlKey || e.metaKey)
       })
-
       item.addEventListener('mouseenter', () => {
         this.selectResult(parseInt(item.dataset.index))
       })
@@ -181,12 +209,10 @@ class SearchModal {
         e.preventDefault()
         this.selectResult(this.selectedIndex + 1)
         break
-
       case 'ArrowUp':
         e.preventDefault()
         this.selectResult(this.selectedIndex - 1)
         break
-
       case 'Enter':
         e.preventDefault()
         if (this.selectedIndex >= 0) {
@@ -199,34 +225,32 @@ class SearchModal {
   selectResult(index) {
     if (index < 0) index = this.searchResults.length - 1
     if (index >= this.searchResults.length) index = 0
-
     this.selectedIndex = index
-
     this.results.querySelectorAll('.je-result-item').forEach((item, i) => {
       item.classList.toggle('je-selected', i === index)
     })
-
-    // Scroll into view
     const selected = this.results.querySelector('.je-selected')
-    if (selected) {
-      selected.scrollIntoView({ block: 'nearest' })
-    }
+    if (selected) selected.scrollIntoView({ block: 'nearest' })
   }
 
   openResult(index, newTab = false) {
     const result = this.searchResults[index]
     if (!result) return
-
     if (newTab) {
       window.open(result.url, '_blank')
     } else {
       window.location.href = result.url
     }
+    this.input.value = ''
+    this.closeDropdown()
+  }
 
-    this.close()
+  closeDropdown() {
+    this.dropdown.classList.add('je-hidden')
   }
 
   showLoading() {
+    this.dropdown.classList.remove('je-hidden')
     this.loadingState.classList.remove('je-hidden')
     this.emptyState.classList.add('je-hidden')
     this.errorState.classList.add('je-hidden')
@@ -240,15 +264,15 @@ class SearchModal {
     this.hideLoading()
     this.emptyState.classList.add('je-hidden')
     this.errorState.classList.remove('je-hidden')
-
     const messages = {
       'AUTH_REQUIRED': 'Please log in to Jira to search',
-      'RATE_LIMITED': 'Too many requests - please wait a moment',
+      'RATE_LIMITED': 'Too many requests — wait a moment',
       'NETWORK_ERROR': 'Unable to connect to Jira',
-      'API_ERROR': 'Jira returned an error'
+      'API_ERROR': 'Jira API error — try adding an API token in extension settings'
     }
-
-    this.errorState.textContent = messages[errorCode] || 'An error occurred'
+    // errorCode may include a status suffix like 'API_ERROR:403'
+    const key = errorCode.split(':')[0]
+    this.errorState.textContent = messages[key] || messages[errorCode] || `Search error: ${errorCode}`
   }
 
   clearResults() {
@@ -257,30 +281,7 @@ class SearchModal {
     this.errorState.classList.add('je-hidden')
     this.searchResults = []
     this.selectedIndex = -1
-  }
-
-  open() {
-    this.modal.classList.remove('je-hidden')
-    this.input.focus()
-    this.input.select()
-    this.isOpen = true
-    document.body.style.overflow = 'hidden'
-  }
-
-  close() {
-    this.modal.classList.add('je-hidden')
-    this.input.value = ''
-    this.clearResults()
-    this.isOpen = false
-    document.body.style.overflow = ''
-  }
-
-  toggle() {
-    if (this.isOpen) {
-      this.close()
-    } else {
-      this.open()
-    }
+    this.closeDropdown()
   }
 
   escapeHtml(text) {
@@ -290,4 +291,5 @@ class SearchModal {
   }
 }
 
-export default SearchModal
+// global for content scripts
+window.SearchModal = SearchModal

@@ -1,6 +1,3 @@
-import JiraSelectors from './lib/jira-selectors.js'
-import DOMObserver from './lib/dom-observer.js'
-
 class FloatingHeader {
   constructor() {
     this.header = null
@@ -9,11 +6,11 @@ class FloatingHeader {
   }
 
   init() {
-    JiraSelectors.detect()
+    window.JiraSelectors.detect()
     this.createHeader()
     this.setupIntersectionObserver()
 
-    DOMObserver.register('floatingHeader', {
+    window.DOMObserver.register('floatingHeader', {
       onNavigate: () => this.reinject(),
       onDOMChange: () => this.checkTitleExists()
     })
@@ -59,7 +56,7 @@ class FloatingHeader {
 
   setupIntersectionObserver() {
     // Wait for title element to exist
-    this.waitForElement(JiraSelectors.ticketTitle, (titleElement) => {
+    this.waitForElement(window.JiraSelectors.ticketTitle, (titleElement) => {
       this.updateHeaderContent()
 
       this.titleObserver = new IntersectionObserver(
@@ -94,12 +91,19 @@ class FloatingHeader {
   }
 
   updateHeaderContent() {
-    const keyElement = document.querySelector(JiraSelectors.ticketKey)
-    const titleElement = document.querySelector(JiraSelectors.ticketTitle)
+    const key = window.JiraSelectors.currentKey()
+    const titleElement = document.querySelector(window.JiraSelectors.ticketTitle)
 
-    if (keyElement && titleElement) {
-      this.header.querySelector('.je-ticket-key').textContent = keyElement.textContent.trim()
-      this.header.querySelector('.je-ticket-title').textContent = titleElement.textContent.trim()
+    if (key) {
+      this.header.querySelector('.je-ticket-key').textContent = key
+    }
+    if (titleElement) {
+      // Strip leading "KEY - " prefix if the h1 includes it
+      let title = titleElement.textContent.trim()
+      if (key && title.startsWith(key)) {
+        title = title.slice(key.length).replace(/^\s*[-–]\s*/, '')
+      }
+      this.header.querySelector('.je-ticket-title').textContent = title
     }
   }
 
@@ -132,7 +136,7 @@ class FloatingHeader {
   }
 
   checkTitleExists() {
-    const titleElement = document.querySelector(JiraSelectors.ticketTitle)
+    const titleElement = document.querySelector(window.JiraSelectors.ticketTitle)
     if (titleElement && !this.titleObserver) {
       this.setupIntersectionObserver()
     }
@@ -149,13 +153,12 @@ class FloatingHeader {
   }
 
   async handleCopy(type, button) {
-    const keyElement = document.querySelector(JiraSelectors.ticketKey)
-    const titleElement = document.querySelector(JiraSelectors.ticketTitle)
+    const titleElement = document.querySelector(window.JiraSelectors.ticketTitle)
 
     let text = ''
     switch (type) {
       case 'key':
-        text = keyElement?.textContent.trim() || ''
+        text = window.JiraSelectors.currentKey() || ''
         break
       case 'title':
         text = titleElement?.textContent.trim() || ''
@@ -183,4 +186,5 @@ class FloatingHeader {
   }
 }
 
-export default FloatingHeader
+// global for content scripts
+window.FloatingHeader = FloatingHeader
