@@ -123,6 +123,16 @@ Concise. Resumable.
 
 ---
 
+# GitHub Deployment
+After making changes to code or creating new code:
+- Check if the user has provided a GitHub repo URL in the conversation.
+- If yes, and you know exactly which repo and branch to deploy to - deploy immediately.
+- If unsure where to deploy, ask: "Would you like me to deploy this to GitHub?"
+  - If yes - ask for the repo URL before proceeding.
+  - If no - skip deployment.
+
+---
+
 # Task Completion (Mandatory)
 Explicitly signal completion at the end of every task, blueprint, or phase. Never let the user infer or guess if work is complete.
 
