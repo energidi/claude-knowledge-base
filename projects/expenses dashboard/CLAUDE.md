@@ -15,6 +15,28 @@ python setup.py
 streamlit run dashboard/app.py
 ```
 
+## GitHub Deployment
+
+After every code change, push to GitHub automatically:
+
+```bash
+# Clone target (already exists at this path)
+# C:/Users/GidiAbramovich/Documents/kb-clone
+
+cd "C:/Users/GidiAbramovich/Documents/kb-clone"
+git pull origin main
+cp -r "c:/Users/GidiAbramovich/Documents/Visual Studio Code/Expenses Summary Dashboard/dashboard" "./projects/expenses dashboard/"
+cp "c:/Users/GidiAbramovich/Documents/Visual Studio Code/Expenses Summary Dashboard/CLAUDE.md" "./projects/expenses dashboard/CLAUDE.md"
+# Add other changed files as needed (requirements.txt, setup.py, parser/, etc.)
+git add "projects/expenses dashboard/"
+git commit -m "update: <description>"
+git push origin main
+```
+
+Repo: `https://github.com/energidi/claude-knowledge-base`
+Target path: `projects/expenses dashboard/`
+Never push `data/`, `Expense Files/`, `.env` (already in .gitignore).
+
 ## Architecture
 
 This is a two-phase Python app: a **one-time setup** that parses Excel files into an encrypted cache, and a **Streamlit dashboard** that reads from that cache.

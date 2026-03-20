@@ -170,7 +170,8 @@ section[data-testid="stSidebarContent"] > div:first-child span[class*="material"
     margin-bottom: 12px;
     padding-bottom: 6px;
     border-bottom: 2px solid #3498db;
-    display: inline-block;
+    display: block;
+    text-align: center;
 }
 
 /* -------- TABS -------- */
@@ -538,12 +539,12 @@ with tab0:
                 "קטגוריה": CATEGORY_LABELS.get(cat, cat),
                 "סה״כ": f"₪{val:,.0f}",
                 "ממוצע חודשי": f"₪{fdf[cat].dropna().mean():,.0f}",
-                "% מהוצאות": f"{val / total_exp_sum * 100:.1f}%",
+                "אחוז מההוצאות": f"{val / total_exp_sum * 100:.1f}%",
             })
     if rank_rows:
         rank_df = pd.DataFrame(rank_rows)
         st.dataframe(
-            _styled_df(rank_df, ["דירוג", "קטגוריה"], ["סה״כ", "ממוצע חודשי", "% מהוצאות"]),
+            _styled_df(rank_df, ["דירוג", "קטגוריה"], ["סה״כ", "ממוצע חודשי", "אחוז מההוצאות"]),
             hide_index=True, use_container_width=True,
         )
 
