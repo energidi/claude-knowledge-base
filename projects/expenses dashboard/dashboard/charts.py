@@ -42,20 +42,32 @@ MONTH_NAMES_HE = {
     9: "ספטמבר", 10: "אוקטובר", 11: "נובמבר", 12: "דצמבר",
 }
 
-C_INCOME      = "#2ecc71"
-C_EXPENSE     = "#e74c3c"
-C_BALANCE_POS = "#27ae60"
-C_BALANCE_NEG = "#c0392b"
-C_PRIMARY     = "#3498db"
-C_NEUTRAL     = "#95a5a6"
-PALETTE       = px.colors.qualitative.Set2
+C_INCOME      = "#10B981"   # emerald
+C_EXPENSE     = "#EF4444"   # vivid red
+C_BALANCE_POS = "#10B981"
+C_BALANCE_NEG = "#EF4444"
+C_PRIMARY     = "#3B82F6"   # bright blue
+C_SECONDARY   = "#1E40AF"   # deep navy
+C_ACCENT      = "#F59E0B"   # amber
+C_NEUTRAL     = "#94A3B8"   # cool slate
+PALETTE = [
+    "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#06B6D4",
+    "#F97316", "#84CC16", "#EC4899", "#14B8A6", "#A855F7",
+    "#F43F5E", "#22C55E", "#0EA5E9", "#EAB308", "#6366F1",
+    "#FB923C", "#4ADE80", "#38BDF8", "#FBBF24", "#E879F9",
+]
 
 LAYOUT_BASE = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="Heebo, Arial, sans-serif", size=13, color="#2c3e50"),
+    font=dict(family="'Fira Sans', Heebo, Arial, sans-serif", size=13, color="#1E293B"),
     margin=dict(l=70, r=20, t=80, b=60),
-    hoverlabel=dict(font_family="Heebo, Arial, sans-serif"),
+    hoverlabel=dict(
+        font_family="'Fira Sans', Heebo, Arial, sans-serif",
+        bgcolor="#0F172A",
+        font_color="white",
+        bordercolor="#3B82F6",
+    ),
     uniformtext=dict(mode="hide", minsize=8),
 )
 
@@ -71,10 +83,14 @@ def _period_label(year: int, month: int) -> str:
 def _apply_base(fig: go.Figure, title: str = "") -> go.Figure:
     fig.update_layout(
         **LAYOUT_BASE,
-        title=dict(text=title, font=dict(size=16, color="#2c3e50"), x=0.5, xanchor="center"),
+        title=dict(
+            text=title,
+            font=dict(size=16, color="#0F172A", family="'Fira Sans', Heebo, Arial, sans-serif", weight=600),
+            x=0.5, xanchor="center",
+        ),
     )
-    fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(gridcolor="#ecf0f1", zeroline=False)
+    fig.update_xaxes(showgrid=False, zeroline=False, tickfont=dict(family="'Fira Sans', Heebo, Arial, sans-serif"))
+    fig.update_yaxes(gridcolor="#E2E8F0", zeroline=False, tickfont=dict(family="'Fira Code', monospace"))
     return fig
 
 
@@ -150,7 +166,7 @@ def annual_summary_bar(df: pd.DataFrame, metric: str) -> go.Figure:
         marker_color=bar_color,
         text=[_bar_label_fmt(v) for v in vals],
         textposition="outside",
-        textfont=dict(size=11, color="#2c3e50"),
+        textfont=dict(size=11, color="#1E293B", family="'Fira Code', monospace"),
         hovertemplate="%{x}: ₪%{y:,.0f}<extra></extra>",
     ))
     _apply_base(fig, f"סיכום שנתי: {_label(metric)}")
@@ -284,7 +300,7 @@ def trend_across_years(df: pd.DataFrame, category: str) -> go.Figure:
         opacity=0.75,
         text=[_bar_label_fmt(v) for v in vals],
         textposition="outside",
-        textfont=dict(size=11, color="#2c3e50"),
+        textfont=dict(size=11, color="#1E293B", family="'Fira Code', monospace"),
         hovertemplate="%{x}: ₪%{y:,.0f}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
@@ -413,7 +429,7 @@ def anomaly_chart(df: pd.DataFrame, metric: str) -> go.Figure:
         marker_color=colors,
         text=[_bar_label_fmt(v) if (h or l) else "" for v, h, l in zip(col, is_high, is_low)],
         textposition="outside",
-        textfont=dict(size=10, color="#2c3e50"),
+        textfont=dict(size=10, color="#1E293B", family="'Fira Code', monospace"),
         hovertemplate="%{x}: ₪%{y:,.0f}<extra></extra>",
     ))
     fig.add_hline(y=mean, line_dash="dash", line_color=C_NEUTRAL,
@@ -469,6 +485,64 @@ def cbs_comparison_bar(user_avg: dict[str, float], benchmarks: dict[str, tuple[f
         yaxis=dict(range=[0, max(max(user_vals), max(cbs_vals)) * 1.2]),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
     )
+    return fig
+
+
+def spending_heatmap(df: pd.DataFrame) -> go.Figure:
+    """Month × Year heatmap of total expenses."""
+    pivot = df.pivot_table(index="year", columns="month", values="total_expenses", aggfunc="sum")
+    pivot.index = [str(int(y)) for y in pivot.index]
+    month_labels = [MONTH_NAMES_HE.get(m, str(m)) for m in pivot.columns]
+
+    text_vals = [
+        [_bar_label_fmt(v) if not pd.isna(v) else "" for v in row]
+        for row in pivot.values
+    ]
+    fig = go.Figure(go.Heatmap(
+        z=pivot.values,
+        x=month_labels,
+        y=list(pivot.index),
+        colorscale=[[0, "#EFF6FF"], [0.4, "#93C5FD"], [0.7, "#3B82F6"], [1, "#1E3A8A"]],
+        hovertemplate="%{y} - %{x}<br>₪%{z:,.0f}<extra></extra>",
+        text=text_vals,
+        texttemplate="%{text}",
+        textfont=dict(size=10, family="'Fira Code', monospace", color="#1E293B"),
+        colorbar=dict(title="₪", title_side="right", tickfont=dict(family="'Fira Code', monospace")),
+        xgap=3,
+        ygap=3,
+    ))
+    _apply_base(fig, "מפת חום הוצאות חודשיות")
+    fig.update_layout(
+        xaxis_title="חודש",
+        yaxis=dict(title="שנה", autorange="reversed"),
+        margin=dict(l=70, r=20, t=80, b=40),
+    )
+    return fig
+
+
+def category_treemap(df: pd.DataFrame, year=None) -> go.Figure:
+    """Treemap of expenses by category - size = total spend."""
+    cats = [c for c in EXPENSE_CATEGORIES if c in df.columns]
+    totals = df[cats].sum()
+    totals = totals[totals > 0].sort_values(ascending=False)
+    title = f"מפת עץ הוצאות - {year}" if year else "מפת עץ הוצאות (כל השנים)"
+
+    fig = go.Figure(go.Treemap(
+        labels=[_label(c) for c in totals.index],
+        parents=["" for _ in totals.index],
+        values=totals.values,
+        texttemplate="<b>%{label}</b><br>₪%{value:,.0f}<br>%{percentParent:.1%}",
+        hovertemplate="%{label}<br>₪%{value:,.0f}<br>%{percentParent:.1%} מהוצאות<extra></extra>",
+        marker=dict(
+            colors=list(range(len(totals))),
+            colorscale=[[0, "#DBEAFE"], [0.3, "#60A5FA"], [0.6, "#2563EB"], [1, "#1E3A8A"]],
+            showscale=False,
+            line=dict(width=2, color="white"),
+        ),
+        textfont=dict(family="'Fira Sans', Heebo, sans-serif", size=13),
+    ))
+    _apply_base(fig, title)
+    fig.update_layout(margin=dict(l=20, r=20, t=80, b=20))
     return fig
 
 

@@ -80,6 +80,28 @@ Display labels: `dashboard/charts.py::CATEGORY_LABELS`.
 - `dashboard/exporter.py` - PDF (reportlab) + Excel (xlsxwriter) export
 - `dashboard/cbs_data.py` - CBS household benchmark data; live fetch each session with fallback to 2022 static data
 
+### Design system (ui-ux-pro-max applied)
+
+- **Style:** Dark Mode OLED fintech aesthetic with light main content area
+- **Fonts:** `Fira Code` (numbers, data values, KPI amounts) + `Fira Sans` (all body text, labels, tabs)
+  - Google Fonts import is in the CSS block at the top of `app.py`
+- **Color palette:**
+
+| Role | Hex |
+|---|---|
+| Primary (blue) | `#3B82F6` |
+| Deep navy | `#1E40AF` |
+| Success / income | `#10B981` |
+| Danger / expense | `#EF4444` |
+| Accent (amber) | `#F59E0B` |
+| Neutral | `#94A3B8` |
+| Page background | `#F8FAFC` |
+| Dark text | `#0F172A` |
+
+- **Transitions:** 180-200ms ease-out on all interactive cards and buttons
+- **Charts:** color constants in `charts.py` (C_INCOME, C_EXPENSE, C_PRIMARY, etc.); PALETTE is a 20-color list starting with blue, emerald, amber
+- **New chart types:** `spending_heatmap(df)` (month × year in Overview tab), `category_treemap(df, year)` (in Category tab)
+
 ### UI / UX rules
 
 - **Language**: Full Hebrew, RTL. Never show English text in the UI.

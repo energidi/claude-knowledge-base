@@ -16,6 +16,7 @@ from dashboard.charts import (
     year_over_year, multi_metric_comparison,
     annual_summary_bar, anomaly_chart, savings_rate,
     cbs_comparison_bar, cbs_delta_bar,
+    spending_heatmap, category_treemap,
 )
 from dashboard.cbs_data import fetch_benchmarks
 from dashboard.exporter import export_pdf, export_excel
@@ -61,25 +62,23 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&family=Heebo:wght@300;400;500;600;700&display=swap');
 
-* { font-family: 'Heebo', sans-serif !important; }
+* { font-family: 'Fira Sans', 'Heebo', sans-serif !important; }
 
 html, body, [class*="css"] {
     direction: rtl;
-    font-family: 'Heebo', sans-serif !important;
+    font-family: 'Fira Sans', 'Heebo', sans-serif !important;
+    background-color: #F8FAFC;
 }
 
 /* Hide default streamlit chrome */
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding-top: 1.5rem; padding-bottom: 1rem; }
+.block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
 
-/* Hide sidebar collapse button icon text */
-[data-testid="collapsedControl"] { display: none !important; }
-button[kind="header"] svg { display: none !important; }
-[data-testid="stSidebarNavItems"] span { display: none !important; }
-/* Fix material icon rendering as text - catches _double_arrow_left etc */
+/* Fix material icon rendering as text */
 .material-symbols-rounded { font-size: 0 !important; color: transparent !important; }
+[data-testid="collapsedControl"] { display: none !important; }
 [data-testid="stSidebarCollapseButton"] span { display: none !important; }
 section[data-testid="stSidebarContent"] > div:first-child span[class*="material"] {
     font-size: 0 !important; color: transparent !important;
@@ -87,147 +86,158 @@ section[data-testid="stSidebarContent"] > div:first-child span[class*="material"
 
 /* -------- LOGIN PAGE -------- */
 .login-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 80vh;
-    text-align: center;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    min-height: 80vh; text-align: center;
 }
 .login-card {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-    border-radius: 24px;
-    padding: 56px 48px;
-    max-width: 440px;
-    width: 100%;
-    box-shadow: 0 25px 60px rgba(0,0,0,0.4);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(145deg, #0F172A 0%, #1E3A8A 60%, #1E40AF 100%);
+    border-radius: 28px;
+    padding: 60px 52px;
+    max-width: 460px; width: 100%;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.45), 0 0 0 1px rgba(59,130,246,0.15);
 }
-.login-logo {
-    font-size: 64px;
-    margin-bottom: 8px;
-}
-.login-title {
-    color: #ffffff;
-    font-size: 28px;
-    font-weight: 700;
-    margin-bottom: 4px;
-}
-.login-subtitle {
-    color: #a0aec0;
-    font-size: 15px;
-    margin-bottom: 32px;
-}
-.login-divider {
-    height: 1px;
-    background: rgba(255,255,255,0.1);
-    margin: 20px 0;
-}
+.login-logo { font-size: 68px; margin-bottom: 10px; }
+.login-title { color: #fff; font-size: 30px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.5px; }
+.login-subtitle { color: #93C5FD; font-size: 15px; margin-bottom: 32px; }
+.login-divider { height: 1px; background: rgba(255,255,255,0.12); margin: 20px 0; }
 
 /* -------- KPI CARDS -------- */
 .kpi-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 14px;
-    margin-bottom: 20px;
+    gap: 16px; margin-bottom: 24px;
 }
 .kpi-card {
-    background: #ffffff;
-    border-radius: 14px;
-    padding: 20px 18px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-    border-top: 4px solid #3498db;
+    background: #fff;
+    border-radius: 18px;
+    padding: 22px 20px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    border: 1px solid #E2E8F0;
+    border-top: 4px solid #3B82F6;
     text-align: right;
+    transition: transform 180ms ease-out, box-shadow 180ms ease-out;
+    cursor: default;
 }
-.kpi-card.green  { border-top-color: #27ae60; }
-.kpi-card.red    { border-top-color: #e74c3c; }
-.kpi-card.gold   { border-top-color: #f39c12; }
-.kpi-card.purple { border-top-color: #9b59b6; }
-.kpi-label { font-size: 12px; color: #7f8c8d; font-weight: 500; margin-bottom: 6px; }
-.kpi-value { font-size: 22px; font-weight: 700; color: #2c3e50; }
-.kpi-delta { font-size: 12px; margin-top: 4px; }
-.kpi-delta.pos { color: #27ae60; }
-.kpi-delta.neg { color: #e74c3c; }
+.kpi-card:hover { transform: translateY(-4px); box-shadow: 0 10px 36px rgba(59,130,246,0.16); }
+.kpi-card.green  { border-top-color: #10B981; }
+.kpi-card.green:hover  { box-shadow: 0 10px 36px rgba(16,185,129,0.16); }
+.kpi-card.red    { border-top-color: #EF4444; }
+.kpi-card.red:hover    { box-shadow: 0 10px 36px rgba(239,68,68,0.16); }
+.kpi-card.gold   { border-top-color: #F59E0B; }
+.kpi-card.gold:hover   { box-shadow: 0 10px 36px rgba(245,158,11,0.16); }
+.kpi-card.purple { border-top-color: #8B5CF6; }
+.kpi-card.purple:hover { box-shadow: 0 10px 36px rgba(139,92,246,0.16); }
+.kpi-label {
+    font-size: 10px; color: #64748B; font-weight: 700;
+    margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.8px;
+}
+.kpi-value {
+    font-size: 24px; font-weight: 700; color: #0F172A;
+    font-family: 'Fira Code', monospace !important;
+}
+.kpi-delta { font-size: 12px; margin-top: 6px; font-weight: 500; }
+.kpi-delta.pos { color: #10B981; }
+.kpi-delta.neg { color: #EF4444; }
 
 /* -------- DASHBOARD HEADER -------- */
 .dash-header {
-    background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
-    border-radius: 16px;
-    padding: 22px 28px;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 55%, #1E40AF 100%);
+    border-radius: 20px;
+    padding: 24px 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 40px rgba(30,58,138,0.28);
+    border: 1px solid rgba(59,130,246,0.18);
 }
-.dash-header-title { color: #fff; font-size: 24px; font-weight: 700; }
-.dash-header-sub   { color: #a0aec0; font-size: 13px; margin-top: 2px; }
-
-/* -------- FILTER BAR -------- */
-.filter-bar {
-    background: #f8fafc;
-    border-radius: 12px;
-    padding: 14px 18px;
-    margin-bottom: 16px;
-    border: 1px solid #e2e8f0;
+.dash-header-title {
+    color: #fff; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;
 }
+.dash-header-sub { color: #93C5FD; font-size: 13px; margin-top: 4px; }
 
 /* -------- SECTION HEADERS -------- */
 .section-title {
-    font-size: 17px;
-    font-weight: 600;
-    color: #2c3e50;
-    margin-bottom: 12px;
-    padding-bottom: 6px;
-    border-bottom: 2px solid #3498db;
-    display: block;
-    text-align: center;
+    font-size: 16px; font-weight: 700; color: #0F172A;
+    margin-bottom: 14px; padding-bottom: 8px;
+    border-bottom: 3px solid #3B82F6;
+    display: block; text-align: center; letter-spacing: -0.2px;
 }
 
 /* -------- TABS -------- */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 6px;
-    background: #f1f5f9;
-    border-radius: 10px;
-    padding: 4px;
+    gap: 4px; background: #F1F5F9;
+    border-radius: 12px; padding: 4px;
 }
 .stTabs [data-baseweb="tab"] {
-    border-radius: 8px;
-    padding: 8px 18px;
-    font-weight: 500;
-    font-size: 14px;
+    border-radius: 8px; padding: 8px 16px;
+    font-weight: 500; font-size: 14px;
+    transition: all 180ms ease-out;
 }
 .stTabs [aria-selected="true"] {
-    background: #ffffff !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    color: #3498db !important;
+    background: #1E40AF !important;
+    box-shadow: 0 2px 12px rgba(30,64,175,0.35) !important;
+    color: white !important;
 }
 
 /* -------- SIDEBAR -------- */
 [data-testid="stSidebar"] {
-    background: #1a1a2e;
+    background: linear-gradient(180deg, #0F172A 0%, #1E1B4B 100%);
 }
-[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
+[data-testid="stSidebar"] * { color: #E2E8F0 !important; }
 [data-testid="stSidebar"] .stMultiSelect [data-baseweb="tag"] {
-    background-color: #3498db !important;
+    background-color: #1E40AF !important;
 }
 [data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.1) !important; }
 [data-testid="stSidebar"] .stButton button {
-    background: #e74c3c !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 8px !important;
-    width: 100%;
+    background: linear-gradient(135deg, #1E40AF, #3B82F6) !important;
+    color: white !important; border: none !important;
+    border-radius: 8px !important; width: 100%;
+    transition: all 180ms ease-out !important;
+}
+[data-testid="stSidebar"] .stButton button:hover {
+    box-shadow: 0 4px 16px rgba(59,130,246,0.4) !important;
+    transform: translateY(-1px) !important;
 }
 
+/* -------- HIGHLIGHTS CARDS -------- */
+.hl-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 28px; }
+.hl-card {
+    background: #fff; border-radius: 20px; padding: 32px 24px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    border: 1px solid #F1F5F9; border-top: 5px solid #3B82F6;
+    text-align: center;
+    transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+}
+.hl-card:hover { transform: translateY(-5px); box-shadow: 0 14px 44px rgba(59,130,246,0.16); }
+.hl-card.green  { border-top-color: #10B981; }
+.hl-card.green:hover  { box-shadow: 0 14px 44px rgba(16,185,129,0.16); }
+.hl-card.red    { border-top-color: #EF4444; }
+.hl-card.red:hover    { box-shadow: 0 14px 44px rgba(239,68,68,0.16); }
+.hl-card.gold   { border-top-color: #F59E0B; }
+.hl-card.gold:hover   { box-shadow: 0 14px 44px rgba(245,158,11,0.16); }
+.hl-card.purple { border-top-color: #8B5CF6; }
+.hl-card.purple:hover { box-shadow: 0 14px 44px rgba(139,92,246,0.16); }
+.hl-card.teal   { border-top-color: #14B8A6; }
+.hl-card.teal:hover   { box-shadow: 0 14px 44px rgba(20,184,166,0.16); }
+.hl-icon  { font-size: 42px; margin-bottom: 12px; }
+.hl-label {
+    font-size: 10px; color: #64748B; font-weight: 700;
+    margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.8px;
+}
+.hl-value {
+    font-size: 28px; font-weight: 700; color: #0F172A;
+    font-family: 'Fira Code', monospace !important;
+}
+.hl-sub { font-size: 13px; color: #94A3B8; margin-top: 8px; }
+
 /* -------- TABLES -------- */
-[data-testid="stDataFrame"] { border-radius: 10px; overflow: hidden; }
+[data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
 
 /* -------- BUTTONS -------- */
 .stDownloadButton button, .stButton > button {
     border-radius: 10px !important;
     font-weight: 600 !important;
-    font-family: 'Heebo', sans-serif !important;
+    font-family: 'Fira Sans', 'Heebo', sans-serif !important;
+    transition: all 180ms ease-out !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -566,6 +576,7 @@ with tab1:
         st.plotly_chart(annual_summary_bar(fdf, "total_expenses"), use_container_width=True)
 
     st.plotly_chart(savings_rate(fdf), use_container_width=True)
+    st.plotly_chart(spending_heatmap(fdf), use_container_width=True)
 
     st.markdown('<div class="section-title">חודשים מובילים</div>', unsafe_allow_html=True)
     show = fdf[["year", "month", "income", "total_expenses", "balance"]].copy()
@@ -595,9 +606,10 @@ with tab2:
     )
     pie_df = fdf if year_for_pie == "כל השנים" else fdf[fdf["year"] == int(year_for_pie)]
 
+    yr_arg = None if year_for_pie == "כל השנים" else int(year_for_pie)
+
     c1, c2 = st.columns([1, 1])
     with c1:
-        yr_arg = None if year_for_pie == "כל השנים" else int(year_for_pie)
         st.plotly_chart(category_breakdown_pie(pie_df, yr_arg), use_container_width=True)
     with c2:
         total_for_pct = pie_df["total_expenses"].sum() or 1
@@ -615,6 +627,8 @@ with tab2:
             cat_df = pd.DataFrame(cat_rows).sort_values("_sort", ascending=False).drop(columns=["_sort"])
             st.dataframe(_styled_df(cat_df, ["קטגוריה"], ["סכום", "אחוז מהוצאות"]),
                          hide_index=True, use_container_width=True)
+
+    st.plotly_chart(category_treemap(pie_df, yr_arg), use_container_width=True)
 
     cats_to_show = selected_cats if selected_cats else avail_cats
     st.plotly_chart(category_bar_monthly(fdf, cats_to_show), use_container_width=True)
