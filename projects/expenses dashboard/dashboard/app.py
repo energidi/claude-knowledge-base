@@ -22,17 +22,27 @@ from dashboard.exporter import export_pdf, export_excel
 
 
 def _styled_df(df: pd.DataFrame, text_cols: list, num_cols: list):
-    """RTL-friendly table: text cols right-aligned & first, numbers centered."""
+    """RTL-friendly table: text cols right-aligned & first, numbers centered (cells + headers)."""
     ordered = [c for c in text_cols if c in df.columns] + \
               [c for c in num_cols  if c in df.columns]
     df = df[ordered]
     styler = df.style
+    # Cell alignment
     for col in text_cols:
         if col in df.columns:
             styler = styler.set_properties(subset=[col], **{"text-align": "right"})
     for col in num_cols:
         if col in df.columns:
             styler = styler.set_properties(subset=[col], **{"text-align": "center"})
+    # Header alignment
+    header_styles = [
+        {
+            "selector": f".col_heading.level0.col{i}",
+            "props": f"text-align: {'right' if col in text_cols else 'center'};",
+        }
+        for i, col in enumerate(ordered)
+    ]
+    styler = styler.set_table_styles(header_styles, overwrite=False)
     return styler
 
 
@@ -304,11 +314,7 @@ with st.sidebar:
         if st.button("שנה אחרונה", key="yr_last", use_container_width=True):
             st.session_state["sel_years"] = [max(all_years)]
 
-    selected_years = st.multiselect(
-        " ", all_years,
-        default=st.session_state.get("sel_years", all_years),
-        key="sel_years",
-    )
+    selected_years = st.multiselect(" ", all_years, key="sel_years")
 
     st.markdown("**חודשים**")
     col_c, col_d = st.columns(2)
@@ -320,9 +326,7 @@ with st.sidebar:
             st.session_state["sel_months"] = [1, 2, 3]
 
     selected_months = st.multiselect(
-        " ", all_months,
-        default=st.session_state.get("sel_months", all_months),
-        key="sel_months",
+        " ", all_months, key="sel_months",
         format_func=lambda m: MONTH_NAMES_HE[m],
     )
 
@@ -336,9 +340,7 @@ with st.sidebar:
             st.session_state["sel_cats"] = []
 
     selected_cats = st.multiselect(
-        " ", avail_cats,
-        default=st.session_state.get("sel_cats", avail_cats),
-        key="sel_cats",
+        " ", avail_cats, key="sel_cats",
         format_func=lambda c: CATEGORY_LABELS.get(c, c),
     )
 
@@ -346,6 +348,11 @@ with st.sidebar:
     if st.button("🔒 נעילה", use_container_width=True):
         st.session_state.df = None
         st.rerun()
+
+# Initialize filter session state (must happen before widgets are created to avoid conflict)
+if "sel_years"  not in st.session_state: st.session_state["sel_years"]  = all_years
+if "sel_months" not in st.session_state: st.session_state["sel_months"] = all_months
+if "sel_cats"   not in st.session_state: st.session_state["sel_cats"]   = avail_cats
 
 # Apply filters
 fdf = df[
@@ -707,7 +714,12 @@ with tab4:
                     row[f"{CATEGORY_LABELS.get(m, m)} %"] = f"{pct:+.1f}%"
             rows.append(row)
         if rows:
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+            comp_df = pd.DataFrame(rows)
+            metric_cols = [c for c in comp_df.columns if c != "שנה"]
+            st.dataframe(
+                _styled_df(comp_df, ["שנה"], metric_cols),
+                hide_index=True, use_container_width=True,
+            )
 
 # ---- TAB 5: Anomalies ------------------------------------------------------
 with tab5:
@@ -732,8 +744,9 @@ with tab5:
             anom_metric: CATEGORY_LABELS.get(anom_metric, anom_metric),
         })
         metric_col = CATEGORY_LABELS.get(anom_metric, anom_metric)
+        disp[metric_col] = disp[metric_col].apply(lambda v: f"₪{v:,.0f}" if pd.notna(v) else "-")
         st.dataframe(
-            disp.style.format({metric_col: "₪{:,.0f}"}),
+            _styled_df(disp, ["שנה", "חודש"], [metric_col, "סטייה"]),
             hide_index=True, use_container_width=True,
         )
     else:
