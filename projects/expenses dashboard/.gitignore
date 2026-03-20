@@ -1,0 +1,6 @@
+data/
+Expense Files/
+__pycache__/
+*.pyc
+*.pyo
+.env
