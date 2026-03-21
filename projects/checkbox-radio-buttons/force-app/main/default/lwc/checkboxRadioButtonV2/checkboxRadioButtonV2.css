@@ -1,0 +1,95 @@
+/* ========================================
+   1. HIDE NATIVE CHECKBOX INPUT (Radio Mode)
+   ======================================== */
+.slds-radio input[type="checkbox"] {
+    position: absolute;
+    clip: rect(0, 0, 0, 0);
+    width: 1px;
+    height: 1px;
+    border: 0;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    opacity: 0;
+}
+
+/* ========================================
+   2. RADIO DOT: Show dynamic theme dot when checked
+   ======================================== */
+.slds-radio input[type="checkbox"]:checked + .slds-radio__label .slds-radio_faux::after {
+    content: "";
+    display: block;
+    position: absolute;
+    width: 0.5rem;
+    height: 0.5rem;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--lwc-brandAccessible, #0176d3);
+    border-radius: 50%;
+}
+
+/* ========================================
+   3. DISABLED STATES
+   ======================================== */
+.slds-radio input[type="checkbox"]:disabled + .slds-radio__label .slds-radio_faux,
+.slds-checkbox input[type="checkbox"]:disabled + .slds-checkbox__label .slds-checkbox_faux {
+    border-color: var(--lwc-colorBorderInputDisabled, #c9c7c5);
+    background-color: var(--lwc-colorBackgroundInputDisabled, #dddbda);
+}
+
+.slds-radio input[type="checkbox"]:disabled + .slds-radio__label .slds-form-element__label,
+.slds-checkbox input[type="checkbox"]:disabled + .slds-checkbox__label .slds-form-element__label {
+    color: var(--lwc-colorTextLabelDisabled, #dddbda);
+}
+
+/* ========================================
+   4. LAYOUT & ALIGNMENT (FINAL FIX)
+   ======================================== */
+
+/* Main Container */
+.slds-radio,
+.slds-checkbox {
+    display: flex !important;
+    align-items: center !important;
+    margin-bottom: 0.5rem;
+}
+
+/* Wrapper */
+.slds-radio__label,
+.slds-checkbox__label {
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 !important;
+}
+
+/* The Button (Circle/Square) */
+.slds-radio_faux,
+.slds-checkbox_faux {
+    margin-right: 0.5rem !important;
+    margin-top: 0 !important;
+    flex-shrink: 0;
+}
+
+/* The Text Label */
+.slds-radio__label .slds-form-element__label,
+.slds-checkbox__label .slds-form-element__label {
+    padding: 0 !important;
+    margin: 0 !important;
+    line-height: 1 !important;
+}
+
+/* Hover States */
+.slds-radio__label:hover .slds-radio_faux,
+.slds-checkbox__label:hover .slds-checkbox_faux,
+.slds-radio input[type="checkbox"]:focus + .slds-radio__label .slds-radio_faux,
+.slds-checkbox input[type="checkbox"]:focus + .slds-checkbox__label .slds-checkbox_faux {
+    border-color: var(--lwc-brandAccessible, #0176d3);
+}
+
+/* ========================================
+   5. BOLD MAIN COMPONENT LABEL
+   ======================================== */
+.slds-grid > .slds-form-element__label {
+    font-weight: 700 !important;
+}
