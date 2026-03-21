@@ -103,10 +103,12 @@ Do not re-ask unless context changes.
 A project is Salesforce if it contains `sfdx-project.json` at the root. When detected, all rules below apply automatically.
 
 ## After Completing Any Salesforce Component
-1. Run `sf org display` to detect the default connected org.
-2. If a default org is found: ask "Would you like me to deploy this to **[alias]** ([instance URL])?"
-3. If no default org is found: ask which org to deploy to.
-4. Never deploy without explicit confirmation.
+1. Run the `code-review:code-review` skill on the changes.
+2. If issues are found - fix them before proceeding.
+3. Run `sf org display` to detect the default connected org.
+4. If a default org is found: ask "Would you like me to deploy this to **[alias]** ([instance URL])?"
+5. If no default org is found: ask which org to deploy to.
+6. Never deploy without explicit confirmation.
 
 ## LWC File Structure (Required for Deployment)
 Each LWC component must live in its own subfolder matching the component name:
