@@ -131,6 +131,28 @@ After making changes to code or creating new code:
   - If yes - ask for the repo URL before proceeding.
   - If no - skip deployment.
 
+## Deployment Method (gh CLI not available on this machine)
+`gh` is not installed. Use raw git instead:
+
+```bash
+# 1. Clone target repo to a temp directory
+git clone https://github.com/<owner>/<repo>.git "C:/Users/GidiAbramovich/AppData/Local/Temp/<repo-name>"
+
+# 2. Copy ONLY the new/changed component, preserving the full SFDX path structure
+mkdir -p "C:/Users/GidiAbramovich/AppData/Local/Temp/<repo-name>/<target-subfolder>/force-app/main/default/lwc"
+cp -r <source>/force-app/main/default/lwc/<ComponentName> "C:/Users/GidiAbramovich/AppData/Local/Temp/<repo-name>/<target-subfolder>/force-app/main/default/lwc/"
+
+# 3. Stage, commit, push
+cd "C:/Users/GidiAbramovich/AppData/Local/Temp/<repo-name>"
+git add <target-subfolder>/
+git commit -m "..."
+git push origin main
+```
+
+- Always clone to `C:/Users/GidiAbramovich/AppData/Local/Temp/` to avoid polluting the working project.
+- If the target URL is a subfolder (e.g. `.../tree/main/projects/foo`), clone the root repo and copy into that subfolder path.
+- Line-ending warnings (LF -> CRLF) on Windows are harmless - do not add `.gitattributes` unless asked.
+
 ---
 
 # Task Completion (Mandatory)
