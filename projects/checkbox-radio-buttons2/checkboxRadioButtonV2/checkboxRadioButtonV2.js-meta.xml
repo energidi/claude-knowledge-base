@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Checkbox Radio Button V2</masterLabel>
+    <description>Reactive version of Checkbox Radio Button. Correctly applies the default value even when inputRecords arrive after initial render (e.g. from a Screen Action or Subflow).</description>
+    <targets>
+        <target>lightning__FlowScreen</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__FlowScreen">
+            <propertyType name="T" extends="SObject" label="Object Name" />
+            <property name="displayField" type="String" label="Display Field API Name" role="inputOnly" required="true" default="Name"/>
+            <property name="inputRecords" type="{T[]}" label="Input Record Collection" role="inputOnly" required="true"/>
+            <property name="label" type="String" label="Label" role="inputOnly"/>
+            <property name="styleOption" type="String" label="Visual Style (Type 'Radio' or 'Checkbox')" role="inputOnly" required="true" default="Checkbox"/>
+            <property name="helpText" type="String" label="Help Text (Tooltip)" role="inputOnly"/>
+            <property name="isRequired" type="Boolean" label="Required" role="inputOnly" default="false"/>
+            <property name="defaultValue" type="String" label="Default Value (Record ID)" role="inputOnly"/>
+            <property name="field1API" type="String" label="Output Field 1 API Name" role="inputOnly"/>
+            <property name="field2API" type="String" label="Output Field 2 API Name" role="inputOnly"/>
+
+            <property name="selectedRecordId" type="String" label="Selected Record ID" role="outputOnly"/>
+            <property name="outputValue1" type="String" label="Output Value 1" role="outputOnly"/>
+            <property name="outputValue2" type="String" label="Output Value 2" role="outputOnly"/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
