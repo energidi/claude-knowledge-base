@@ -94,11 +94,32 @@ Do not re-ask unless context changes.
 ---
 
 # Salesforce Rules
-- Never deploy automatically.
-- After completing a Salesforce component, run `sf org display` to detect the default connected org.
-  - If a default org is found: ask "Would you like me to deploy this to **[alias]** ([instance URL])?"
-  - If no default org is found: ask which org to deploy to before proceeding.
-- Always wait for explicit confirmation before running any deploy command.
+
+## Detecting a Salesforce Project
+A project is Salesforce if it contains `sfdx-project.json` at the root. When detected, all rules below apply automatically.
+
+## After Completing Any Salesforce Component
+1. Run `sf org display` to detect the default connected org.
+2. If a default org is found: ask "Would you like me to deploy this to **[alias]** ([instance URL])?"
+3. If no default org is found: ask which org to deploy to.
+4. Never deploy without explicit confirmation.
+
+## LWC File Structure (Required for Deployment)
+Each LWC component must live in its own subfolder matching the component name:
+```
+force-app/main/default/lwc/
+  myComponent/
+    myComponent.js
+    myComponent.html
+    myComponent.css
+    myComponent.js-meta.xml
+```
+Verify this structure before deploying - files placed directly in `lwc/` will fail.
+
+## Deploy Command
+```bash
+sf project deploy start --source-dir force-app/main/default/lwc/<ComponentName> --target-org <alias>
+```
 
 ---
 
