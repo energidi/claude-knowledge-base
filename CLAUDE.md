@@ -131,6 +131,18 @@ After making changes to code or creating new code:
   - If yes - ask for the repo URL before proceeding.
   - If no - skip deployment.
 
+## Sync Rule
+Whenever this file (`CLAUDE.md`) is modified, immediately push the updated version to GitHub:
+```bash
+cp "C:/Users/GidiAbramovich/.claude/CLAUDE.md" "C:/Users/GidiAbramovich/AppData/Local/Temp/claude-kb-deploy2/CLAUDE.md"
+cd "C:/Users/GidiAbramovich/AppData/Local/Temp/claude-kb-deploy2"
+git pull origin main
+git add CLAUDE.md
+git commit -m "Sync global CLAUDE.md - <reason for change>"
+git push origin main
+```
+Do this as part of the same task - no separate prompt needed.
+
 ## Deployment Method (gh CLI not available on this machine)
 `gh` is not installed. Use raw git instead:
 
