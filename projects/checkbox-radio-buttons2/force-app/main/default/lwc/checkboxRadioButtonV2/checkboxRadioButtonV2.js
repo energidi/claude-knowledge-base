@@ -16,6 +16,7 @@ export default class CheckboxRadioButtonV2 extends LightningElement {
 
     _inputRecords = [];
     _defaultValue;
+    _userHasSelected = false;
 
     @api
     get inputRecords() {
@@ -37,6 +38,7 @@ export default class CheckboxRadioButtonV2 extends LightningElement {
 
     _applyDefault() {
         if (!this._defaultValue || !this._inputRecords?.length) return;
+        if (this._userHasSelected) return;
         if (this.selectedRecordId === this._defaultValue) return;
         const match = this._inputRecords.find(r => r.Id === this._defaultValue);
         if (!match) return;
@@ -72,6 +74,7 @@ export default class CheckboxRadioButtonV2 extends LightningElement {
     }
 
     handleCheckboxChange(event) {
+        this._userHasSelected = true;
         const selectedId = event.target.dataset.id;
         if (event.target.checked) {
             this.selectedRecordId = selectedId;

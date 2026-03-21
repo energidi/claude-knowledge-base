@@ -117,6 +117,28 @@ describe('c-checkbox-radio-button-v2', () => {
         expect(dispatchSpy).not.toHaveBeenCalled();
     });
 
+    it('does not overwrite user selection when inputRecords reload', async () => {
+        const element = createElement('c-checkbox-radio-button-v2', { is: CheckboxRadioButtonV2 });
+        element.label = 'Choose one';
+        element.defaultValue = 'rec001';
+        element.inputRecords = MOCK_RECORDS;
+        document.body.appendChild(element);
+        await Promise.resolve();
+
+        // Simulate user picking a different option
+        const input = element.shadowRoot.querySelector('input');
+        input.dataset.id = 'rec003';
+        input.checked = true;
+        input.dispatchEvent(new CustomEvent('change', { bubbles: true }));
+        await Promise.resolve();
+
+        // Records reload - default must not overwrite user pick
+        element.inputRecords = [...MOCK_RECORDS];
+        await Promise.resolve();
+
+        expect(element.selectedRecordId).toBe('rec003');
+    });
+
     it('handles null inputRecords without throwing', () => {
         const element = createElement('c-checkbox-radio-button-v2', { is: CheckboxRadioButtonV2 });
         element.defaultValue = 'rec001';
