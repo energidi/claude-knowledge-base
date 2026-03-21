@@ -8,13 +8,17 @@ Tone: Expert, methodical, warm. No fluff, no motivational filler, no restating t
 ---
 
 # Always-On Rules
-- Respond in the user's language at all times.
+- Always respond in English unless clearly asked otherwise.
 - Replace every em dash (—) and en dash (–) with a hyphen (-). Never output — or –.
 - No filler, repetition, or restating the prompt.
 - Prefer tables > bullets > prose. Diffs over full rewrites.
 - If a request is ambiguous, ask one precise clarifying question before proceeding.
 - Output only what moves execution forward.
 - Minimize tokens without sacrificing correctness.
+- Start with a short answer. Elaborate only if asked.
+- Flag any uncertain or unverified data point with [?].
+- If the user is heading in the wrong direction or making an incorrect assumption, stop and explain why before continuing.
+- If a related risk or issue is spotted outside the current task scope, flag it and wait before continuing.
 
 ---
 
@@ -94,8 +98,34 @@ Do not re-ask unless context changes.
 ---
 
 # Salesforce Rules
-- Before any deployment: identify the target Salesforce environment, then stop and wait for explicit confirmation.
-- Never deploy automatically.
+
+## Detecting a Salesforce Project
+A project is Salesforce if it contains `sfdx-project.json` at the root. When detected, all rules below apply automatically.
+
+## After Completing Any Salesforce Component
+1. Run the `code-review:code-review` skill on the changes.
+2. If issues are found - fix them before proceeding.
+3. Run `sf org display` to detect the default connected org.
+4. If a default org is found: ask "Would you like me to deploy this to **[alias]** ([instance URL])?"
+5. If no default org is found: ask which org to deploy to.
+6. Never deploy without explicit confirmation.
+
+## LWC File Structure (Required for Deployment)
+Each LWC component must live in its own subfolder matching the component name:
+```
+force-app/main/default/lwc/
+  myComponent/
+    myComponent.js
+    myComponent.html
+    myComponent.css
+    myComponent.js-meta.xml
+```
+Verify this structure before deploying - files placed directly in `lwc/` will fail.
+
+## Deploy Command
+```bash
+sf project deploy start --source-dir force-app/main/default/lwc/<ComponentName> --target-org <alias>
+```
 
 ---
 
@@ -120,6 +150,7 @@ Concise. Resumable.
 | Multiple options without a recommendation | Correctness before speed |
 | "It depends" without criteria | Minimize tokens |
 | Mix Planning and Execution phases | Ask one precise question if ambiguous |
+| Output uncertain data without flagging it with [?] | Flag risks outside task scope before continuing |
 
 ---
 
@@ -130,6 +161,40 @@ After making changes to code or creating new code:
 - If unsure where to deploy, ask: "Would you like me to deploy this to GitHub?"
   - If yes - ask for the repo URL before proceeding.
   - If no - skip deployment.
+
+## Sync Rule
+Whenever this file (`CLAUDE.md`) is modified, immediately push the updated version to GitHub:
+```bash
+cp "C:/Users/GidiAbramovich/.claude/CLAUDE.md" "C:/Users/GidiAbramovich/AppData/Local/Temp/claude-kb-deploy2/CLAUDE.md"
+cd "C:/Users/GidiAbramovich/AppData/Local/Temp/claude-kb-deploy2"
+git pull origin main
+git add CLAUDE.md
+git commit -m "Sync global CLAUDE.md - <reason for change>"
+git push origin main
+```
+Do this as part of the same task - no separate prompt needed.
+
+## Deployment Method (gh CLI not available on this machine)
+`gh` is not installed. Use raw git instead:
+
+```bash
+# 1. Clone target repo to a temp directory
+git clone https://github.com/<owner>/<repo>.git "C:/Users/GidiAbramovich/AppData/Local/Temp/<repo-name>"
+
+# 2. Copy ONLY the new/changed component, preserving the full SFDX path structure
+mkdir -p "C:/Users/GidiAbramovich/AppData/Local/Temp/<repo-name>/<target-subfolder>/force-app/main/default/lwc"
+cp -r <source>/force-app/main/default/lwc/<ComponentName> "C:/Users/GidiAbramovich/AppData/Local/Temp/<repo-name>/<target-subfolder>/force-app/main/default/lwc/"
+
+# 3. Stage, commit, push
+cd "C:/Users/GidiAbramovich/AppData/Local/Temp/<repo-name>"
+git add <target-subfolder>/
+git commit -m "..."
+git push origin main
+```
+
+- Always clone to `C:/Users/GidiAbramovich/AppData/Local/Temp/` to avoid polluting the working project.
+- If the target URL is a subfolder (e.g. `.../tree/main/projects/foo`), clone the root repo and copy into that subfolder path.
+- Line-ending warnings (LF -> CRLF) on Windows are harmless - do not add `.gitattributes` unless asked.
 
 ---
 
