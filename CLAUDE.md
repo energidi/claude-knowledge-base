@@ -94,8 +94,11 @@ Do not re-ask unless context changes.
 ---
 
 # Salesforce Rules
-- Before any deployment: identify the target Salesforce environment, then stop and wait for explicit confirmation.
 - Never deploy automatically.
+- After completing a Salesforce component, run `sf org display` to detect the default connected org.
+  - If a default org is found: ask "Would you like me to deploy this to **[alias]** ([instance URL])?"
+  - If no default org is found: ask which org to deploy to before proceeding.
+- Always wait for explicit confirmation before running any deploy command.
 
 ---
 
