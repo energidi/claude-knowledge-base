@@ -1,0 +1,966 @@
+/* ============================================================
+   קוף החלל - Space Chimp Runner
+   Full game logic - Vanilla JS + Canvas API
+   No external dependencies.
+   ============================================================ */
+
+'use strict';
+
+// ============================================================
+// SECTION 1 - CANVAS SETUP & RESIZE
+// ============================================================
+
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+
+// Logical (design) resolution. All game coordinates use these values.
+const LOGICAL_W = 800;
+const LOGICAL_H = 400;
+
+// Scale factor: how much we multiply logical coords to fill the window.
+let scale = 1;
+
+function resizeCanvas() {
+  const winW  = window.innerWidth;
+  const winH  = window.innerHeight;
+  const scaleX = winW / LOGICAL_W;
+  const scaleY = winH / LOGICAL_H;
+  scale = Math.min(scaleX, scaleY);
+
+  canvas.width  = Math.floor(LOGICAL_W * scale);
+  canvas.height = Math.floor(LOGICAL_H * scale);
+
+  // All subsequent draw calls are scaled automatically
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ============================================================
+// SECTION 2 - GAME STATES
+// ============================================================
+
+const STATE = {
+  START          : 'START',
+  PLAYING        : 'PLAYING',
+  LEVEL_COMPLETE : 'LEVEL_COMPLETE',
+  GAME_OVER      : 'GAME_OVER',
+  VICTORY        : 'VICTORY',
+};
+
+let gameState = STATE.START;
+
+// ============================================================
+// SECTION 3 - LEVEL CONFIGURATION
+// ============================================================
+// time          - seconds to survive
+// lives         - starting lives for this level
+// spawnInterval - ms between meteor spawns (lower = more frequent)
+// meteorSpeed   - base pixels/sec for meteors
+
+const LEVELS = [
+  { time: 30,  lives: 1, spawnInterval: 2500, meteorSpeed: 180 },
+  { time: 60,  lives: 1, spawnInterval: 2200, meteorSpeed: 200 },
+  { time: 90,  lives: 1, spawnInterval: 2000, meteorSpeed: 220 },
+  { time: 120, lives: 1, spawnInterval: 1800, meteorSpeed: 240 },
+  { time: 150, lives: 1, spawnInterval: 1600, meteorSpeed: 260 },
+  { time: 180, lives: 3, spawnInterval: 1400, meteorSpeed: 290 },
+  { time: 210, lives: 3, spawnInterval: 1200, meteorSpeed: 320 },
+  { time: 240, lives: 3, spawnInterval: 1000, meteorSpeed: 350 },
+  { time: 270, lives: 3, spawnInterval: 800,  meteorSpeed: 390 },
+  { time: 300, lives: 3, spawnInterval: 600,  meteorSpeed: 430 },
+];
+
+// ============================================================
+// SECTION 4 - CHARACTERS
+// ============================================================
+
+const CHARACTERS = [
+  { emoji: '🐒', name: 'אסטרו-שימפנזה' },
+  { emoji: '🐈', name: 'אסטרו-חתול'    },
+  { emoji: '🤖', name: 'רובוט חלוד'    },
+  { emoji: '👽', name: 'זלוג הבלוב'    },
+];
+
+let selectedCharIdx = 0;
+
+// ============================================================
+// SECTION 5 - MUTABLE GAME STATE
+// ============================================================
+
+let currentLevel  = 0;
+let score         = 0;
+let lives         = 1;
+let timeRemaining = 0;
+let lastTimestamp  = 0;
+
+// ============================================================
+// SECTION 6 - GROUND
+// ============================================================
+
+const GROUND_Y = 320; // Y-position of the ground line (logical px)
+
+// ============================================================
+// SECTION 7 - PLAYER
+// ============================================================
+// VARIABLE JUMP EXPLAINED:
+//   The jump system has two phases:
+//   Phase 1 - Impulse: On Space keydown (while on ground), vy is set to
+//             JUMP_VY (a large negative value). This launches the player up.
+//   Phase 2 - Hold Boost: While Space is held AND the player is still rising
+//             AND jumpHeldSec < MAX_JUMP_HOLD, an extra upward force
+//             (HOLD_BOOST) is subtracted from vy each frame.
+//             This extends the jump height the longer you hold.
+//   When Space is released, jumpPressed = false, boost stops.
+//   Result: tap = short hop, hold = tall jump. Max height is capped.
+//
+//   Gravity (GRAVITY px/sec^2) is always applied, whether on ground or not.
+//   When player.y reaches GROUND_Y the player lands and vy resets to 0.
+
+const GRAVITY       = 1400;  // downward acceleration (px/sec^2)
+const JUMP_VY       = -520;  // initial upward velocity on jump (px/sec)
+const HOLD_BOOST    = 900;   // extra upward acceleration while holding (px/sec^2)
+const MAX_JUMP_HOLD = 0.38;  // max seconds the hold boost is applied
+const PLAYER_SPEED_X = 180;  // horizontal movement speed (px/sec)
+const PLAYER_MIN_X   = 80;
+const PLAYER_MAX_X   = LOGICAL_W - 80;
+
+const player = {
+  x             : 560,
+  y             : GROUND_Y,
+  vy            : 0,
+  onGround      : true,
+  jumpPressed   : false,   // true while Space is held on a jump
+  jumpHeldSec   : 0,       // seconds Space has been held this jump
+  invincible    : false,
+  invincibleTimer : 0,
+  INVINCIBLE_DUR  : 2.0,
+  size          : 44,      // emoji font size
+};
+
+// ============================================================
+// SECTION 8 - METEORS
+// ============================================================
+// RIGHT-TO-LEFT RUNNING EXPLAINED:
+//   The player character conceptually runs from RIGHT to LEFT through space.
+//   We simulate this by scrolling all background layers from right to left
+//   (subtracting dx from their X positions each frame).
+//
+//   Meteors are rocks rolling toward the player. Since the player runs left,
+//   meteors come from the LEFT and roll RIGHTWARD (toward the player):
+//     - Meteors spawn at x = -radius (just off the left edge of the screen)
+//     - Each frame: meteor.x += meteor.speed * dt  (positive X = rightward)
+//     - When meteor.x > LOGICAL_W + radius, it is recycled
+//
+//   This creates the feel of running head-on into incoming space debris.
+//
+// SCORING:
+//   A point is awarded when a meteor crosses the player's X position
+//   while the player is airborne. This means the player successfully
+//   jumped over the rolling rock.
+//   Tracked with meteor.scored to prevent double-counting.
+
+const METEOR_POOL_SIZE = 12;
+const meteors = [];
+
+for (let i = 0; i < METEOR_POOL_SIZE; i++) {
+  meteors.push({
+    x: 0, y: 0,
+    radius  : 24,
+    speed   : 0,
+    active  : false,
+    scored  : false,
+    rotation: 0,
+  });
+}
+
+let spawnTimer = 0; // ms since last spawn
+
+function getFreeMeteor() {
+  for (const m of meteors) {
+    if (!m.active) return m;
+  }
+  return null;
+}
+
+function spawnMeteor() {
+  const m = getFreeMeteor();
+  if (!m) return;
+  const cfg   = LEVELS[currentLevel];
+  m.radius    = 18 + Math.random() * 18;
+  m.x         = -m.radius;
+  m.y         = GROUND_Y - m.radius;
+  m.speed     = cfg.meteorSpeed * (0.85 + Math.random() * 0.3);
+  m.active    = true;
+  m.scored    = false;
+  m.rotation  = 0;
+}
+
+// ============================================================
+// SECTION 9 - PARALLAX BACKGROUND
+// ============================================================
+// SCROLLING EXPLAINED:
+//   Stars and the planet have an X position that decreases by
+//   (speed * dt) every frame. This moves them leftward, simulating
+//   the player running to the left through space.
+//
+//   Different layers scroll at different speeds to create depth:
+//     Far stars:  speed = BG_BASE_SPEED * 0.15 (very slow, far away)
+//     Near stars: speed = BG_BASE_SPEED * 0.40 (faster, closer)
+//     Planet:     speed = BG_BASE_SPEED * 0.06 (barely moves, very far)
+//
+//   When an element exits the left edge, it wraps to the right edge.
+
+const BG_BASE_SPEED = 80; // reference scroll speed (px/sec)
+
+function makeStarLayer(count, speedMult, minR, maxR) {
+  const arr = [];
+  for (let i = 0; i < count; i++) {
+    arr.push({
+      x    : Math.random() * LOGICAL_W,
+      y    : Math.random() * (GROUND_Y - 20),
+      r    : minR + Math.random() * (maxR - minR),
+      speed: BG_BASE_SPEED * speedMult,
+      alpha: 0.4 + Math.random() * 0.6,
+    });
+  }
+  return arr;
+}
+
+const farStars  = makeStarLayer(80, 0.15, 0.5, 1.2);
+const nearStars = makeStarLayer(30, 0.40, 1.0, 2.5);
+
+const planet = { x: LOGICAL_W * 0.25, y: 110, r: 55, speed: BG_BASE_SPEED * 0.06 };
+
+// Ground tick marks that scroll with the background
+const GROUND_MARKS = [];
+for (let i = 0; i < 14; i++) {
+  GROUND_MARKS.push({ x: i * (LOGICAL_W / 11) });
+}
+const GROUND_MARK_SPEED = BG_BASE_SPEED * 1.0;
+
+// ============================================================
+// SECTION 10 - WEB AUDIO
+// ============================================================
+
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioCtx;
+}
+
+function playTone(type, freqStart, freqEnd, duration, volume = 0.3) {
+  try {
+    const ac   = getAudioCtx();
+    const osc  = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freqStart, ac.currentTime);
+    osc.frequency.linearRampToValueAtTime(freqEnd, ac.currentTime + duration);
+    gain.gain.setValueAtTime(volume, ac.currentTime);
+    gain.gain.linearRampToValueAtTime(0, ac.currentTime + duration);
+    osc.start(ac.currentTime);
+    osc.stop(ac.currentTime + duration + 0.02);
+  } catch (e) { /* Audio blocked before user gesture - ignore */ }
+}
+
+function soundJump()          { playTone('sine',     300, 560, 0.08, 0.2);  }
+function soundHit()           { playTone('sawtooth', 220, 80,  0.18, 0.35); }
+function soundLevelComplete() {
+  playTone('sine', 523, 523, 0.12, 0.3);
+  setTimeout(() => playTone('sine', 659, 659, 0.12, 0.3), 140);
+  setTimeout(() => playTone('sine', 784, 784, 0.18, 0.3), 280);
+}
+function soundVictory() {
+  [523, 587, 659, 698, 784, 880, 988, 1047].forEach((f, i) => {
+    setTimeout(() => playTone('sine', f, f, 0.15, 0.3), i * 130);
+  });
+}
+
+// ============================================================
+// SECTION 11 - INPUT
+// ============================================================
+
+const keys = { ArrowLeft: false, ArrowRight: false, Space: false };
+
+function onJumpPress() {
+  // Start a jump only from the ground and only if key wasn't already held
+  if (!keys.Space && player.onGround && gameState === STATE.PLAYING) {
+    player.vy          = JUMP_VY;
+    player.onGround    = false;
+    player.jumpPressed = true;
+    player.jumpHeldSec = 0;
+    soundJump();
+  }
+  keys.Space = true;
+}
+
+function onJumpRelease() {
+  keys.Space         = false;
+  player.jumpPressed = false; // ends hold boost
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'ArrowLeft')  { keys.ArrowLeft  = true; e.preventDefault(); }
+  if (e.code === 'ArrowRight') { keys.ArrowRight = true; e.preventDefault(); }
+  if (e.code === 'Space')      { e.preventDefault(); onJumpPress(); }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'ArrowLeft')  keys.ArrowLeft  = false;
+  if (e.code === 'ArrowRight') keys.ArrowRight = false;
+  if (e.code === 'Space')      onJumpRelease();
+});
+
+// Mobile button wiring
+function wireButton(btnId, downFn, upFn) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  const down = (e) => { e.preventDefault(); btn.classList.add('pressed');    downFn(); };
+  const up   = (e) => { e.preventDefault(); btn.classList.remove('pressed'); upFn();   };
+  btn.addEventListener('touchstart',  down, { passive: false });
+  btn.addEventListener('touchend',    up,   { passive: false });
+  btn.addEventListener('touchcancel', up,   { passive: false });
+  btn.addEventListener('mousedown',   down);
+  btn.addEventListener('mouseup',     up);
+  btn.addEventListener('mouseleave',  up);
+}
+
+wireButton('btn-left',
+  () => { keys.ArrowLeft = true;  },
+  () => { keys.ArrowLeft = false; }
+);
+wireButton('btn-right',
+  () => { keys.ArrowRight = true;  },
+  () => { keys.ArrowRight = false; }
+);
+wireButton('btn-jump', onJumpPress, onJumpRelease);
+
+// ============================================================
+// SECTION 12 - UI BUTTON REGISTRY (click / tap on canvas)
+// ============================================================
+
+let uiButtons = [];
+
+function registerButton(id, x, y, w, h) {
+  uiButtons.push({ id, x, y, w, h });
+}
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const lx = (e.clientX - rect.left) / scale;
+  const ly = (e.clientY - rect.top)  / scale;
+  handleMenuClick(lx, ly);
+});
+
+canvas.addEventListener('touchend', (e) => {
+  const t    = e.changedTouches[0];
+  const rect = canvas.getBoundingClientRect();
+  const lx = (t.clientX - rect.left) / scale;
+  const ly = (t.clientY - rect.top)  / scale;
+  handleMenuClick(lx, ly);
+}, { passive: true });
+
+function handleMenuClick(lx, ly) {
+  for (const btn of uiButtons) {
+    if (lx >= btn.x && lx <= btn.x + btn.w &&
+        ly >= btn.y && ly <= btn.y + btn.h) {
+      onButtonClick(btn.id);
+      return;
+    }
+  }
+}
+
+function onButtonClick(id) {
+  if (id === 'start')       { startLevel(0); return; }
+  if (id === 'next-level')  { startLevel(currentLevel + 1); return; }
+  if (id === 'try-again')   { startLevel(currentLevel); return; }
+  if (id === 'restart')     { score = 0; startLevel(0); return; }
+  if (id.startsWith('char-')) {
+    selectedCharIdx = parseInt(id.split('-')[1], 10);
+  }
+}
+
+// ============================================================
+// SECTION 13 - COLLISION DETECTION
+// ============================================================
+
+// Circle vs AABB (axis-aligned bounding box) overlap test.
+function circleRectOverlap(cx, cy, cr, rx, ry, rw, rh) {
+  const nearX = Math.max(rx, Math.min(cx, rx + rw));
+  const nearY = Math.max(ry, Math.min(cy, ry + rh));
+  const dx = cx - nearX;
+  const dy = cy - nearY;
+  return (dx * dx + dy * dy) < (cr * cr);
+}
+
+function checkCollisions() {
+  // Player AABB (shrunk slightly so emoji edges don't trigger unfairly)
+  const hw     = player.size * 0.35;
+  const shrink = 8;
+  const px = player.x - hw + shrink;
+  const py = player.y - player.size + shrink;
+  const pw = hw * 2 - shrink * 2;
+  const ph = player.size - shrink;
+
+  for (const m of meteors) {
+    if (!m.active) continue;
+
+    // Score: meteor crossed player's X while player is airborne
+    if (!m.scored && m.x > player.x && !player.onGround) {
+      m.scored = true;
+      score++;
+    }
+
+    // Hit detection: skip if invincible
+    if (player.invincible) continue;
+
+    if (circleRectOverlap(m.x, m.y, m.radius * 0.85, px, py, pw, ph)) {
+      handlePlayerHit();
+      break; // process one hit per frame
+    }
+  }
+}
+
+// ============================================================
+// SECTION 14 - HIT / LIVES LOGIC
+// ============================================================
+
+function handlePlayerHit() {
+  soundHit();
+  lives--;
+
+  if (lives <= 0) {
+    // No lives left - show Game Over screen
+    gameState = STATE.GAME_OVER;
+    return;
+  }
+
+  // Lives remain (levels 6-10 with 3 lives): grant invincibility frames
+  player.invincible       = true;
+  player.invincibleTimer  = player.INVINCIBLE_DUR;
+}
+
+// ============================================================
+// SECTION 15 - LEVEL MANAGEMENT
+// ============================================================
+
+function startLevel(levelIdx) {
+  currentLevel  = levelIdx;
+  const cfg     = LEVELS[currentLevel];
+  lives         = cfg.lives;
+  timeRemaining = cfg.time;
+  spawnTimer    = 0;
+
+  // Reset meteor pool
+  for (const m of meteors) m.active = false;
+
+  // Reset player
+  player.x              = 560;
+  player.y              = GROUND_Y;
+  player.vy             = 0;
+  player.onGround       = true;
+  player.jumpPressed    = false;
+  player.jumpHeldSec    = 0;
+  player.invincible     = false;
+  player.invincibleTimer = 0;
+
+  // Reset input state
+  keys.ArrowLeft  = false;
+  keys.ArrowRight = false;
+  keys.Space      = false;
+
+  gameState = STATE.PLAYING;
+}
+
+// ============================================================
+// SECTION 16 - UPDATE
+// ============================================================
+
+function update(dt) {
+  if (gameState !== STATE.PLAYING) return;
+
+  // -- Timer --
+  timeRemaining -= dt;
+  if (timeRemaining <= 0) {
+    timeRemaining = 0;
+    // Level survived!
+    if (currentLevel >= LEVELS.length - 1) {
+      gameState = STATE.VICTORY;
+      soundVictory();
+    } else {
+      gameState = STATE.LEVEL_COMPLETE;
+      soundLevelComplete();
+    }
+    return;
+  }
+
+  // -- Player horizontal (arrow keys adjust position to time jumps) --
+  if (keys.ArrowLeft)  player.x = Math.max(PLAYER_MIN_X, player.x - PLAYER_SPEED_X * dt);
+  if (keys.ArrowRight) player.x = Math.min(PLAYER_MAX_X, player.x + PLAYER_SPEED_X * dt);
+
+  // -- Variable jump: hold boost phase --
+  // While Space is held, player is airborne, and hold time not exhausted:
+  // apply additional upward acceleration to extend jump height.
+  if (player.jumpPressed && !player.onGround) {
+    if (player.jumpHeldSec < MAX_JUMP_HOLD) {
+      player.vy          -= HOLD_BOOST * dt;
+      player.jumpHeldSec += dt;
+    } else {
+      player.jumpPressed = false; // cap reached - stop boost
+    }
+  }
+
+  // -- Gravity (always applied) --
+  player.vy += GRAVITY * dt;
+
+  // -- Vertical position --
+  player.y += player.vy * dt;
+
+  // -- Ground landing --
+  if (player.y >= GROUND_Y) {
+    player.y           = GROUND_Y;
+    player.vy          = 0;
+    player.onGround    = true;
+    player.jumpPressed = false;
+  }
+
+  // -- Invincibility countdown --
+  if (player.invincible) {
+    player.invincibleTimer -= dt;
+    if (player.invincibleTimer <= 0) player.invincible = false;
+  }
+
+  // -- Meteor spawning --
+  spawnTimer += dt * 1000;
+  if (spawnTimer >= LEVELS[currentLevel].spawnInterval) {
+    spawnTimer = 0;
+    spawnMeteor();
+  }
+
+  // -- Meteor movement --
+  for (const m of meteors) {
+    if (!m.active) continue;
+    m.x        += m.speed * dt;
+    m.rotation += (m.speed / m.radius) * dt; // rolling effect
+    if (m.x > LOGICAL_W + m.radius) m.active = false; // recycle
+  }
+
+  // -- Background scroll (right-to-left parallax) --
+  for (const s of farStars) {
+    s.x -= s.speed * dt;
+    if (s.x < 0) s.x += LOGICAL_W;
+  }
+  for (const s of nearStars) {
+    s.x -= s.speed * dt;
+    if (s.x < 0) s.x += LOGICAL_W;
+  }
+  planet.x -= planet.speed * dt;
+  if (planet.x < -planet.r * 2) planet.x = LOGICAL_W + planet.r;
+
+  for (const mark of GROUND_MARKS) {
+    mark.x -= GROUND_MARK_SPEED * dt;
+    if (mark.x < -20) mark.x += LOGICAL_W + 20;
+  }
+
+  // -- Collisions --
+  checkCollisions();
+}
+
+// ============================================================
+// SECTION 17 - DRAW HELPERS
+// ============================================================
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawButton(id, label, x, y, w, h, bgColor = '#1a6aff') {
+  ctx.save();
+  ctx.shadowColor = '#003388';
+  ctx.shadowBlur  = 14;
+  ctx.fillStyle   = bgColor;
+  roundRect(x, y, w, h, 10);
+  ctx.fill();
+  ctx.shadowBlur  = 0;
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth   = 1.5;
+  ctx.stroke();
+  ctx.fillStyle    = '#fff';
+  ctx.font         = `bold ${Math.round(h * 0.42)}px Arial`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + w / 2, y + h / 2);
+  ctx.restore();
+  registerButton(id, x, y, w, h);
+}
+
+// ============================================================
+// SECTION 18 - DRAW SCENE ELEMENTS
+// ============================================================
+
+function drawBackground() {
+  // Sky gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  grad.addColorStop(0, '#020818');
+  grad.addColorStop(1, '#0a1a3a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+
+  // Planet
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  const pg = ctx.createRadialGradient(
+    planet.x - planet.r * 0.3, planet.y - planet.r * 0.3, planet.r * 0.1,
+    planet.x, planet.y, planet.r
+  );
+  pg.addColorStop(0, '#6070c0');
+  pg.addColorStop(1, '#1a2550');
+  ctx.fillStyle = pg;
+  ctx.beginPath();
+  ctx.arc(planet.x, planet.y, planet.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(150,170,255,0.3)';
+  ctx.lineWidth   = 4;
+  ctx.beginPath();
+  ctx.ellipse(planet.x, planet.y, planet.r * 1.7, planet.r * 0.35, -0.3, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // Far stars
+  ctx.fillStyle = '#ffffff';
+  for (const s of farStars) {
+    ctx.globalAlpha = s.alpha * 0.7;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Near stars
+  ctx.fillStyle = '#cce0ff';
+  for (const s of nearStars) {
+    ctx.globalAlpha = s.alpha;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawGround() {
+  const g = ctx.createLinearGradient(0, GROUND_Y, 0, LOGICAL_H);
+  g.addColorStop(0, '#3a3060');
+  g.addColorStop(1, '#1a1030');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, GROUND_Y, LOGICAL_W, LOGICAL_H - GROUND_Y);
+
+  ctx.strokeStyle = '#7060cc';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y);
+  ctx.lineTo(LOGICAL_W, GROUND_Y);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(150,130,220,0.4)';
+  ctx.lineWidth   = 1;
+  for (const mark of GROUND_MARKS) {
+    ctx.beginPath();
+    ctx.moveTo(mark.x, GROUND_Y);
+    ctx.lineTo(mark.x, GROUND_Y + 8);
+    ctx.stroke();
+  }
+}
+
+function drawPlayer() {
+  // Blink effect during invincibility
+  if (player.invincible) {
+    const blinkOn = Math.floor(player.invincibleTimer * 8) % 2 === 0;
+    if (blinkOn) return;
+  }
+  ctx.save();
+  ctx.font         = `${player.size}px serif`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.shadowColor  = 'rgba(100,200,255,0.6)';
+  ctx.shadowBlur   = 14;
+  ctx.fillText(CHARACTERS[selectedCharIdx].emoji, player.x, player.y);
+  ctx.restore();
+}
+
+function drawMeteors() {
+  for (const m of meteors) {
+    if (!m.active) continue;
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    ctx.rotate(m.rotation);
+    const mg = ctx.createRadialGradient(-m.radius * 0.3, -m.radius * 0.3, 1, 0, 0, m.radius);
+    mg.addColorStop(0, '#ff8844');
+    mg.addColorStop(0.5, '#cc3300');
+    mg.addColorStop(1, '#661100');
+    ctx.fillStyle   = mg;
+    ctx.shadowColor = '#ff4400';
+    ctx.shadowBlur  = 10;
+    ctx.beginPath();
+    ctx.arc(0, 0, m.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur   = 0;
+    ctx.font         = `${Math.round(m.radius * 1.5)}px serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('☄️', 0, 0);
+    ctx.restore();
+  }
+}
+
+function drawHUD() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, LOGICAL_W, 40);
+
+  ctx.font         = 'bold 18px Arial';
+  ctx.textBaseline = 'middle';
+
+  // Level (right side - RTL)
+  ctx.fillStyle = '#aaccff';
+  ctx.textAlign = 'right';
+  ctx.fillText(`שלב: ${currentLevel + 1}`, LOGICAL_W - 12, 14);
+
+  // Time (center)
+  const secs = Math.ceil(timeRemaining);
+  ctx.fillStyle = secs <= 10 ? '#ff5555' : '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.fillText(`זמן: ${secs}`, LOGICAL_W / 2, 14);
+
+  // Score (left)
+  ctx.fillStyle = '#ffdd44';
+  ctx.textAlign = 'left';
+  ctx.fillText(`ניקוד: ${score}`, 12, 14);
+
+  // Lives (hearts below score)
+  let hearts = '';
+  const maxLives = LEVELS[currentLevel].lives;
+  for (let i = 0; i < maxLives; i++) {
+    hearts += i < lives ? '❤️' : '🖤';
+  }
+  ctx.font = '14px serif';
+  ctx.fillText(hearts, 12, 32);
+
+  ctx.restore();
+}
+
+// ============================================================
+// SECTION 19 - SCREEN DRAW FUNCTIONS
+// ============================================================
+
+function drawStartScreen() {
+  drawBackground();
+
+  ctx.save();
+  // Title
+  ctx.font         = 'bold 52px Arial';
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle    = '#ffffff';
+  ctx.shadowColor  = '#4488ff';
+  ctx.shadowBlur   = 24;
+  ctx.fillText('קוף החלל', LOGICAL_W / 2, 70);
+  ctx.shadowBlur   = 0;
+
+  ctx.font      = '20px Arial';
+  ctx.fillStyle = '#8899cc';
+  ctx.fillText('משחק ריצה בחלל', LOGICAL_W / 2, 110);
+
+  ctx.font      = 'bold 18px Arial';
+  ctx.fillStyle = '#ccddff';
+  ctx.fillText('בחר את הדמות שלך', LOGICAL_W / 2, 155);
+  ctx.restore();
+
+  // Character cards
+  const cardW  = 120;
+  const cardH  = 110;
+  const gap    = 16;
+  const totalW = CHARACTERS.length * cardW + (CHARACTERS.length - 1) * gap;
+  const startX = (LOGICAL_W - totalW) / 2;
+  const cardY  = 170;
+
+  for (let i = 0; i < CHARACTERS.length; i++) {
+    const cx  = startX + i * (cardW + gap);
+    const sel = i === selectedCharIdx;
+
+    ctx.save();
+    ctx.fillStyle   = sel ? 'rgba(30,80,180,0.6)' : 'rgba(255,255,255,0.05)';
+    ctx.strokeStyle = sel ? '#44aaff' : 'rgba(255,255,255,0.2)';
+    ctx.lineWidth   = sel ? 3 : 1;
+    roundRect(cx, cardY, cardW, cardH, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font         = '46px serif';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle    = '#fff';
+    ctx.fillText(CHARACTERS[i].emoji, cx + cardW / 2, cardY + 42);
+
+    ctx.font         = '12px Arial';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle    = sel ? '#aaddff' : '#8899aa';
+    ctx.fillText(CHARACTERS[i].name, cx + cardW / 2, cardY + 82);
+    ctx.restore();
+
+    registerButton(`char-${i}`, cx, cardY, cardW, cardH);
+  }
+
+  drawButton('start', 'התחל', LOGICAL_W / 2 - 80, 312, 160, 50, '#1a6aff');
+
+  ctx.save();
+  ctx.font      = '13px Arial';
+  ctx.fillStyle = 'rgba(150,170,210,0.7)';
+  ctx.textAlign = 'center';
+  ctx.fillText('חצים: תנועה | רווח: קפיצה', LOGICAL_W / 2, 375);
+  ctx.restore();
+}
+
+function drawLevelCompleteScreen() {
+  drawBackground();
+  drawGround();
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle    = '#44ffaa';
+  ctx.font         = 'bold 48px Arial';
+  ctx.shadowColor  = '#00ff88';
+  ctx.shadowBlur   = 20;
+  ctx.fillText('שלב הושלם!', LOGICAL_W / 2, 130);
+  ctx.shadowBlur   = 0;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font      = '22px Arial';
+  ctx.fillText(`ניקוד: ${score}`, LOGICAL_W / 2, 195);
+
+  ctx.fillStyle = '#aaddff';
+  ctx.font      = '16px Arial';
+  ctx.fillText(`שלב ${currentLevel + 2} - הכן את עצמך!`, LOGICAL_W / 2, 235);
+
+  drawButton('next-level', 'שלב הבא', LOGICAL_W / 2 - 80, 270, 160, 50);
+  ctx.restore();
+}
+
+function drawGameOverScreen() {
+  drawBackground();
+  drawGround();
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle    = '#ff4444';
+  ctx.font         = 'bold 48px Arial';
+  ctx.shadowColor  = '#ff0000';
+  ctx.shadowBlur   = 20;
+  ctx.fillText('המשחק נגמר', LOGICAL_W / 2, 130);
+  ctx.shadowBlur   = 0;
+
+  ctx.fillStyle = '#cccccc';
+  ctx.font      = '20px Arial';
+  ctx.fillText(`שלב ${currentLevel + 1}  |  ניקוד: ${score}`, LOGICAL_W / 2, 195);
+
+  drawButton('try-again', 'נסה שוב', LOGICAL_W / 2 - 80, 240, 160, 50, '#aa2222');
+  ctx.restore();
+}
+
+function drawVictoryScreen() {
+  drawBackground();
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,20,0.5)';
+  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle    = '#ffdd00';
+  ctx.font         = 'bold 56px Arial';
+  ctx.shadowColor  = '#ffaa00';
+  ctx.shadowBlur   = 30;
+  ctx.fillText('ניצחת!', LOGICAL_W / 2, 100);
+  ctx.shadowBlur   = 0;
+
+  ctx.fillStyle = '#aaffdd';
+  ctx.font      = '22px Arial';
+  ctx.fillText('השלמת את כל 10 השלבים!', LOGICAL_W / 2, 158);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font      = '22px Arial';
+  ctx.fillText(`ניקוד סופי: ${score}`, LOGICAL_W / 2, 200);
+
+  ctx.font = '60px serif';
+  ctx.fillText('🏆', LOGICAL_W / 2, 270);
+
+  drawButton('restart', 'שחק שוב', LOGICAL_W / 2 - 80, 320, 160, 50, '#886600');
+  ctx.restore();
+}
+
+// ============================================================
+// SECTION 20 - MAIN LOOP
+// ============================================================
+
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+  lastTimestamp = timestamp;
+
+  uiButtons = []; // reset click registry each frame
+
+  update(dt);
+
+  ctx.clearRect(0, 0, LOGICAL_W, LOGICAL_H);
+
+  switch (gameState) {
+    case STATE.START:
+      drawStartScreen();
+      break;
+    case STATE.PLAYING:
+      drawBackground();
+      drawGround();
+      drawMeteors();
+      drawPlayer();
+      drawHUD();
+      break;
+    case STATE.LEVEL_COMPLETE:
+      drawLevelCompleteScreen();
+      break;
+    case STATE.GAME_OVER:
+      drawGameOverScreen();
+      break;
+    case STATE.VICTORY:
+      drawVictoryScreen();
+      break;
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// Start the loop on the next animation frame
+requestAnimationFrame((ts) => {
+  lastTimestamp = ts;
+  requestAnimationFrame(gameLoop);
+});

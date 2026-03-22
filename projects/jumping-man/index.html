@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>קוף החלל</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Main game canvas -->
+  <div id="canvas-wrapper">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Mobile on-screen controls (hidden on desktop via CSS media query) -->
+    <div id="mobile-controls">
+      <button id="btn-left"  class="ctrl-btn" aria-label="שמאל">&#8592;</button>
+      <button id="btn-jump"  class="ctrl-btn jump-btn" aria-label="קפוץ">קפוץ</button>
+      <button id="btn-right" class="ctrl-btn" aria-label="ימין">&#8594;</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
