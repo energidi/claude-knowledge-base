@@ -251,11 +251,17 @@ const meteors = [];
 for (let i = 0; i < METEOR_POOL_SIZE; i++) {
   meteors.push({
     x: 0, y: 0,
-    radius  : 24,
-    speed   : 0,
-    active  : false,
-    scored  : false,
-    rotation: 0,
+    radius    : 24,
+    speed     : 0,
+    active    : false,
+    scored    : false,
+    rotation  : 0,
+    // Bounce properties (active from level 3+)
+    bounces   : false,  // whether this meteor bounces
+    bounceVy  : 0,      // current vertical bounce velocity (px/sec)
+    bounceY   : 0,      // current Y offset above ground (positive = up)
+    bounceCount: 0,     // how many bounces have occurred
+    maxBounces : 0,     // max bounces before settling
   });
 }
 
@@ -274,11 +280,31 @@ function spawnMeteor() {
   const cfg   = LEVELS[currentLevel];
   m.radius    = 18 + Math.random() * 18;
   m.x         = -m.radius;
-  m.y         = GROUND_Y - m.radius;
+  m.y         = GROUND_Y - m.radius;  // ground-level Y (never changes)
   m.speed     = cfg.meteorSpeed * (0.85 + Math.random() * 0.3);
   m.active    = true;
   m.scored    = false;
   m.rotation  = 0;
+
+  // Bouncing meteors: from level 3+ with increasing probability
+  // bounceY tracks how far above ground the meteor currently is.
+  // The meteor is drawn at (m.y - m.bounceY) so bounceY > 0 = airborne.
+  if (currentLevel >= 2) {
+    const bounceChance = 0.3 + (currentLevel - 2) * 0.07; // 30%..93%
+    m.bounces     = Math.random() < bounceChance;
+    m.bounceY     = 0;
+    m.bounceCount = 0;
+    m.maxBounces  = 2 + Math.floor(Math.random() * 3);           // 2-4 bounces
+    // Initial launch velocity scales with level for higher arcs
+    const maxArc  = 180 + (currentLevel - 2) * 30;              // 180-420 px/sec
+    m.bounceVy    = m.bounces ? -(100 + Math.random() * maxArc) : 0;
+  } else {
+    m.bounces     = false;
+    m.bounceY     = 0;
+    m.bounceVy    = 0;
+    m.bounceCount = 0;
+    m.maxBounces  = 0;
+  }
 }
 
 // ============================================================
@@ -533,29 +559,62 @@ window.addEventListener('keyup', (e) => {
   if (e.code === 'Space')      onJumpRelease();
 });
 
-// Mobile button wiring
-function wireButton(btnId, downFn, upFn) {
-  const btn = document.getElementById(btnId);
-  if (!btn) return;
-  const down = (e) => { e.preventDefault(); btn.classList.add('pressed');    downFn(); };
-  const up   = (e) => { e.preventDefault(); btn.classList.remove('pressed'); upFn();   };
-  btn.addEventListener('touchstart',  down, { passive: false });
-  btn.addEventListener('touchend',    up,   { passive: false });
-  btn.addEventListener('touchcancel', up,   { passive: false });
-  btn.addEventListener('mousedown',   down);
-  btn.addEventListener('mouseup',     up);
-  btn.addEventListener('mouseleave',  up);
+// ---- Canvas touch zones (replaces on-screen buttons) ----
+// Left half of canvas  = move left + jump
+// Right half of canvas = move right + jump
+// Holding a touch extends the variable jump (same as holding spacebar).
+// Multiple simultaneous touches are tracked by identifier so each
+// finger independently controls direction and jump state.
+
+const activeTouches = new Map(); // touchId -> 'left' | 'right'
+
+function applyTouchDirection(touchId, clientX) {
+  const rect = canvas.getBoundingClientRect();
+  const lx   = (clientX - rect.left) / scale;
+  const side = lx < LOGICAL_W / 2 ? 'left' : 'right';
+
+  const prevSide = activeTouches.get(touchId);
+  if (prevSide === side) return; // no change
+
+  // Release old direction
+  if (prevSide === 'left')  keys.ArrowLeft  = false;
+  if (prevSide === 'right') keys.ArrowRight = false;
+
+  activeTouches.set(touchId, side);
+  if (side === 'left')  keys.ArrowLeft  = true;
+  if (side === 'right') keys.ArrowRight = true;
 }
 
-wireButton('btn-left',
-  () => { keys.ArrowLeft = true;  },
-  () => { keys.ArrowLeft = false; }
-);
-wireButton('btn-right',
-  () => { keys.ArrowRight = true;  },
-  () => { keys.ArrowRight = false; }
-);
-wireButton('btn-jump', onJumpPress, onJumpRelease);
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  startBackgroundMusic();
+  for (const t of e.changedTouches) {
+    applyTouchDirection(t.identifier, t.clientX);
+    onJumpPress(); // tap = jump attempt (ignored when already airborne)
+    // Also forward to menu click handler for non-playing screens
+    const rect = canvas.getBoundingClientRect();
+    handleMenuClick((t.clientX - rect.left) / scale, (t.clientY - rect.top) / scale);
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    applyTouchDirection(t.identifier, t.clientX);
+  }
+}, { passive: false });
+
+function releaseTouches(e) {
+  for (const t of e.changedTouches) {
+    const side = activeTouches.get(t.identifier);
+    if (side === 'left')  keys.ArrowLeft  = false;
+    if (side === 'right') keys.ArrowRight = false;
+    activeTouches.delete(t.identifier);
+  }
+  if (activeTouches.size === 0) onJumpRelease();
+}
+canvas.addEventListener('touchend',    releaseTouches, { passive: false });
+canvas.addEventListener('touchcancel', releaseTouches, { passive: false });
 
 // ============================================================
 // SECTION 12 - UI BUTTON REGISTRY (click / tap on canvas)
@@ -574,13 +633,7 @@ canvas.addEventListener('click', (e) => {
   handleMenuClick(lx, ly);
 });
 
-canvas.addEventListener('touchend', (e) => {
-  const t    = e.changedTouches[0];
-  const rect = canvas.getBoundingClientRect();
-  const lx = (t.clientX - rect.left) / scale;
-  const ly = (t.clientY - rect.top)  / scale;
-  handleMenuClick(lx, ly);
-}, { passive: true });
+// (menu touch handled in touchstart listener below)
 
 function handleMenuClick(lx, ly) {
   for (const btn of uiButtons) {
@@ -639,7 +692,8 @@ function checkCollisions() {
     // Hit detection: skip if invincible
     if (player.invincible) continue;
 
-    if (circleRectOverlap(m.x, m.y, m.radius * 0.85, px, py, pw, ph)) {
+    const drawY = m.y - m.bounceY; // actual drawn Y centre
+    if (circleRectOverlap(m.x, drawY, m.radius * 0.85, px, py, pw, ph)) {
       handlePlayerHit();
       break; // process one hit per frame
     }
@@ -707,6 +761,9 @@ function update(dt) {
 
   if (gameState !== STATE.PLAYING) return;
 
+  // -- Touch zone hint fade-out --
+  if (touchHintTimer > 0) touchHintTimer -= dt;
+
   // -- Timer --
   timeRemaining -= dt;
   if (timeRemaining <= 0) {
@@ -769,11 +826,32 @@ function update(dt) {
   }
 
   // -- Meteor movement --
+  const BOUNCE_GRAVITY = 1600; // px/sec^2 for bouncing meteors
   for (const m of meteors) {
     if (!m.active) continue;
     m.x        += m.speed * dt;
-    m.rotation += (m.speed / m.radius) * dt; // rolling effect
-    if (m.x > LOGICAL_W + m.radius) m.active = false; // recycle
+    m.rotation += (m.speed / m.radius) * dt;
+    if (m.x > LOGICAL_W + m.radius) { m.active = false; continue; }
+
+    if (m.bounces && m.bounceCount < m.maxBounces) {
+      // Apply gravity to the bounce offset
+      m.bounceVy += BOUNCE_GRAVITY * dt;
+      m.bounceY  -= m.bounceVy * dt; // bounceY is height-above-ground (positive=up)
+
+      if (m.bounceY <= 0) {
+        // Landed - reflect with damping
+        m.bounceY  = 0;
+        m.bounceVy = m.bounceVy * -0.55; // energy loss per bounce
+        m.bounceCount++;
+        // Stop bouncing if velocity is too low
+        if (Math.abs(m.bounceVy) < 40) {
+          m.bounces = false;
+          m.bounceY = 0;
+        }
+      }
+    } else {
+      m.bounceY = 0;
+    }
   }
 
   // -- Background scroll (right-to-left parallax) --
@@ -930,7 +1008,9 @@ function drawMeteors() {
   for (const m of meteors) {
     if (!m.active) continue;
     ctx.save();
-    ctx.translate(m.x, m.y);
+    // Draw at bounced position: m.y is always ground-level centre,
+    // subtract bounceY to lift it above the ground when bouncing.
+    ctx.translate(m.x, m.y - m.bounceY);
     ctx.rotate(m.rotation);
     const mg = ctx.createRadialGradient(-m.radius * 0.3, -m.radius * 0.3, 1, 0, 0, m.radius);
     mg.addColorStop(0, '#ff8844');
@@ -1254,6 +1334,40 @@ function drawHistoryScreen() {
   ctx.restore();
 }
 
+// Draw faint left/right zone divider on touch devices only.
+// Shown only for the first 3 seconds of the first level.
+let touchHintTimer = 3.0;
+
+function drawTouchZoneHint() {
+  if (touchHintTimer <= 0) return;
+  // Only show if no mouse present (touch device)
+  if (window.matchMedia('(pointer: fine)').matches) return;
+
+  const alpha = Math.min(1, touchHintTimer) * 0.18;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Vertical divider line
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([6, 8]);
+  ctx.beginPath();
+  ctx.moveTo(LOGICAL_W / 2, 45);
+  ctx.lineTo(LOGICAL_W / 2, GROUND_Y - 10);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Labels
+  ctx.font         = 'bold 22px Arial';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle    = '#ffffff';
+  ctx.textAlign    = 'center';
+  ctx.fillText('←', LOGICAL_W * 0.25, LOGICAL_H / 2);
+  ctx.fillText('→', LOGICAL_W * 0.75, LOGICAL_H / 2);
+
+  ctx.restore();
+}
+
 // ============================================================
 // SECTION 20 - MAIN LOOP
 // ============================================================
@@ -1278,6 +1392,7 @@ function gameLoop(timestamp) {
       drawMeteors();
       drawPlayer();
       drawHUD();
+      drawTouchZoneHint();
       break;
     case STATE.LEVEL_COMPLETE:
       drawLevelCompleteScreen();

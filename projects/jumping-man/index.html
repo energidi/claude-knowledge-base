@@ -22,18 +22,10 @@
   <div id="canvas-wrapper">
     <canvas id="gameCanvas"></canvas>
 
-    <!-- Fullscreen button (always visible) -->
-    <button id="btn-fullscreen" aria-label="מסך מלא">⛶</button>
+    <button id="btn-fullscreen" class="overlay-btn" aria-label="מסך מלא">⛶</button>
+    <button id="btn-mute"       class="overlay-btn" aria-label="השתק מוזיקה">🔊</button>
 
-    <!-- Mute button (always visible) -->
-    <button id="btn-mute" aria-label="השתק מוזיקה">🔊</button>
-
-    <!-- Mobile on-screen controls (hidden on desktop via CSS media query) -->
-    <div id="mobile-controls">
-      <button id="btn-left"  class="ctrl-btn" aria-label="שמאל">&#8592;</button>
-      <button id="btn-jump"  class="ctrl-btn jump-btn" aria-label="קפוץ">קפוץ</button>
-      <button id="btn-right" class="ctrl-btn" aria-label="ימין">&#8594;</button>
-    </div>
+    <!-- Mobile controls are now handled by canvas touch zones -->
   </div>
 
   <script src="game.js"></script>

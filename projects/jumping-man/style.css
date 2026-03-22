@@ -17,7 +17,7 @@ html, body {
 }
 
 /* ======================================================
-   Canvas Wrapper - centres canvas and keeps aspect ratio
+   Canvas Wrapper - centres canvas, fills full screen
    ====================================================== */
 #canvas-wrapper {
   position: relative;
@@ -30,137 +30,36 @@ html, body {
 
 #gameCanvas {
   display: block;
-  /* The canvas element is sized by JS to fill the screen
-     while maintaining the 2:1 logical aspect ratio.       */
   image-rendering: pixelated;
-  touch-action: none; /* prevent default touch scroll/zoom  */
+  touch-action: none; /* prevent default touch scroll/zoom */
 }
 
 /* ======================================================
-   Mobile On-Screen Controls
+   Overlay Buttons (Fullscreen + Mute)
+   Always visible, top-left corner, small and unobtrusive
    ====================================================== */
-#mobile-controls {
+.overlay-btn {
   position: absolute;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  /* Hidden by default on large screens */
-  display: none;
-}
-
-.ctrl-btn {
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.15);
+  top: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(0,0,0,0.5);
   color: #fff;
-  font-size: 1.6rem;
+  font-size: 1.1rem;
   cursor: pointer;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
-  backdrop-filter: blur(4px);
-  transition: background 0.1s;
-  /* Prevent long-press context menu on mobile */
-  -webkit-touch-callout: none;
 }
+.overlay-btn:hover,
+.overlay-btn:active { background: rgba(255,255,255,0.2); }
 
-.ctrl-btn:active,
-.ctrl-btn.pressed {
-  background: rgba(255, 255, 255, 0.35);
-}
-
-/* Jump button is slightly larger */
-.jump-btn {
-  width: 90px;
-  height: 90px;
-  font-size: 1rem;
-  font-weight: bold;
-  letter-spacing: 1px;
-  border-color: rgba(100, 220, 255, 0.7);
-  background: rgba(0, 150, 255, 0.2);
-}
-
-/* Show mobile controls on touch/small screens */
-@media (max-width: 768px), (pointer: coarse) {
-  #mobile-controls {
-    display: flex;
-  }
-
-  /* Leave room at the bottom for the control buttons so they
-     don't overlap the canvas. The wrapper shrinks, the JS
-     resizeCanvas() then fits the canvas inside the smaller area. */
-  #canvas-wrapper {
-    padding-bottom: 110px;
-  }
-
-  /* Encourage landscape orientation hint */
-  body::after {
-    content: '↺ סובב לרוחב למשחק מלא';
-    display: none;
-  }
-}
-
-/* Fullscreen button - always visible, top-left corner */
-#btn-fullscreen {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.3);
-  background: rgba(0,0,0,0.4);
-  color: #fff;
-  font-size: 1.1rem;
-  cursor: pointer;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(4px);
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-#btn-fullscreen:hover { background: rgba(255,255,255,0.2); }
-
-/* Mute button - sits next to the fullscreen button */
-#btn-mute {
-  position: absolute;
-  top: 10px;
-  left: 54px; /* fullscreen is at left:10, width 36 + 8px gap */
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.3);
-  background: rgba(0,0,0,0.4);
-  color: #fff;
-  font-size: 1.1rem;
-  cursor: pointer;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(4px);
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-#btn-mute:hover { background: rgba(255,255,255,0.2); }
-
-/* Portrait phones: overlay a "tap fullscreen" nudge */
-@media (pointer: coarse) and (orientation: portrait) {
-  #btn-fullscreen::after {
-    content: ' מסך מלא';
-    font-size: 0.7rem;
-    white-space: nowrap;
-  }
-  #btn-fullscreen {
-    width: auto;
-    padding: 0 10px;
-    top: 12px;
-    left: 12px;
-  }
-}
+#btn-fullscreen { left: 10px; }
+#btn-mute       { left: 54px; }
