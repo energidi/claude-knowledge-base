@@ -206,21 +206,20 @@ const GRAVITY       = 1400;  // downward acceleration (px/sec^2)
 const JUMP_VY       = -520;  // initial upward velocity on jump (px/sec)
 const HOLD_BOOST    = 900;   // extra upward acceleration while holding (px/sec^2)
 const MAX_JUMP_HOLD = 0.38;  // max seconds the hold boost is applied
-const PLAYER_SPEED_X = 180;  // horizontal movement speed (px/sec)
-const PLAYER_MIN_X   = 80;
-const PLAYER_MAX_X   = LOGICAL_W - 80;
+const PLAYER_X      = 180;   // fixed horizontal position (auto-runner, no L/R)
 
 const player = {
-  x             : 560,
+  x             : PLAYER_X,
   y             : GROUND_Y,
   vy            : 0,
   onGround      : true,
-  jumpPressed   : false,   // true while Space is held on a jump
-  jumpHeldSec   : 0,       // seconds Space has been held this jump
+  jumpPressed   : false,
+  jumpHeldSec   : 0,
+  isDucking     : false,   // true while duck key / bottom-half touch held
   invincible    : false,
   invincibleTimer : 0,
   INVINCIBLE_DUR  : 2.0,
-  size          : 44,      // emoji font size
+  size          : 44,
 };
 
 // ============================================================
@@ -251,17 +250,19 @@ const meteors = [];
 for (let i = 0; i < METEOR_POOL_SIZE; i++) {
   meteors.push({
     x: 0, y: 0,
-    radius    : 24,
-    speed     : 0,
-    active    : false,
-    scored    : false,
-    rotation  : 0,
-    // Bounce properties (active from level 3+)
-    bounces   : false,  // whether this meteor bounces
-    bounceVy  : 0,      // current vertical bounce velocity (px/sec)
-    bounceY   : 0,      // current Y offset above ground (positive = up)
-    bounceCount: 0,     // how many bounces have occurred
-    maxBounces : 0,     // max bounces before settling
+    radius     : 24,
+    speed      : 0,
+    active     : false,
+    scored     : false,
+    rotation   : 0,
+    // Type: 'roller' (ground), 'bouncer' (bounces), 'flyer' (airborne)
+    type       : 'roller',
+    // Bounce properties
+    bounces    : false,
+    bounceVy   : 0,
+    bounceY    : 0,
+    bounceCount: 0,
+    maxBounces : 0,
   });
 }
 
@@ -274,36 +275,61 @@ function getFreeMeteor() {
   return null;
 }
 
+// Meteor type weights per level.
+// Columns: [roller%, bouncer%, flyer%]
+const METEOR_TYPE_WEIGHTS = [
+  [1.00, 0.00, 0.00], // L1
+  [0.85, 0.15, 0.00], // L2
+  [0.65, 0.35, 0.00], // L3
+  [0.55, 0.35, 0.10], // L4
+  [0.45, 0.30, 0.25], // L5
+  [0.35, 0.28, 0.37], // L6
+  [0.28, 0.27, 0.45], // L7
+  [0.22, 0.28, 0.50], // L8
+  [0.18, 0.27, 0.55], // L9
+  [0.15, 0.25, 0.60], // L10
+];
+
 function spawnMeteor() {
   const m = getFreeMeteor();
   if (!m) return;
-  const cfg   = LEVELS[currentLevel];
-  m.radius    = 18 + Math.random() * 18;
-  m.x         = -m.radius;
-  m.y         = GROUND_Y - m.radius;  // ground-level Y (never changes)
-  m.speed     = cfg.meteorSpeed * (0.85 + Math.random() * 0.3);
-  m.active    = true;
-  m.scored    = false;
-  m.rotation  = 0;
+  const cfg    = LEVELS[currentLevel];
+  const w      = METEOR_TYPE_WEIGHTS[currentLevel];
+  const roll   = Math.random();
 
-  // Bouncing meteors: from level 3+ with increasing probability
-  // bounceY tracks how far above ground the meteor currently is.
-  // The meteor is drawn at (m.y - m.bounceY) so bounceY > 0 = airborne.
-  if (currentLevel >= 2) {
-    const bounceChance = 0.3 + (currentLevel - 2) * 0.07; // 30%..93%
-    m.bounces     = Math.random() < bounceChance;
-    m.bounceY     = 0;
-    m.bounceCount = 0;
-    m.maxBounces  = 2 + Math.floor(Math.random() * 3);           // 2-4 bounces
-    // Initial launch velocity scales with level for higher arcs
-    const maxArc  = 180 + (currentLevel - 2) * 30;              // 180-420 px/sec
-    m.bounceVy    = m.bounces ? -(100 + Math.random() * maxArc) : 0;
+  // Pick type from weighted distribution
+  if (roll < w[0])       m.type = 'roller';
+  else if (roll < w[0] + w[1]) m.type = 'bouncer';
+  else                   m.type = 'flyer';
+
+  m.radius     = 18 + Math.random() * 18;
+  m.x          = -m.radius;
+  m.speed      = cfg.meteorSpeed * (0.85 + Math.random() * 0.35);
+  m.active     = true;
+  m.scored     = false;
+  m.rotation   = 0;
+  m.bounceY    = 0;
+  m.bounceVy   = 0;
+  m.bounceCount = 0;
+  m.maxBounces  = 0;
+  m.bounces     = false;
+
+  if (m.type === 'flyer') {
+    // Flyers travel at a fixed height players must DUCK under.
+    // Height varies so players can't predict: 48-90px above ground.
+    const heightAboveGround = 52 + Math.random() * 38;
+    m.y      = GROUND_Y - m.radius - heightAboveGround;
+    m.bounces = false;
   } else {
-    m.bounces     = false;
-    m.bounceY     = 0;
-    m.bounceVy    = 0;
-    m.bounceCount = 0;
-    m.maxBounces  = 0;
+    // Rollers and bouncers sit on the ground
+    m.y = GROUND_Y - m.radius;
+
+    if (m.type === 'bouncer') {
+      m.bounces    = true;
+      m.maxBounces = 2 + Math.floor(Math.random() * 3);
+      const maxArc = 200 + currentLevel * 28; // higher arcs each level
+      m.bounceVy   = -(120 + Math.random() * maxArc);
+    }
   }
 }
 
@@ -534,16 +560,16 @@ function soundVictory() {
 // SECTION 11 - INPUT
 // ============================================================
 
-const keys = { ArrowLeft: false, ArrowRight: false, Space: false };
+const keys = { Space: false, Duck: false };
 
 function onJumpPress() {
   startBackgroundMusic();
-  // Start a jump only from the ground and only if key wasn't already held
   if (!keys.Space && player.onGround && gameState === STATE.PLAYING) {
     player.vy          = JUMP_VY;
     player.onGround    = false;
     player.jumpPressed = true;
     player.jumpHeldSec = 0;
+    player.isDucking   = false; // can't duck mid-air
     soundJump();
   }
   keys.Space = true;
@@ -551,74 +577,69 @@ function onJumpPress() {
 
 function onJumpRelease() {
   keys.Space         = false;
-  player.jumpPressed = false; // ends hold boost
+  player.jumpPressed = false;
 }
 
+function onDuckPress()    { keys.Duck = true;  }
+function onDuckRelease()  { keys.Duck = false; }
+
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'ArrowLeft')  { keys.ArrowLeft  = true; e.preventDefault(); }
-  if (e.code === 'ArrowRight') { keys.ArrowRight = true; e.preventDefault(); }
-  if (e.code === 'Space')      { e.preventDefault(); onJumpPress(); }
+  if (e.code === 'Space')                          { e.preventDefault(); onJumpPress();   }
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') { e.preventDefault(); onDuckPress();   }
 });
 
 window.addEventListener('keyup', (e) => {
-  if (e.code === 'ArrowLeft')  keys.ArrowLeft  = false;
-  if (e.code === 'ArrowRight') keys.ArrowRight = false;
-  if (e.code === 'Space')      onJumpRelease();
+  if (e.code === 'Space')                          onJumpRelease();
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') onDuckRelease();
 });
 
-// ---- Canvas touch zones (replaces on-screen buttons) ----
-// Left half of canvas  = move left + jump
-// Right half of canvas = move right + jump
-// Holding a touch extends the variable jump (same as holding spacebar).
-// Multiple simultaneous touches are tracked by identifier so each
-// finger independently controls direction and jump state.
+// ---- Canvas touch zones ----
+// TOP half of canvas  = Jump (tap + hold for variable height)
+// BOTTOM half of canvas = Duck (hold to crouch under flyers)
+// Works for gameplay; also forwards to menu click handler on other screens.
 
-const activeTouches = new Map(); // touchId -> 'left' | 'right'
-
-function applyTouchDirection(touchId, clientX) {
-  const rect = canvas.getBoundingClientRect();
-  const lx   = (clientX - rect.left) / scale;
-  const side = lx < LOGICAL_W / 2 ? 'left' : 'right';
-
-  const prevSide = activeTouches.get(touchId);
-  if (prevSide === side) return; // no change
-
-  // Release old direction
-  if (prevSide === 'left')  keys.ArrowLeft  = false;
-  if (prevSide === 'right') keys.ArrowRight = false;
-
-  activeTouches.set(touchId, side);
-  if (side === 'left')  keys.ArrowLeft  = true;
-  if (side === 'right') keys.ArrowRight = true;
-}
+const activeTouches = new Map(); // touchId -> 'jump' | 'duck'
 
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   startBackgroundMusic();
+  const rect = canvas.getBoundingClientRect();
   for (const t of e.changedTouches) {
-    applyTouchDirection(t.identifier, t.clientX);
-    onJumpPress(); // tap = jump attempt (ignored when already airborne)
-    // Also forward to menu click handler for non-playing screens
-    const rect = canvas.getBoundingClientRect();
-    handleMenuClick((t.clientX - rect.left) / scale, (t.clientY - rect.top) / scale);
+    const ly   = (t.clientY - rect.top) / scale;
+    const zone = ly < LOGICAL_H / 2 ? 'jump' : 'duck';
+    activeTouches.set(t.identifier, zone);
+    if (zone === 'jump') onJumpPress();
+    else                 onDuckPress();
+    // Forward to menu buttons on non-playing screens
+    const lx = (t.clientX - rect.left) / scale;
+    handleMenuClick(lx, ly);
   }
 }, { passive: false });
 
 canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
   for (const t of e.changedTouches) {
-    applyTouchDirection(t.identifier, t.clientX);
+    const ly      = (t.clientY - rect.top) / scale;
+    const newZone = ly < LOGICAL_H / 2 ? 'jump' : 'duck';
+    const oldZone = activeTouches.get(t.identifier);
+    if (oldZone === newZone) continue;
+    // Zone crossed - release old, press new
+    if (oldZone === 'jump') onJumpRelease();
+    else if (oldZone === 'duck') onDuckRelease();
+    activeTouches.set(t.identifier, newZone);
+    if (newZone === 'jump') onJumpPress();
+    else                    onDuckPress();
   }
 }, { passive: false });
 
 function releaseTouches(e) {
   for (const t of e.changedTouches) {
-    const side = activeTouches.get(t.identifier);
-    if (side === 'left')  keys.ArrowLeft  = false;
-    if (side === 'right') keys.ArrowRight = false;
+    const zone = activeTouches.get(t.identifier);
+    if (zone === 'jump') onJumpRelease();
+    else if (zone === 'duck') onDuckRelease();
     activeTouches.delete(t.identifier);
   }
-  if (activeTouches.size === 0) onJumpRelease();
 }
 canvas.addEventListener('touchend',    releaseTouches, { passive: false });
 canvas.addEventListener('touchcancel', releaseTouches, { passive: false });
@@ -679,30 +700,35 @@ function circleRectOverlap(cx, cy, cr, rx, ry, rw, rh) {
 }
 
 function checkCollisions() {
-  // Player AABB (shrunk slightly so emoji edges don't trigger unfairly)
-  const hw     = player.size * 0.35;
-  const shrink = 8;
+  // Player hitbox - shrinks vertically when ducking
+  const hw        = player.size * 0.35;
+  const shrink    = 8;
+  const duckRatio = player.isDucking ? 0.45 : 1.0; // half height when ducking
+  const ph        = (player.size - shrink) * duckRatio;
   const px = player.x - hw + shrink;
-  const py = player.y - player.size + shrink;
+  const py = player.y - ph;         // bottom of hitbox is always at ground
   const pw = hw * 2 - shrink * 2;
-  const ph = player.size - shrink;
 
   for (const m of meteors) {
     if (!m.active) continue;
 
-    // Score: meteor crossed player's X while player is airborne
-    if (!m.scored && m.x > player.x && !player.onGround) {
-      m.scored = true;
-      score++;
+    const drawY = m.y - m.bounceY; // actual drawn centre Y
+
+    // Score point when meteor passes player:
+    //   - Roller/bouncer: player must be airborne
+    //   - Flyer: player must be ducking
+    if (!m.scored && m.x > player.x) {
+      const dodged = (m.type === 'flyer')
+        ? player.isDucking
+        : !player.onGround;
+      if (dodged) { m.scored = true; score++; }
     }
 
-    // Hit detection: skip if invincible
     if (player.invincible) continue;
 
-    const drawY = m.y - m.bounceY; // actual drawn Y centre
-    if (circleRectOverlap(m.x, drawY, m.radius * 0.85, px, py, pw, ph)) {
+    if (circleRectOverlap(m.x, drawY, m.radius * 0.82, px, py, pw, ph)) {
       handlePlayerHit();
-      break; // process one hit per frame
+      break;
     }
   }
 }
@@ -741,19 +767,19 @@ function startLevel(levelIdx) {
   for (const m of meteors) m.active = false;
 
   // Reset player
-  player.x              = 560;
-  player.y              = GROUND_Y;
-  player.vy             = 0;
-  player.onGround       = true;
-  player.jumpPressed    = false;
-  player.jumpHeldSec    = 0;
-  player.invincible     = false;
+  player.x               = PLAYER_X;
+  player.y               = GROUND_Y;
+  player.vy              = 0;
+  player.onGround        = true;
+  player.jumpPressed     = false;
+  player.jumpHeldSec     = 0;
+  player.isDucking       = false;
+  player.invincible      = false;
   player.invincibleTimer = 0;
 
   // Reset input state
-  keys.ArrowLeft  = false;
-  keys.ArrowRight = false;
-  keys.Space      = false;
+  keys.Space = false;
+  keys.Duck  = false;
 
   gameState = STATE.PLAYING;
 }
@@ -789,9 +815,8 @@ function update(dt) {
     return;
   }
 
-  // -- Player horizontal (arrow keys adjust position to time jumps) --
-  if (keys.ArrowLeft)  player.x = Math.max(PLAYER_MIN_X, player.x - PLAYER_SPEED_X * dt);
-  if (keys.ArrowRight) player.x = Math.min(PLAYER_MAX_X, player.x + PLAYER_SPEED_X * dt);
+  // -- Duck state (only when on ground) --
+  player.isDucking = keys.Duck && player.onGround;
 
   // -- Variable jump: hold boost phase --
   // While Space is held, player is airborne, and hold time not exhausted:
@@ -996,18 +1021,27 @@ function drawGround() {
 }
 
 function drawPlayer() {
-  // Blink effect during invincibility
   if (player.invincible) {
     const blinkOn = Math.floor(player.invincibleTimer * 8) % 2 === 0;
     if (blinkOn) return;
   }
   ctx.save();
-  ctx.font         = `${player.size}px serif`;
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'bottom';
-  ctx.shadowColor  = 'rgba(100,200,255,0.6)';
-  ctx.shadowBlur   = 14;
-  ctx.fillText(CHARACTERS[selectedCharIdx].emoji, player.x, player.y);
+  ctx.textAlign   = 'center';
+  ctx.shadowColor = 'rgba(100,200,255,0.6)';
+  ctx.shadowBlur  = 14;
+
+  if (player.isDucking) {
+    // Squish the emoji vertically to look like crouching
+    ctx.translate(player.x, player.y);
+    ctx.scale(1.2, 0.5);           // wider, half-height
+    ctx.font         = `${player.size}px serif`;
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(CHARACTERS[selectedCharIdx].emoji, 0, 0);
+  } else {
+    ctx.font         = `${player.size}px serif`;
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(CHARACTERS[selectedCharIdx].emoji, player.x, player.y);
+  }
   ctx.restore();
 }
 
@@ -1015,17 +1049,28 @@ function drawMeteors() {
   for (const m of meteors) {
     if (!m.active) continue;
     ctx.save();
-    // Draw at bounced position: m.y is always ground-level centre,
-    // subtract bounceY to lift it above the ground when bouncing.
     ctx.translate(m.x, m.y - m.bounceY);
     ctx.rotate(m.rotation);
-    const mg = ctx.createRadialGradient(-m.radius * 0.3, -m.radius * 0.3, 1, 0, 0, m.radius);
-    mg.addColorStop(0, '#ff8844');
-    mg.addColorStop(0.5, '#cc3300');
-    mg.addColorStop(1, '#661100');
-    ctx.fillStyle   = mg;
-    ctx.shadowColor = '#ff4400';
-    ctx.shadowBlur  = 10;
+
+    if (m.type === 'flyer') {
+      // Flyers glow blue/purple and leave a trail hint
+      ctx.shadowColor = '#4488ff';
+      ctx.shadowBlur  = 18;
+      const fg = ctx.createRadialGradient(-m.radius*0.3, -m.radius*0.3, 1, 0, 0, m.radius);
+      fg.addColorStop(0, '#aaccff');
+      fg.addColorStop(0.5, '#4466cc');
+      fg.addColorStop(1, '#112266');
+      ctx.fillStyle = fg;
+    } else {
+      ctx.shadowColor = '#ff4400';
+      ctx.shadowBlur  = 10;
+      const mg = ctx.createRadialGradient(-m.radius*0.3, -m.radius*0.3, 1, 0, 0, m.radius);
+      mg.addColorStop(0, '#ff8844');
+      mg.addColorStop(0.5, '#cc3300');
+      mg.addColorStop(1, '#661100');
+      ctx.fillStyle = mg;
+    }
+
     ctx.beginPath();
     ctx.arc(0, 0, m.radius, 0, Math.PI * 2);
     ctx.fill();
@@ -1033,7 +1078,7 @@ function drawMeteors() {
     ctx.font         = `${Math.round(m.radius * 1.5)}px serif`;
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('☄️', 0, 0);
+    ctx.fillText(m.type === 'flyer' ? '💫' : '☄️', 0, 0);
     ctx.restore();
   }
 }
@@ -1143,7 +1188,7 @@ function drawStartScreen() {
   ctx.font      = '13px Arial';
   ctx.fillStyle = 'rgba(150,170,210,0.7)';
   ctx.textAlign = 'center';
-  ctx.fillText('חצים: תנועה | רווח: קפיצה', LOGICAL_W / 2, 370);
+  ctx.fillText('רווח / נגיעה למעלה: קפיצה  |  ↓ / נגיעה למטה: כריעה', LOGICAL_W / 2, 370);
 
   ctx.font      = '12px Arial';
   ctx.fillStyle = 'rgba(180,200,230,0.5)';
@@ -1354,13 +1399,13 @@ function drawTouchZoneHint() {
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // Vertical divider line
+  // Horizontal divider line
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth   = 1;
   ctx.setLineDash([6, 8]);
   ctx.beginPath();
-  ctx.moveTo(LOGICAL_W / 2, 45);
-  ctx.lineTo(LOGICAL_W / 2, GROUND_Y - 10);
+  ctx.moveTo(20, LOGICAL_H / 2);
+  ctx.lineTo(LOGICAL_W - 20, LOGICAL_H / 2);
   ctx.stroke();
   ctx.setLineDash([]);
 
@@ -1369,8 +1414,8 @@ function drawTouchZoneHint() {
   ctx.textBaseline = 'middle';
   ctx.fillStyle    = '#ffffff';
   ctx.textAlign    = 'center';
-  ctx.fillText('←', LOGICAL_W * 0.25, LOGICAL_H / 2);
-  ctx.fillText('→', LOGICAL_W * 0.75, LOGICAL_H / 2);
+  ctx.fillText('↑ קפוץ', LOGICAL_W / 2, LOGICAL_H * 0.28);
+  ctx.fillText('↓ כרע', LOGICAL_W / 2, LOGICAL_H * 0.72);
 
   ctx.restore();
 }
