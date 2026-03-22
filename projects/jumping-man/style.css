@@ -104,17 +104,40 @@ html, body {
   }
 }
 
-/* Portrait phones: show a rotate hint over the game */
+/* Fullscreen button - always visible, top-left corner */
+#btn-fullscreen {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+#btn-fullscreen:hover { background: rgba(255,255,255,0.2); }
+
+/* Portrait phones: overlay a "tap fullscreen" nudge */
 @media (pointer: coarse) and (orientation: portrait) {
-  body::before {
-    content: '↺ סובב את המכשיר לרוחב';
-    position: fixed;
-    bottom: 120px;
-    left: 0; right: 0;
-    text-align: center;
-    color: rgba(255,255,255,0.5);
-    font-size: 13px;
-    pointer-events: none;
-    z-index: 10;
+  #btn-fullscreen::after {
+    content: ' מסך מלא';
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+  #btn-fullscreen {
+    width: auto;
+    padding: 0 10px;
+    top: 12px;
+    left: 12px;
   }
 }

@@ -831,7 +831,11 @@ function drawStartScreen() {
   ctx.font      = '13px Arial';
   ctx.fillStyle = 'rgba(150,170,210,0.7)';
   ctx.textAlign = 'center';
-  ctx.fillText('חצים: תנועה | רווח: קפיצה', LOGICAL_W / 2, 375);
+  ctx.fillText('חצים: תנועה | רווח: קפיצה', LOGICAL_W / 2, 370);
+
+  ctx.font      = '12px Arial';
+  ctx.fillStyle = 'rgba(180,200,230,0.5)';
+  ctx.fillText('נבנה על ידי בועז אברמוביץ', LOGICAL_W / 2, 388);
   ctx.restore();
 }
 
@@ -964,3 +968,51 @@ requestAnimationFrame((ts) => {
   lastTimestamp = ts;
   requestAnimationFrame(gameLoop);
 });
+
+// ============================================================
+// SECTION 21 - FULLSCREEN
+// ============================================================
+// Entering fullscreen also requests landscape orientation on mobile,
+// so players don't need to rotate the phone manually.
+
+const btnFS = document.getElementById('btn-fullscreen');
+
+function enterFullscreen() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+  if (req) {
+    req.call(el).then(() => {
+      // Lock to landscape after fullscreen is granted (mobile browsers)
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {});
+      }
+      resizeCanvas();
+    }).catch(() => {});
+  }
+}
+
+function exitFullscreen() {
+  const ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
+  if (ex) ex.call(document);
+}
+
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+}
+
+function updateFSButton() {
+  btnFS.textContent = isFullscreen() ? '✕' : '⛶';
+  btnFS.title = isFullscreen() ? 'יציאה ממסך מלא' : 'מסך מלא';
+}
+
+btnFS.addEventListener('click', () => {
+  isFullscreen() ? exitFullscreen() : enterFullscreen();
+});
+
+document.addEventListener('fullscreenchange',       updateFSButton);
+document.addEventListener('webkitfullscreenchange', updateFSButton);
+document.addEventListener('mozfullscreenchange',    updateFSButton);
+
+// Also resize canvas when fullscreen changes
+document.addEventListener('fullscreenchange',       resizeCanvas);
+document.addEventListener('webkitfullscreenchange', resizeCanvas);
