@@ -325,21 +325,151 @@ for (let i = 0; i < 14; i++) {
 const GROUND_MARK_SPEED = BG_BASE_SPEED * 1.0;
 
 // ============================================================
-// SECTION 10 - WEB AUDIO
+// SECTION 10 - WEB AUDIO (SFX + BACKGROUND MUSIC)
 // ============================================================
+// One shared AudioContext for all audio.
+// Sound effects connect directly to destination.
+// Music has its own GainNode (musicGain) so it can be muted
+// independently without silencing jump/hit sounds.
+//
+// BACKGROUND MUSIC DESIGN:
+//   A slow ambient arpeggio using A-minor pentatonic frequencies.
+//   Two layers: a bass note every 4 beats, and a melodic arpeggio.
+//   Notes are scheduled ~200ms ahead using a recurring setTimeout
+//   (the "audio scheduler" pattern) so timing stays tight even if
+//   the main thread is busy rendering.
 
-let audioCtx = null;
+let audioCtx  = null;
+let musicGain = null;       // controls music volume only
+let isMuted   = false;
+let musicSchedulerTimer = null;
+let nextNoteTime = 0;
+let musicBeatIdx = 0;
+let musicStarted = false;
+
+// Am-pentatonic melody (Hz): A2 E3 G3 A3 C4 E4 G4 A4
+const MUSIC_MELODY = [110, 165, 196, 220, 261, 330, 392, 220,
+                      196, 165, 220, 261, 196, 165, 110, 165];
+const MUSIC_BEAT_DUR = 0.55; // seconds per arpeggio step (slow, ambient)
+const MUSIC_VOL      = 0.18; // master music volume when unmuted
 
 function getAudioCtx() {
   if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = isMuted ? 0 : MUSIC_VOL;
+    musicGain.connect(audioCtx.destination);
   }
   return audioCtx;
 }
 
+// Schedule one melodic note at `when` seconds (AudioContext time)
+function scheduleMusicNote(freq, when) {
+  const ac  = getAudioCtx();
+  const dur = MUSIC_BEAT_DUR * 0.85;
+
+  // Sine wave body
+  const osc  = ac.createOscillator();
+  const env  = ac.createGain();
+  osc.connect(env);
+  env.connect(musicGain);
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  env.gain.setValueAtTime(0, when);
+  env.gain.linearRampToValueAtTime(0.5, when + 0.06);
+  env.gain.exponentialRampToValueAtTime(0.001, when + dur);
+  osc.start(when);
+  osc.stop(when + dur + 0.01);
+
+  // Subtle triangle overtone for warmth
+  const osc2 = ac.createOscillator();
+  const env2 = ac.createGain();
+  osc2.connect(env2);
+  env2.connect(musicGain);
+  osc2.type = 'triangle';
+  osc2.frequency.value = freq * 2;
+  env2.gain.setValueAtTime(0, when);
+  env2.gain.linearRampToValueAtTime(0.12, when + 0.06);
+  env2.gain.exponentialRampToValueAtTime(0.001, when + dur);
+  osc2.start(when);
+  osc2.stop(when + dur + 0.01);
+
+  // Bass pulse every 4 beats
+  if (musicBeatIdx % 4 === 0) {
+    const bass  = ac.createOscillator();
+    const bassG = ac.createGain();
+    bass.connect(bassG);
+    bassG.connect(musicGain);
+    bass.type = 'sine';
+    bass.frequency.value = MUSIC_MELODY[0] / 2; // A1 - deep bass
+    bassG.gain.setValueAtTime(0, when);
+    bassG.gain.linearRampToValueAtTime(0.4, when + 0.08);
+    bassG.gain.exponentialRampToValueAtTime(0.001, when + MUSIC_BEAT_DUR * 3.8);
+    bass.start(when);
+    bass.stop(when + MUSIC_BEAT_DUR * 4);
+  }
+}
+
+// Scheduler tick: look 200ms ahead and queue any notes due in that window
+function musicSchedulerTick() {
+  const ac = getAudioCtx();
+  const LOOKAHEAD = 0.2; // seconds
+
+  while (nextNoteTime < ac.currentTime + LOOKAHEAD) {
+    scheduleMusicNote(
+      MUSIC_MELODY[musicBeatIdx % MUSIC_MELODY.length],
+      nextNoteTime
+    );
+    musicBeatIdx++;
+    nextNoteTime += MUSIC_BEAT_DUR;
+  }
+
+  musicSchedulerTimer = setTimeout(musicSchedulerTick, 50);
+}
+
+function startBackgroundMusic() {
+  if (musicStarted) return;
+  musicStarted = true;
+  try {
+    const ac = getAudioCtx();
+    // Resume context if browser suspended it (autoplay policy)
+    if (ac.state === 'suspended') ac.resume();
+    nextNoteTime = ac.currentTime + 0.1;
+    musicBeatIdx = 0;
+    musicSchedulerTick();
+  } catch (e) { /* ignore */ }
+}
+
+function toggleMute() {
+  isMuted = !isMuted;
+  const ac = getAudioCtx();
+  // Smooth fade instead of abrupt cut
+  musicGain.gain.setTargetAtTime(
+    isMuted ? 0 : MUSIC_VOL,
+    ac.currentTime,
+    0.15
+  );
+  // Persist preference
+  try { localStorage.setItem('kof-hachalal-muted', isMuted ? '1' : '0'); }
+  catch { /* ignore */ }
+  updateMuteButton();
+}
+
+function updateMuteButton() {
+  const btn = document.getElementById('btn-mute');
+  if (btn) btn.textContent = isMuted ? '🔇' : '🔊';
+}
+
+// Restore saved mute preference
+try {
+  isMuted = localStorage.getItem('kof-hachalal-muted') === '1';
+} catch { isMuted = false; }
+
+// SFX functions (connect directly to destination, not affected by mute)
 function playTone(type, freqStart, freqEnd, duration, volume = 0.3) {
   try {
     const ac   = getAudioCtx();
+    if (ac.state === 'suspended') ac.resume();
     const osc  = ac.createOscillator();
     const gain = ac.createGain();
     osc.connect(gain);
@@ -374,6 +504,7 @@ function soundVictory() {
 const keys = { ArrowLeft: false, ArrowRight: false, Space: false };
 
 function onJumpPress() {
+  startBackgroundMusic();
   // Start a jump only from the ground and only if key wasn't already held
   if (!keys.Space && player.onGround && gameState === STATE.PLAYING) {
     player.vy          = JUMP_VY;
@@ -462,6 +593,7 @@ function handleMenuClick(lx, ly) {
 }
 
 function onButtonClick(id) {
+  startBackgroundMusic(); // first click = first user gesture = safe to start audio
   if (id === 'start')         { startLevel(0); return; }
   if (id === 'next-level')    { startLevel(currentLevel + 1); return; }
   if (id === 'try-again')     { startLevel(currentLevel); return; }
@@ -1176,19 +1308,32 @@ requestAnimationFrame((ts) => {
 // Entering fullscreen also requests landscape orientation on mobile,
 // so players don't need to rotate the phone manually.
 
+// Wire mute button
+document.getElementById('btn-mute').addEventListener('click', toggleMute);
+updateMuteButton(); // set correct icon from saved preference on load
+
 const btnFS = document.getElementById('btn-fullscreen');
 
 function enterFullscreen() {
-  const el = document.documentElement;
+  const el  = document.documentElement;
   const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
   if (req) {
     req.call(el).then(() => {
-      // Lock to landscape after fullscreen is granted (mobile browsers)
+      // Lock to landscape after fullscreen is granted (Android Chrome)
       if (screen.orientation && screen.orientation.lock) {
         screen.orientation.lock('landscape').catch(() => {});
       }
       resizeCanvas();
-    }).catch(() => {});
+    }).catch(() => {
+      // Fullscreen API rejected (common on iOS Safari) - use scroll trick
+      // to hide the address bar as a fallback
+      window.scrollTo(0, 1);
+      resizeCanvas();
+    });
+  } else {
+    // No fullscreen API at all (older iOS) - scroll fallback
+    window.scrollTo(0, 1);
+    resizeCanvas();
   }
 }
 
