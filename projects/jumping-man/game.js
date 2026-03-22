@@ -377,7 +377,7 @@ let musicStarted = false;
 const MUSIC_MELODY = [110, 165, 196, 220, 261, 330, 392, 220,
                       196, 165, 220, 261, 196, 165, 110, 165];
 const MUSIC_BEAT_DUR = 0.55; // seconds per arpeggio step (slow, ambient)
-const MUSIC_VOL      = 0.18; // master music volume when unmuted
+const MUSIC_VOL      = 0.32; // master music volume when unmuted
 
 function getAudioCtx() {
   if (!audioCtx) {
@@ -458,11 +458,18 @@ function startBackgroundMusic() {
   musicStarted = true;
   try {
     const ac = getAudioCtx();
-    // Resume context if browser suspended it (autoplay policy)
-    if (ac.state === 'suspended') ac.resume();
-    nextNoteTime = ac.currentTime + 0.1;
-    musicBeatIdx = 0;
-    musicSchedulerTick();
+    // Must await resume() - browsers suspend AudioContext until a user gesture.
+    // Scheduling notes before the context is running produces silence.
+    const doStart = () => {
+      nextNoteTime = ac.currentTime + 0.1;
+      musicBeatIdx = 0;
+      musicSchedulerTick();
+    };
+    if (ac.state === 'suspended') {
+      ac.resume().then(doStart).catch(() => {});
+    } else {
+      doStart();
+    }
   } catch (e) { /* ignore */ }
 }
 
