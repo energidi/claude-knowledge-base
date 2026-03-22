@@ -89,4 +89,32 @@ html, body {
   #mobile-controls {
     display: flex;
   }
+
+  /* Leave room at the bottom for the control buttons so they
+     don't overlap the canvas. The wrapper shrinks, the JS
+     resizeCanvas() then fits the canvas inside the smaller area. */
+  #canvas-wrapper {
+    padding-bottom: 110px;
+  }
+
+  /* Encourage landscape orientation hint */
+  body::after {
+    content: '↺ סובב לרוחב למשחק מלא';
+    display: none;
+  }
+}
+
+/* Portrait phones: show a rotate hint over the game */
+@media (pointer: coarse) and (orientation: portrait) {
+  body::before {
+    content: '↺ סובב את המכשיר לרוחב';
+    position: fixed;
+    bottom: 120px;
+    left: 0; right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.5);
+    font-size: 13px;
+    pointer-events: none;
+    z-index: 10;
+  }
 }
