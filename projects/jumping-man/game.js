@@ -1137,7 +1137,7 @@ function drawStartScreen() {
   }
 
   drawButton('start',   'התחל',        LOGICAL_W / 2 - 168, 312, 150, 50, '#1a6aff');
-  drawButton('history', 'היסטוריה 📊', LOGICAL_W / 2 + 18,  312, 150, 50, '#2a5a2a');
+  drawButton('history', 'שיאים 🏆', LOGICAL_W / 2 + 18,  312, 150, 50, '#2a5a2a');
 
   ctx.save();
   ctx.font      = '13px Arial';
@@ -1270,7 +1270,7 @@ function drawHistoryScreen() {
   ctx.textBaseline = 'middle';
   ctx.font         = 'bold 32px Arial';
   ctx.fillStyle    = '#aaddff';
-  ctx.fillText('📊 היסטוריית שיאים', LOGICAL_W / 2, 32);
+  ctx.fillText('🏆 שיאים', LOGICAL_W / 2, 32);
 
   const records = loadRecords();
   const hasAny  = Object.keys(records).length > 0;

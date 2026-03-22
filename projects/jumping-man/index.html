@@ -18,14 +18,18 @@
 </head>
 <body>
 
+  <!-- Portrait-mode rotate hint (shown only on touch devices in portrait) -->
+  <div id="rotate-hint">
+    <div class="rotate-icon">📱</div>
+    <p>סובב את המכשיר לרוחב<br>לחוויית משחק מלאה</p>
+    <button onclick="document.getElementById('rotate-hint').style.display='none'">המשך בכל זאת</button>
+  </div>
+
   <!-- Main game canvas -->
   <div id="canvas-wrapper">
     <canvas id="gameCanvas"></canvas>
-
     <button id="btn-fullscreen" class="overlay-btn" aria-label="מסך מלא">⛶</button>
     <button id="btn-mute"       class="overlay-btn" aria-label="השתק מוזיקה">🔊</button>
-
-    <!-- Mobile controls are now handled by canvas touch zones -->
   </div>
 
   <script src="game.js"></script>

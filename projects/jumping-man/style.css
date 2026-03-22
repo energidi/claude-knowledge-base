@@ -63,3 +63,48 @@ html, body {
 
 #btn-fullscreen { left: 10px; }
 #btn-mute       { left: 54px; }
+
+/* Portrait mode: show a rotate nudge and make canvas fill width better */
+@media (orientation: portrait) and (pointer: coarse) {
+  #rotate-hint {
+    display: flex;
+  }
+}
+
+#rotate-hint {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.82);
+  z-index: 100;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  gap: 16px;
+  font-family: Arial, sans-serif;
+  direction: rtl;
+}
+#rotate-hint .rotate-icon {
+  font-size: 4rem;
+  animation: spin90 1.4s ease-in-out infinite alternate;
+}
+@keyframes spin90 {
+  from { transform: rotate(0deg);  }
+  to   { transform: rotate(90deg); }
+}
+#rotate-hint p {
+  font-size: 1.2rem;
+  text-align: center;
+  line-height: 1.6;
+}
+#rotate-hint button {
+  margin-top: 8px;
+  padding: 10px 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
