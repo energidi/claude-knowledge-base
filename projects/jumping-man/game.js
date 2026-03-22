@@ -47,9 +47,93 @@ const STATE = {
   LEVEL_COMPLETE : 'LEVEL_COMPLETE',
   GAME_OVER      : 'GAME_OVER',
   VICTORY        : 'VICTORY',
+  HISTORY        : 'HISTORY',
 };
 
 let gameState = STATE.START;
+
+// ============================================================
+// SECTION 2b - RECORDS (localStorage)
+// ============================================================
+// We store the best cumulative score achieved at the completion
+// of each level, plus the date. Key format: "level0".."level9".
+
+const STORAGE_KEY = 'kof-hachalal-records';
+
+function loadRecords() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+
+// Save score for levelIdx if it beats the previous best.
+// Returns true if this is a new record.
+function trySaveRecord(levelIdx, newScore) {
+  const records = loadRecords();
+  const key     = `level${levelIdx}`;
+  const prev    = records[key];
+  if (!prev || newScore > prev.score) {
+    records[key] = {
+      score : newScore,
+      date  : new Date().toLocaleDateString('he-IL'),
+    };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); }
+    catch { /* storage full - ignore */ }
+    return true;
+  }
+  return false;
+}
+
+// ============================================================
+// SECTION 2c - CONFETTI PARTICLES
+// ============================================================
+
+let confetti = [];
+
+function launchConfetti() {
+  confetti = [];
+  const colors = ['#ff4444','#44ff88','#4488ff','#ffdd00','#ff88ff','#44ffff','#ffaa22'];
+  for (let i = 0; i < 160; i++) {
+    confetti.push({
+      x       : Math.random() * LOGICAL_W,
+      y       : -12,
+      vx      : (Math.random() - 0.5) * 220,
+      vy      : 80 + Math.random() * 180,
+      color   : colors[Math.floor(Math.random() * colors.length)],
+      w       : 6 + Math.random() * 8,
+      h       : 4 + Math.random() * 5,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 7,
+      alpha   : 1,
+    });
+  }
+}
+
+function updateConfetti(dt) {
+  for (const p of confetti) {
+    p.x        += p.vx * dt;
+    p.y        += p.vy * dt;
+    p.vy       += 140 * dt;   // gravity pulls confetti down
+    p.rotation += p.rotSpeed * dt;
+    p.alpha    -= 0.28 * dt;  // fade out over ~3.5 seconds
+  }
+  confetti = confetti.filter(p => p.alpha > 0 && p.y < LOGICAL_H + 20);
+}
+
+function drawConfetti() {
+  for (const p of confetti) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.alpha);
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rotation);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Tracks whether the last level completion broke a record
+let isNewRecord = false;
 
 // ============================================================
 // SECTION 3 - LEVEL CONFIGURATION
@@ -378,10 +462,12 @@ function handleMenuClick(lx, ly) {
 }
 
 function onButtonClick(id) {
-  if (id === 'start')       { startLevel(0); return; }
-  if (id === 'next-level')  { startLevel(currentLevel + 1); return; }
-  if (id === 'try-again')   { startLevel(currentLevel); return; }
-  if (id === 'restart')     { score = 0; startLevel(0); return; }
+  if (id === 'start')         { startLevel(0); return; }
+  if (id === 'next-level')    { startLevel(currentLevel + 1); return; }
+  if (id === 'try-again')     { startLevel(currentLevel); return; }
+  if (id === 'restart')       { score = 0; startLevel(0); return; }
+  if (id === 'history')       { gameState = STATE.HISTORY; return; }
+  if (id === 'back-to-start') { gameState = STATE.START;   return; }
   if (id.startsWith('char-')) {
     selectedCharIdx = parseInt(id.split('-')[1], 10);
   }
@@ -484,6 +570,9 @@ function startLevel(levelIdx) {
 // ============================================================
 
 function update(dt) {
+  // Confetti runs on level-complete and victory screens too
+  if (confetti.length > 0) updateConfetti(dt);
+
   if (gameState !== STATE.PLAYING) return;
 
   // -- Timer --
@@ -491,6 +580,9 @@ function update(dt) {
   if (timeRemaining <= 0) {
     timeRemaining = 0;
     // Level survived!
+    isNewRecord = trySaveRecord(currentLevel, score);
+    if (isNewRecord) launchConfetti();
+
     if (currentLevel >= LEVELS.length - 1) {
       gameState = STATE.VICTORY;
       soundVictory();
@@ -825,7 +917,8 @@ function drawStartScreen() {
     registerButton(`char-${i}`, cx, cardY, cardW, cardH);
   }
 
-  drawButton('start', 'התחל', LOGICAL_W / 2 - 80, 312, 160, 50, '#1a6aff');
+  drawButton('start',   'התחל',        LOGICAL_W / 2 - 168, 312, 150, 50, '#1a6aff');
+  drawButton('history', 'היסטוריה 📊', LOGICAL_W / 2 + 18,  312, 150, 50, '#2a5a2a');
 
   ctx.save();
   ctx.font      = '13px Arial';
@@ -853,19 +946,39 @@ function drawLevelCompleteScreen() {
   ctx.font         = 'bold 48px Arial';
   ctx.shadowColor  = '#00ff88';
   ctx.shadowBlur   = 20;
-  ctx.fillText('שלב הושלם!', LOGICAL_W / 2, 130);
+  ctx.fillText('שלב הושלם!', LOGICAL_W / 2, 115);
   ctx.shadowBlur   = 0;
+
+  // New record banner
+  if (isNewRecord) {
+    ctx.fillStyle  = '#ffdd00';
+    ctx.font       = 'bold 22px Arial';
+    ctx.shadowColor = '#ff8800';
+    ctx.shadowBlur  = 12;
+    ctx.fillText('🏆 שיא חדש!', LOGICAL_W / 2, 158);
+    ctx.shadowBlur  = 0;
+  }
 
   ctx.fillStyle = '#ffffff';
   ctx.font      = '22px Arial';
-  ctx.fillText(`ניקוד: ${score}`, LOGICAL_W / 2, 195);
+  ctx.fillText(`ניקוד: ${score}`, LOGICAL_W / 2, isNewRecord ? 195 : 175);
+
+  const prevRecord = loadRecords()[`level${currentLevel}`];
+  if (prevRecord && !isNewRecord) {
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font      = '14px Arial';
+    ctx.fillText(`שיא קודם: ${prevRecord.score}  (${prevRecord.date})`, LOGICAL_W / 2, 220);
+  }
 
   ctx.fillStyle = '#aaddff';
-  ctx.font      = '16px Arial';
-  ctx.fillText(`שלב ${currentLevel + 2} - הכן את עצמך!`, LOGICAL_W / 2, 235);
+  ctx.font      = '15px Arial';
+  ctx.fillText(`שלב ${currentLevel + 2} - הכן את עצמך!`, LOGICAL_W / 2, 248);
 
-  drawButton('next-level', 'שלב הבא', LOGICAL_W / 2 - 80, 270, 160, 50);
+  drawButton('next-level', 'שלב הבא', LOGICAL_W / 2 - 80, 272, 160, 50);
   ctx.restore();
+
+  // Confetti on top of everything
+  drawConfetti();
 }
 
 function drawGameOverScreen() {
@@ -922,6 +1035,91 @@ function drawVictoryScreen() {
 
   drawButton('restart', 'שחק שוב', LOGICAL_W / 2 - 80, 320, 160, 50, '#886600');
   ctx.restore();
+
+  drawConfetti();
+}
+
+function drawHistoryScreen() {
+  drawBackground();
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+
+  // Title
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font         = 'bold 32px Arial';
+  ctx.fillStyle    = '#aaddff';
+  ctx.fillText('📊 היסטוריית שיאים', LOGICAL_W / 2, 32);
+
+  const records = loadRecords();
+  const hasAny  = Object.keys(records).length > 0;
+
+  if (!hasAny) {
+    ctx.font      = '20px Arial';
+    ctx.fillStyle = '#888899';
+    ctx.fillText('עדיין אין שיאים. שחק כדי לרשום!', LOGICAL_W / 2, LOGICAL_H / 2);
+  } else {
+    // Table header
+    const tableX = 80;
+    const tableW = LOGICAL_W - 160;
+    const rowH   = 30;
+    const startY = 65;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fillRect(tableX, startY, tableW, rowH);
+
+    ctx.font         = 'bold 14px Arial';
+    ctx.fillStyle    = '#aaddff';
+    ctx.textAlign    = 'right';
+    ctx.textBaseline = 'middle';
+    const midY = startY + rowH / 2;
+    ctx.fillText('שלב',    tableX + tableW - 20,       midY);
+    ctx.fillText('שיא',    tableX + tableW - 130,      midY);
+    ctx.fillText('תאריך',  tableX + tableW - 260,      midY);
+    ctx.fillText('כוכבים', tableX + tableW - 390,      midY);
+
+    // Rows
+    for (let i = 0; i < LEVELS.length; i++) {
+      const key  = `level${i}`;
+      const rec  = records[key];
+      const ry   = startY + rowH + i * rowH;
+
+      // Alternating row bg
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.2)';
+      ctx.fillRect(tableX, ry, tableW, rowH);
+
+      const cy = ry + rowH / 2;
+
+      if (rec) {
+        // Stars: 1 star per 10 points, max 5
+        const stars = '⭐'.repeat(Math.min(5, Math.max(1, Math.floor(rec.score / 5))));
+
+        ctx.font      = '14px Arial';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${i + 1}`,      tableX + tableW - 20,  cy);
+        ctx.fillStyle = '#ffdd44';
+        ctx.fillText(`${rec.score}`,  tableX + tableW - 130, cy);
+        ctx.fillStyle = '#aaaaaa';
+        ctx.fillText(rec.date,        tableX + tableW - 260, cy);
+        ctx.font      = '12px serif';
+        ctx.fillStyle = '#ffdd44';
+        ctx.fillText(stars,           tableX + tableW - 390, cy);
+      } else {
+        ctx.font      = '13px Arial';
+        ctx.fillStyle = '#555566';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${i + 1}`,  tableX + tableW - 20,  cy);
+        ctx.fillText('---',        tableX + tableW - 130, cy);
+        ctx.fillText('---',        tableX + tableW - 260, cy);
+      }
+    }
+  }
+
+  drawButton('back-to-start', '← חזור', 30, 10, 110, 36, '#333355');
+  ctx.restore();
 }
 
 // ============================================================
@@ -957,6 +1155,9 @@ function gameLoop(timestamp) {
       break;
     case STATE.VICTORY:
       drawVictoryScreen();
+      break;
+    case STATE.HISTORY:
+      drawHistoryScreen();
       break;
   }
 
