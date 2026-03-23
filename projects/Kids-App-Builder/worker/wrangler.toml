@@ -1,0 +1,7 @@
+name = "playbuild"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[r2_buckets]]
+binding = "GAMES_BUCKET"
+bucket_name = "playbuild-games"
