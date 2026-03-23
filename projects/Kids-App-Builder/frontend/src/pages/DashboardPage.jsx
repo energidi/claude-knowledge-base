@@ -5,13 +5,23 @@ import { useProfile } from '../hooks/useProfile'
 import api from '../lib/api'
 
 const INSPIRATION_CHIPS = [
-  'משחק שבו כדור קופץ ומנפץ לבנים',
-  'מטוס שיורה על אסטרואידים',
-  'נחש שאוכל תפוחים וגדל',
-  'דמות שקופצת על פלטפורמות',
-  'מכונית שנמנעת ממכשולים',
-  'חידון שאלות על חיות'
+  { label: 'כדור מנפץ לבנים', emoji: '🧱' },
+  { label: 'מטוס יורה על אסטרואידים', emoji: '🚀' },
+  { label: 'נחש אוכל תפוחים וגדל', emoji: '🐍' },
+  { label: 'דמות קופצת על פלטפורמות', emoji: '🦘' },
+  { label: 'מכונית נמנעת ממכשולים', emoji: '🚗' },
+  { label: 'חידון על חיות', emoji: '🦁' },
 ]
+
+const GAME_COLORS = [
+  { bg: 'rgba(241,80,72,0.08)', border: 'rgba(241,80,72,0.2)', dot: '#F15048' },
+  { bg: 'rgba(108,99,255,0.08)', border: 'rgba(108,99,255,0.2)', dot: '#6C63FF' },
+  { bg: 'rgba(46,204,113,0.08)', border: 'rgba(46,204,113,0.2)', dot: '#2ECC71' },
+  { bg: 'rgba(255,184,0,0.08)', border: 'rgba(255,184,0,0.2)', dot: '#FFB800' },
+  { bg: 'rgba(0,188,212,0.08)', border: 'rgba(0,188,212,0.2)', dot: '#00BCD4' },
+]
+
+const GAME_EMOJIS = ['🎮', '🕹️', '⚡', '🔥', '💎', '🌟', '🎯', '🏆']
 
 export default function DashboardPage({ session }) {
   const navigate = useNavigate()
@@ -28,48 +38,93 @@ export default function DashboardPage({ session }) {
 
   const handleSignOut = () => supabase.auth.signOut()
 
-  const greeting = profile
-    ? `שלום ${profile.display_name}, מה תרצה לבנות היום?`
-    : 'שלום! מה תרצה לבנות היום?'
+  const timeGreeting = () => {
+    const h = new Date().getHours()
+    if (h < 12) return 'בוקר טוב'
+    if (h < 17) return 'צהריים טובים'
+    return 'ערב טוב'
+  }
+
+  const firstName = profile?.display_name?.split(' ')[0] || ''
 
   return (
-    <div className="min-h-screen bg-bg pb-24">
+    <div className="min-h-screen pb-24" style={{ background: 'linear-gradient(180deg, #fff5f5 0%, #F8F9FA 180px)' }}>
+
       {/* Header */}
-      <header className="bg-white shadow-sm px-5 py-4 flex items-center justify-between">
-        <h1 className="text-2xl font-black text-coral">PlayBuild</h1>
+      <header className="px-5 pt-5 pb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-black gradient-text">PlayBuild</h1>
         <div className="flex items-center gap-3">
-          {profile?.avatar_url && (
-            <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full" />
-          )}
-          <button onClick={handleSignOut} className="text-sm text-text-secondary font-semibold">
+          {profile?.avatar_url
+            ? <img src={profile.avatar_url} alt="" className="w-10 h-10 rounded-full"
+                style={{ border: '2px solid rgba(241,80,72,0.3)', boxShadow: '0 2px 8px rgba(241,80,72,0.15)' }} />
+            : <div className="w-10 h-10 rounded-full gradient-brand flex items-center justify-center text-white font-black text-lg">
+                {firstName[0] || '?'}
+              </div>
+          }
+          <button onClick={handleSignOut}
+            className="text-sm font-bold px-3 py-1.5 rounded-xl transition-colors"
+            style={{ color: '#999', background: 'rgba(0,0,0,0.04)' }}>
             יציאה
           </button>
         </div>
       </header>
 
-      <main className="px-5 pt-6 max-w-2xl mx-auto">
-        {/* Greeting */}
-        <p className="text-xl font-bold text-text-primary mb-6">{greeting}</p>
+      <main className="px-5 max-w-2xl mx-auto">
 
-        {/* New game button */}
+        {/* Greeting */}
+        <div className="mb-6 animate-slide-up">
+          <p className="text-3xl font-black" style={{ color: '#2D2D2D', lineHeight: 1.2 }}>
+            {timeGreeting()}
+            {firstName && <span className="gradient-text"> {firstName}! </span>}
+            👋
+          </p>
+          <p className="text-base font-semibold mt-1" style={{ color: '#999' }}>
+            מה תרצה לבנות היום?
+          </p>
+        </div>
+
+        {/* New game CTA */}
         <button
           onClick={() => navigate('/build')}
-          className="w-full touch-target bg-coral text-white font-black text-lg rounded-2xl py-4 mb-8 shadow-lg shadow-coral/30 active:scale-95 transition-transform"
+          className="w-full rounded-3xl mb-7 flex items-center justify-between px-6 active:scale-95 transition-transform duration-150"
+          style={{
+            height: '72px',
+            background: 'linear-gradient(135deg, #F15048 0%, #6C63FF 100%)',
+            boxShadow: '0 8px 28px rgba(241,80,72,0.35)',
+          }}
         >
-          + בנה משחק חדש
+          <span className="text-white font-black text-lg">בנה משחק חדש</span>
+          <span className="text-3xl">🎮</span>
         </button>
 
         {/* Inspiration chips */}
         <div className="mb-8">
-          <p className="text-sm font-bold text-text-secondary mb-3">רעיונות לדוגמה:</p>
+          <p className="text-sm font-black mb-3 uppercase tracking-wide" style={{ color: '#bbb' }}>
+            רעיונות לדוגמה
+          </p>
           <div className="flex flex-wrap gap-2">
             {INSPIRATION_CHIPS.map((chip) => (
               <button
-                key={chip}
-                onClick={() => navigate('/build', { state: { prompt: chip } })}
-                className="px-4 py-2 bg-white border-2 border-gray-100 rounded-full text-sm font-semibold text-text-primary hover:border-coral hover:text-coral transition-colors active:scale-95"
+                key={chip.label}
+                onClick={() => navigate('/build', { state: { prompt: chip.label } })}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all duration-150 active:scale-95"
+                style={{
+                  background: '#fff',
+                  border: '2px solid #f0f0f0',
+                  color: '#2D2D2D',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = '#F15048'
+                  e.currentTarget.style.color = '#F15048'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = '#f0f0f0'
+                  e.currentTarget.style.color = '#2D2D2D'
+                }}
               >
-                {chip}
+                <span>{chip.emoji}</span>
+                <span>{chip.label}</span>
               </button>
             ))}
           </div>
@@ -77,19 +132,36 @@ export default function DashboardPage({ session }) {
 
         {/* Games list */}
         <div>
-          <p className="text-sm font-bold text-text-secondary mb-3">המשחקים שלי:</p>
+          <p className="text-sm font-black mb-3 uppercase tracking-wide" style={{ color: '#bbb' }}>
+            המשחקים שלי
+          </p>
+
           {loadingGames ? (
-            <div className="flex justify-center py-10">
-              <div className="w-8 h-8 rounded-full border-4 border-coral border-t-transparent animate-spin" />
+            <div className="flex flex-col gap-3">
+              {[1, 2].map(i => (
+                <div key={i} className="skeleton h-20 w-full" />
+              ))}
             </div>
           ) : games.length === 0 ? (
-            <p className="text-center text-text-secondary py-10 font-semibold">
-              עוד לא בנית משחקים - בוא נתחיל!
-            </p>
+            <div className="text-center py-12 rounded-3xl"
+              style={{ background: '#fff', border: '2px dashed #f0f0f0' }}>
+              <p className="text-4xl mb-3">🎯</p>
+              <p className="font-bold text-base" style={{ color: '#2D2D2D' }}>
+                עוד לא בנית משחקים
+              </p>
+              <p className="text-sm font-semibold mt-1" style={{ color: '#bbb' }}>
+                לחץ על "בנה משחק חדש" כדי להתחיל!
+              </p>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {games.map((game) => (
-                <GameCard key={game.id} game={game} onEdit={() => navigate(`/build/${game.id}`)} />
+            <div className="flex flex-col gap-3">
+              {games.map((game, i) => (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  index={i}
+                  onEdit={() => navigate(`/build/${game.id}`)}
+                />
               ))}
             </div>
           )}
@@ -99,31 +171,54 @@ export default function DashboardPage({ session }) {
   )
 }
 
-function GameCard({ game, onEdit }) {
+function GameCard({ game, index, onEdit }) {
+  const color = GAME_COLORS[index % GAME_COLORS.length]
+  const emoji = GAME_EMOJIS[index % GAME_EMOJIS.length]
+
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <p className="font-bold text-text-primary truncate">{game.name}</p>
-        <p className="text-sm text-text-secondary">
-          {new Date(game.updated_at).toLocaleDateString('he-IL')}
+    <div
+      className="rounded-2xl p-4 flex items-center gap-4 transition-all duration-150 active:scale-98"
+      style={{
+        background: '#fff',
+        border: `2px solid ${color.border}`,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.05)'
+      }}
+    >
+      {/* Icon */}
+      <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+        style={{ background: color.bg }}>
+        {emoji}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <p className="font-black text-base truncate" style={{ color: '#2D2D2D' }}>{game.name}</p>
+        <p className="text-xs font-semibold mt-0.5" style={{ color: '#bbb' }}>
+          {new Date(game.updated_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'long' })}
         </p>
       </div>
-      <div className="flex gap-2 shrink-0">
+
+      {/* Actions */}
+      <div className="flex gap-2 flex-shrink-0">
         {game.published_url && (
           <a
             href={game.published_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="touch-target flex items-center px-3 py-2 bg-success/10 text-success rounded-xl text-sm font-bold"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition-colors"
+            style={{ background: 'rgba(46,204,113,0.1)', color: '#2ECC71' }}
           >
-            שחק
+            <span>▶</span>
+            <span>שחק</span>
           </a>
         )}
         <button
           onClick={onEdit}
-          className="touch-target flex items-center px-3 py-2 bg-purple-brand/10 text-purple-brand rounded-xl text-sm font-bold"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition-colors"
+          style={{ background: color.bg, color: color.dot }}
         >
-          ערוך
+          <span>✏️</span>
+          <span>ערוך</span>
         </button>
       </div>
     </div>
