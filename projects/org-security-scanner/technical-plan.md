@@ -37,6 +37,7 @@ GitHub target: `https://github.com/energidi/claude-knowledge-base/tree/main/proj
 | Low Count | `LowCount__c` | Number(6,0) | |
 | Info Count | `InfoCount__c` | Number(6,0) | |
 | Failed Categories | `FailedCategories__c` | LongTextArea(1000) | Comma-delimited category codes that threw exceptions (e.g. `AA,GU`). UI shows warning banner if non-empty. |
+| Completed Categories | `CompletedCategories__c` | LongTextArea(1000) | Comma-delimited category codes that completed successfully (e.g. `UA,GU,SRA`). Each runner appends its code on success - mirrors FailedCategories__c pattern. The scan progress view polls getScanRunStatus() which returns this field so the UI can render a 13-item checklist with completed categories ticked. |
 | Is Partial Scan | `IsPartialScan__c` | Checkbox | True if running user lacks PermissionsModifyAllData - some Tooling API results may be incomplete |
 | Is Production Scan | `IsProductionScan__c` | Checkbox | True when the scan ran against a production org (`Organization.IsSandbox = false`). UI shows a red "PRODUCTION" badge on this run in history and the dashboard. |
 | Error Details | `ErrorDetails__c` | LongTextArea(32768) | Full Apex exception text from failed runners for debugging |
@@ -108,7 +109,7 @@ KEYSET pattern (composite sort on `SeverityRank__c` + `Id`):
 - First page: `lastRank = null` and `lastSeenId = null` (composite filter omitted)
 - Subsequent pages: pass both `SeverityRank__c` and `Id` of the last record from the previous page
 - Constant-time at any depth - no row-skipping overhead
-- Controller signature: `getCurrentScanFindings(String scanRunId, String lastSeenId, Integer lastRank, Integer pageSize)`
+- Controller signature: `getCurrentScanFindings(String scanRunId, String lastSeenId, Integer lastRank, Integer pageSize, String searchTerm)` (searchTerm = null for no text filter)
 - LWC tracks both `lastSeenId` and `lastRank`
 - `hasMore` returned when result size equals `pageSize`
 - `FindingsPageDTO`: `List<SecurityFinding__c> findings`, `Boolean hasMore`, `String lastSeenId`, `Integer lastRank`
@@ -324,12 +325,17 @@ SecScanRunnerChain.cls            - Generic Queueable chain (Queueable + AllowsC
                                     try/catch per runner - one failure does not abort chain
                                     Catches SecScanSessionExpiredException specifically, logs
                                     "Session expired - re-run scan" and marks remaining categories failed
-                                    Appends failed category code to FailedCategories__c on error
+                                    Appends failed category code to FailedCategories__c on error.
+                                    Appends completed category code to CompletedCategories__c on
+                                    success (after runner.execute() returns without exception).
 SecScanOrchestrator.cls           - Entry point Queueable
                                     Creates SecurityScanRun__c
                                     Receives sessionId from SecScanController (sync context)
                                     Starts chain
-SecScanRetentionBatch.cls         - Database.Batchable, scope 200
+SecScanRetentionBatch.cls         - Database.Batchable, scope 1 (NOT 200 - scope=200 means 200 runs
+                                    per execute() transaction; at 100 findings/run = 20,000 child deletes,
+                                    exceeding the 10,000 DML row limit. scope=1: one run + its children
+                                    per transaction, safe at any realistic finding volume)
                                     Triggered by finalizeScan() after scan completes AND by nightly scheduler
                                     start(): query SecurityScanRun__c records beyond MaxScanRuns__c limit
                                     Also prunes orphaned Running/Cancelled runs older than 24h in same start()
@@ -346,6 +352,12 @@ SecScanOrphanCleanupSchedulable.cls - Schedulable wrapper. Fires SecScanRetentio
 SecScanRunnerContinuation.cls     - Heap-safe continuation Queueable for AA and LA runners
                                     Constructor: (Id scanRunId, List<String> runners, Integer currentIndex,
                                     String sessionId, Integer pageOffset)
+                                    execute() MUST check Status__c for Cancelled first (same pattern as
+                                    SecScanRunnerChain). Without this check, a cancelled scan that triggered
+                                    a continuation still processes all remaining Tooling API pages (30+ seconds
+                                    of wasted callouts and DML in large orgs) before the next chain link
+                                    checks and halts. Guard: query Status__c; if Cancelled, call
+                                    finalizeScan() and return without enqueueing the next chain link.
                                     Resumes Tooling API paging from pageOffset, saves additional findings,
                                     then calls System.enqueueJob(new SecScanRunnerChain(scanRunId, runners,
                                     currentIndex + 1, sessionId)) to resume the main chain
@@ -467,7 +479,11 @@ public void execute(QueueableContext ctx) {
     // Cancellation check - must be first. Admin may have cancelled while this job was queued.
     SecurityScanRun__c run = [SELECT Status__c FROM SecurityScanRun__c WHERE Id = :scanRunId LIMIT 1];
     if (run.Status__c == 'Cancelled') {
-        SecScanOrchestrator.finalizeScan(scanRunId); // mark Completed with whatever ran
+        // finalizeScan() computes Score__c, Grade__c, and aggregate counts from whatever categories ran.
+        // CRITICAL: finalizeScan() must NOT set Status__c = 'Completed' if current status is Cancelled.
+        // It must check status before writing: if (currentStatus != 'Cancelled') { run.Status__c = 'Completed'; }
+        // Without this guard, finalizeScan() overwrites Cancelled -> Completed, contradicting the cancel test assertion.
+        SecScanOrchestrator.finalizeScan(scanRunId);
         return;
     }
 
@@ -559,7 +575,7 @@ All 13 runners must use `buildFinding()` from the base class exclusively. No inl
 - `Severity__c` always a valid picklist value
 - `FindingType__c` always set
 - `RawEvidence__c` always passed through `SecScanEvidenceUtil.scrub()` first
-- `Description__c`, `Impact__c`, and `Remediation__c` always non-blank
+- `Description__c`, `Impact__c`, and `Remediation__c` always populated - if blank (e.g. admin accidentally cleared a CMT field), `buildFinding()` sets a fallback: `"No description available - check SecurityCheckDef__mdt record [CheckId]"`. This produces a visible finding that points directly at the data problem rather than crashing the entire category with a cryptic runner failure.
 
 Enforced by `SecScanCategoryRunnerTest`.
 
@@ -641,7 +657,7 @@ Beyond the original 76:
 - Where `WITH USER_MODE` would strip needed fields on reads: `Security.stripInaccessible(AccessType.READABLE, records)`
 - **WITH USER_MODE graceful degradation**: Any admin summary query (e.g. aggregate counts, scan run list) that would fail silently if the running user lacks field access must wrap the query in a try/catch `QueryException`. On catch: return a partial result with a flag (e.g. `isPartialData: true`) rather than throwing. The UI displays a non-blocking warning. Controllers that are read-only views (getScanRuns, getScanRunStatus) must not throw on access gaps - only writes (updateFindingStatus) may throw.
 - **Dynamic SOQL bind safety**: No controller or runner ever concatenates user-supplied input into a SOQL string. All variable predicates use Apex bind variables (`:variable`). The only dynamic SOQL in the codebase is in `SecScanFindingsController` for optional filters (category, severity, status). These are built via a whitelist approach: each accepted filter value is validated against a hardcoded `Set<String>` of allowed values before appending to the WHERE clause. Unknown values are rejected and `SecScanApiResponse.errorMessage` is populated with `'Invalid filter value'` so the LWC can display a non-blocking warning. Silently dropping invalid values is avoided because it would widen results without any indication to the caller.
-- `startScan()` concurrency guard: `SELECT Id FROM SecurityScanRun__c WHERE Status__c IN ('Pending','Running') LIMIT 1 FOR UPDATE`. If a record is found, throw `SecScanException('A scan is already in progress')`. The `FOR UPDATE` lock prevents two simultaneous calls from both passing the check. The 5-minute UI cooldown is client-side only and does not protect against API calls or two browser tabs.
+- `startScan()` concurrency guard: `SELECT Id FROM SecurityScanRun__c WHERE Status__c IN ('Pending','Running') LIMIT 1 FOR UPDATE`. If a record is found, throw `SecScanException('A scan is already in progress')`. The `FOR UPDATE` lock prevents two simultaneous calls from both passing the check. The 5-minute UI cooldown is client-side only and does not protect against API calls or two browser tabs. **V1 known gap:** `FOR UPDATE` only locks existing rows - it cannot prevent concurrent inserts. If two API calls arrive simultaneously when no scan is running (empty locked set), both pass the check and both insert a new run record. This requires sub-second simultaneous execution from two separate API clients; the UI cooldown eliminates the common case. V2 fix: insert the run record first, then query `SELECT COUNT() FROM SecurityScanRun__c WHERE Status__c IN ('Pending','Running') FOR UPDATE` - if count > 1, delete the just-inserted record and throw.
 - `startScan()` reads `[SELECT IsSandbox FROM Organization LIMIT 1]`. If `IsSandbox = false`: sets `IsProductionScan__c = true` on the new run record. Does not block. The LWC is responsible for showing the production confirmation modal before calling `startScan()` (see App States).
 - `startScan()` validates running user has `OrgSecurityScanner_Admin` Permission Set (defense-in-depth)
 - `startScan()` checks `PermissionsModifyAllData` on the running user's profile as a proxy for full metadata visibility. If false: does not block but sets `IsPartialScan__c = true`. UI shows: "Running as a user without full metadata visibility - some Tooling API results may be incomplete." Note: this is not an exact System Administrator role check - it is a practical proxy for whether the session will return complete Tooling API results.
@@ -705,10 +721,11 @@ Single-page application. No full page reloads. Three views (Dashboard, Findings 
 |---|---|
 | No scan yet | Empty state illustration + CTA. Tab strip disabled. |
 | Production org | Persistent red banner across the top: "PRODUCTION ORG - changes to finding status will affect your live org." `IsProductionScan__c` badge shown in header. |
-| Scan running | Button replaced by spinner "Scan Running...". Progress view shown. Tab strip disabled. Adaptive polling: starts 2s, backs off to 5s after 20s, to 10s after 60s. `clearInterval` on Completed/Failed. v2: replace with `Scan_Progress__e` Platform Event + `lightning/empApi`. |
+| Scan running | Button replaced by spinner "Scan Running...". Progress view shown - renders a 13-item checklist of all categories; completed categories ticked (green), failed categories marked red, remaining categories grey. Data from `getScanRunStatus().completedCategories` and `failedCategories` polled on the adaptive interval. Tab strip disabled. Adaptive polling: starts 2s, backs off to 5s after 20s, to 10s after 60s. `clearInterval` on Completed/Failed/Cancelled. v2: replace with `Scan_Progress__e` Platform Event + `lightning/empApi`. |
 | Scan complete | Toast notification. Dashboard activates. Left panel populates. |
 | Failed categories | Warning banner: "Some categories failed to scan: AA, GU. Results may be incomplete." |
 | Partial scan | Warning banner: "Running as a user without full metadata visibility - results may be incomplete." |
+| Scan cancelled | Amber banner: "Scan was cancelled after [N] of 13 categories. Results are partial." Dashboard shows findings from completed categories. Score ring displays the partial score computed by finalizeScan(). Run button re-enabled immediately - cancelled scans do NOT consume the 5-minute cooldown (admin intentionally stopped the scan and should be able to re-run immediately). |
 | Viewing history | Amber banner "Viewing Historical Data". Status actions disabled. |
 
 ### App Header Bar
@@ -717,13 +734,19 @@ Single-page application. No full page reloads. Three views (Dashboard, Findings 
 - Right: Score Ring (SVG arc, 0-100, grade A-F) + "Run Security Check" button (`variant="brand"`)
 - Center: Last scan chips (timestamp, operator, finding count)
 - Click button: `lightning-modal` confirmation before scan starts. If `getOrgInfo().isSandbox = false`, the modal shows a red production warning: "You are about to scan a PRODUCTION org. This is read-only but may surface sensitive configuration details. Proceed?" with a red "Scan Production" confirm button. Sandbox confirmation is the standard neutral modal.
-- 5-minute cooldown with countdown after scan runs
+- 5-minute cooldown with countdown, starting from scan completion/failure detection (not from button click). If the scan takes 8 minutes, the cooldown expires during the scan and the button is available immediately on completion. Cancelled scans bypass the cooldown entirely - the admin should be able to re-run immediately after cancelling.
 
 ### Security Score Formula
 
 Deduction weights and caps are read from `OrgSecurityScanner_Setting__mdt` (Default record) - never hardcoded. Default behavior: start at 100. Deductions (capped): Critical -10 (max -40), High -4 (max -20), Medium -2 (max -20), Low -0.5 (max -10), Info -0.1 (max -5). Floor: 5. Remediated/False Positive excluded.
 
-`finalizeScan()` computes `Score__c` and `Grade__c` and stores them on `SecurityScanRun__c` - these are the authoritative values for history and export. Storing them prevents retroactive score shifts when CMT deduction weights are later edited. The LWC recalculates score live from the in-memory findings array for instant feedback when an admin changes a finding status to Remediated or False Positive within the current session - but the stored values persist.
+`finalizeScan()` computes `Score__c` and `Grade__c` and stores them on `SecurityScanRun__c` - these are the authoritative values for history and export. Storing them prevents retroactive score shifts when CMT deduction weights are later edited.
+
+**Live score after status changes:** The LWC does NOT recalculate score from in-memory `allFindings[]`. Findings are paginated at 100 per page - `allFindings[]` only contains loaded pages. Calculating score from a partial array produces a wrong result (e.g. admin loads 100 of 400 findings, marks 3 Critical as Remediated - score recalculated from 100 findings, missing 300 High/Medium/Low findings on pages 2-4).
+
+Instead: after every `updateFindingStatus` or `bulkUpdateFindingStatus`, the LWC calls `getScoreCounts(String scanRunId)` - a lightweight `@AuraEnabled(cacheable=false)` method that returns `{ criticalOpen, highOpen, mediumOpen, lowOpen, infoOpen }` (counts of findings where `Status__c NOT IN ('Remediated','False Positive')`). The LWC applies the CMT deduction formula to these server-side counts. No full page reload required, no in-memory array iteration.
+
+`getScoreCounts()` is added to `SecScanFindingsController`. It is NOT used to update `Score__c` on the run record - that value is frozen by `finalizeScan()` and only reflects the state at scan completion (correct behavior - prevents retroactive changes).
 
 Grades: A = 90-100, B = 75-89, C = 60-74, D = 45-59, F = 0-44.
 
@@ -760,9 +783,9 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 
 ### Left Panel (Persistent, 320px)
 
-- **Severity Breakdown**: 5 rows - colored dot + label + `lightning-progress-bar` + count. Click filters Findings Explorer.
-- **Quick Stats**: 3-tile grid - Open / Critical / Pending Recommendations. Each clickable.
-- **Trend vs Previous**: Table comparing this scan vs last, delta arrows color-coded.
+- **Severity Breakdown**: 5 rows - colored dot + label + `lightning-progress-bar` + count. Click filters Findings Explorer. Counts are driven by `getScoreCounts()` results after any status change (not the `SecurityScanRun__c` parent record counts, which are frozen at scan completion). On initial load, derive from the parent record counts; after any `updateFindingStatus` / `bulkUpdateFindingStatus`, refresh from `getScoreCounts()`.
+- **Quick Stats**: 3-tile grid - Open / Critical / Pending Recommendations. Each clickable. Same data source rule as Severity Breakdown.
+- **Trend vs Previous**: Table comparing this scan vs the previous scan, delta arrows color-coded. Data source: `getScanRuns()` already returns the full scan list. The LWC selects the most recent Completed run with the same `OrgId__c` as the current run (handles sandbox refresh - do not compare across orgs). Columns: per-severity count delta and score delta. Null-safe: first scan has no previous - render "No previous scan" placeholder. No new Apex method required.
 - **Category Coverage**: "X of 13 categories have findings" + progress bar.
 
 ### Dashboard View
@@ -780,13 +803,17 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 ### Findings Explorer
 
 **Filter Bar:**
-- Search box (debounced 300ms) across name, description, component
+- Search box (debounced 300ms) - see text search spec below
 - Category dropdown
 - Severity 5-button toggle (C/H/M/L/I)
 - Type toggle (Automated / Recommendation)
 - Status multi-select
 - Clear Filters (visible when any filter active)
 - Active filter pills row
+
+**Filter change rule:** When any filter value changes (category, severity, status, or search term), the LWC must reset `lastSeenId = null`, `lastRank = null`, and clear `allFindings[]` before calling `getCurrentScanFindings`. The KEYSET cursor values reference a specific finding by rank + ID in the unfiltered result set. Reusing a stale cursor with a different filter set produces skipped records or wrong results (e.g. cursor from finding #200 unfiltered points to a finding that does not exist in the "Guest User" filtered subset).
+
+**Text search spec (Issue 3):** Search runs server-side via dynamic SOQL `LIKE` clause added to `getCurrentScanFindings`. Fields searched: `CheckName__c` (Text 255) and `AffectedComponent__c` (Text 255) only. `Description__c` is excluded from SOQL search - LIKE on a 32KB LongTextArea performs a full table scan even within the ScanRun__c predicate; at 9,000+ findings this is unacceptably slow. Clause: `AND (CheckName__c LIKE :searchPattern OR AffectedComponent__c LIKE :searchPattern)` where `searchPattern = '%' + String.escapeSingleQuotes(term) + '%'`. As a secondary pass, the LWC filters loaded records client-side against `Description__c` for admins who expect description matching. `getCurrentScanFindings` signature gains an optional `String searchTerm` parameter (null = no text filter).
 
 **Findings List:**
 - Static sort label above list: "Sorted by severity - Critical first" (no sort control in v1; the KEYSET query enforces `SeverityRank__c ASC, Id ASC`)
@@ -811,7 +838,7 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 - Severity badges: `aria-label="Severity: Critical"` on each badge (color + icon alone is insufficient for screen readers)
 - Scan progress region: `aria-live="polite"` on the progress container so screen readers announce category completions
 
-**Header:** Close X | Prev/Next navigation "Finding 3 of 47" | Check Name | Severity badge | Type pill
+**Header:** Close X | Prev/Next navigation "Finding 3 of [TotalFindings__c]" | Check Name | Severity badge | Type pill. The denominator uses `TotalFindings__c` from the parent `SecurityScanRun__c` - not `allFindings[].length`, which changes as the admin loads more pages. When the admin reaches the last loaded finding before all pages are fetched, show "Load more findings to continue" in place of the Next button instead of disabling it silently.
 
 **Tab 1 - Details:**
 - Category, Affected Component (linked if navigable via `NavigationMixin`)
@@ -825,6 +852,7 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 **Tab 2 - Status:**
 - Status change form with allowed next-states (state machine enforced)
 - Note field (required for Risk Accepted and False Positive)
+- **Submit button debounce:** After clicking Save, disable the status form buttons for the duration of the `updateFindingStatus` call + `refreshApex` cycle (typically 1-2 seconds). Without this, rapid Prev/Next + Save clicks produce near-simultaneous Apex calls - each triggers its own `refreshApex` on `getFindingDetail`, causing a flicker storm and potentially hitting the 25 concurrent long-running requests per user limit in some Salesforce editions.
 - `AcknowledgedBy__c` and `AcknowledgedDate__c` set on every save where status transitions away from Open. Overwritten on each subsequent change (e.g. Open -> Acknowledged -> Risk Accepted updates both fields each time). Tracks the last admin who acted, not the first. This is intentional - the full change history is available via Salesforce field history tracking. `Status__c`, `AcknowledgedBy__c`, and `AcknowledgedDate__c` must all have field history tracking enabled on `SecurityFinding__c`.
 
 ### Scan History View
@@ -892,7 +920,7 @@ Deferred to v2: `securityScanComparison`, `securityCategoryDetail`, `securityFin
 
 Root `securityScanner` owns all state: `currentScanId`, `scanStatus`, `activeView`, `selectedFindingId`, `isHistoricalView`, `allFindings[]`.
 
-Mutations: child fires event -> root handles -> calls Apex -> updates `allFindings[]` immutably -> all children re-render from props. No child mutates data directly.
+Mutations: child fires event -> root handles -> calls Apex -> updates `allFindings[]` immutably -> all children re-render from props. No child mutates data directly. After status mutations, also calls `getScoreCounts()` to refresh both (1) the live score ring and (2) the Left Panel severity breakdown and Quick Stats - these come from `getScoreCounts()` results after any status change, not from the `SecurityScanRun__c` parent record counts which are set once by `finalizeScan()` and never updated. The parent record counts represent the "at scan completion" snapshot; live counts come from `getScoreCounts()`.
 
 ### LWC Events
 
@@ -923,7 +951,7 @@ Root calls `event.stopPropagation()` on all handled cross-branch events.
 
 **`@wire` (cacheable=true only):** `getScanRuns` (reactive, refreshApex() after runSecurityScan), `getFindingDetail` (reactive to `selectedFindingId`, refreshApex() after updateFindingStatus), `getOrgSecuritySettings` (static config), `getOrgInfo` (static org info)
 
-**Imperative:** `getCurrentScanFindings` (paginated with complex lastSeenId/lastRank state - @wire cannot manage "load more" accumulation), `runSecurityScan`, `getScanRunStatus` (polled), `updateFindingStatus`, `bulkUpdateFindingStatus`, `cancelScan`, `exportFindingsCsv`
+**Imperative:** `getCurrentScanFindings` (paginated with complex lastSeenId/lastRank state - @wire cannot manage "load more" accumulation), `getScoreCounts` (called after every status mutation - drives both live score ring AND Left Panel severity counts), `runSecurityScan`, `getScanRunStatus` (polled), `updateFindingStatus`, `bulkUpdateFindingStatus`, `cancelScan`, `exportFindingsCsv`
 
 **Rule:** All `@wire` methods must be `cacheable=true`. Use `refreshApex()` after mutations to clear LDS cache. Non-cacheable methods must be called imperatively - `@wire` on a non-cacheable method is a platform error. The stale-cache concern for `getScanRuns` and `getFindingDetail` is resolved by explicit `refreshApex()` calls after mutations, not by avoiding cache.
 
@@ -938,12 +966,13 @@ Root calls `event.stopPropagation()` on all handled cross-branch events.
 - `getOrgInfo()` - **cacheable=true**. Returns `{ isSandbox: Boolean, orgId: String, orgName: String }`. Org type does not change mid-session. Called on LWC init to drive production warning modal and persistent banner.
 - `getScanRuns()` - **cacheable=true**. Returns list of `SecurityScanRun__c` with counts. Used with `@wire`. Stale-cache concern is resolved by explicit `refreshApex()` after `runSecurityScan` - do not mark non-cacheable to work around this, as `@wire` requires `cacheable=true`.
 - `getOrgSecuritySettings()` - **cacheable=true**. Returns `OrgSecurityScanner_Setting__mdt.getInstance('Default')` field values as `OrgSecuritySettingsDTO` (typed inner class). CMT values do not change during a session.
-- `getScanRunStatus(String scanRunId)` - **NOT cacheable** (polled). Returns `{ status, failedCategories, isPartialScan }`. `SecScanApiResponse`.
+- `getScanRunStatus(String scanRunId)` - **NOT cacheable** (polled). Returns `{ status, failedCategories, completedCategories, isPartialScan }`. `SecScanApiResponse`. `completedCategories` is the value of `CompletedCategories__c` - used by the scan progress view to tick completed categories in the 13-item checklist.
 - `cancelScan(String scanRunId)` - NOT cacheable (mutation). Sets `Status__c = 'Cancelled'`. The running Queueable chain cannot be aborted externally - each `SecScanRunnerChain.execute()` checks `Status__c` at the start of its transaction; if Cancelled, it skips the current category and does not enqueue the next link. The scan halts at the next category boundary, not immediately.
-- `exportFindingsCsv(String scanRunId)` - NOT cacheable (mutation). Generates CSV from findings. Creates `ContentVersion` with the CSV body. Creates `ContentDocumentLink` with `ShareType = 'I'` (Inferred from parent) and `Visibility = 'InternalUsers'`. Returns `ContentDocumentId`. Never returns raw String. CSV columns (in order): `CheckId`, `CheckName`, `Category`, `Severity`, `FindingType`, `Status`, `AffectedComponent`, `AffectedComponentType`, `Description`, `Impact`, `Remediation`, `AcknowledgedBy` (user name, not ID), `AcknowledgedDate`, `SalesforceDocUrl`. Header row uses field labels. `RawEvidence__c` excluded (too large, scrubbed - admins use the detail panel for evidence).
+- `exportFindingsCsv(String scanRunId)` - NOT cacheable (mutation). Generates CSV from findings. Creates `ContentVersion` with the CSV body. Creates `ContentDocumentLink` with `ShareType = 'I'` (Inferred from parent) and `Visibility = 'InternalUsers'`. Returns `ContentDocumentId`. Never returns raw String. CSV columns (in order): `CheckId`, `CheckName`, `Category`, `Severity`, `FindingType`, `Status`, `AffectedComponent`, `AffectedComponentType`, `Description`, `Impact`, `Remediation`, `AcknowledgedBy` (user name, not ID), `AcknowledgedDate`, `SalesforceDocUrl`. Header row uses field labels. `RawEvidence__c` excluded (too large, scrubbed - admins use the detail panel for evidence). CSV encoding: RFC 4180 compliant - fields containing commas, double quotes, or newlines are enclosed in double quotes; double quotes within field values are escaped as two consecutive double quotes (`""`). `Description__c`, `Impact__c`, and `Remediation__c` will contain commas and newlines - naive comma-joining corrupts the file. **Size guard:** ContentVersion body limit is ~37MB. After building the CSV string, check `csvBody.length() > 30000000` (30MB safety margin). If exceeded: truncate `Description__c`, `Impact__c`, and `Remediation__c` to 500 chars each and append `[truncated - see detail panel for full text]`, then rebuild and save. Document this in the ContentVersion `Description` field: "Full text columns truncated - finding count exceeded 30MB export limit." At typical v1 volumes (under 1,000 findings at 2KB/finding average) this guard will never fire; it is required for production orgs with verbose CMT definitions and large finding sets.
 
 **`SecScanFindingsController`:**
-- `getCurrentScanFindings(String scanRunId, String lastSeenId, Integer lastRank, Integer pageSize)` - **NOT cacheable**. KEYSET paginated (default 100), severity-first composite sort. Both `lastSeenId` and `lastRank` = null for first page. Returns `SecScanApiResponse<FindingsPageDTO>` where `FindingsPageDTO` has `List<SecurityFinding__c> findings`, `Boolean hasMore`, `String lastSeenId`, `Integer lastRank`.
+- `getCurrentScanFindings(String scanRunId, String lastSeenId, Integer lastRank, Integer pageSize, String searchTerm)` - **NOT cacheable**. KEYSET paginated (default 100), severity-first composite sort. Both `lastSeenId` and `lastRank` = null for first page. `searchTerm` = null for no text filter. Returns `SecScanApiResponse<FindingsPageDTO>` where `FindingsPageDTO` has `List<SecurityFinding__c> findings`, `Boolean hasMore`, `String lastSeenId`, `Integer lastRank`.
+- `getScoreCounts(String scanRunId)` - **NOT cacheable**. Returns `{ criticalOpen, highOpen, mediumOpen, lowOpen, infoOpen }` - live counts of findings where `Status__c NOT IN ('Remediated','False Positive')`. Called after every `updateFindingStatus` / `bulkUpdateFindingStatus` so the LWC can recalculate the live score from server-side counts rather than from the partial in-memory `allFindings[]`. Without this, paginated findings cause a wrong live score (score computed from 100 loaded findings, not the actual 400).
 - `getFindingDetail(String findingId)` - **cacheable=true**. Single finding all fields. Used with `@wire` (reactive to `selectedFindingId`). `refreshApex()` called after `updateFindingStatus` handles staleness. Must not be marked non-cacheable - `@wire` requires `cacheable=true`.
 - `updateFindingStatus(String findingId, String status, String note)` - NOT cacheable (mutation). Returns updated record.
 - `bulkUpdateFindingStatus(List<String> findingIds, String status, String note)` - NOT cacheable (mutation). Cap: throws `SecScanException` if `findingIds.size() > 5000`. Returns count. (200 was wrong - that is the trigger chunk size, not the DML row limit. Salesforce synchronous DML supports up to 10,000 rows. 5,000 is a practical LWC payload ceiling to avoid HTTP timeout on very large selections.)
@@ -1038,6 +1067,8 @@ When something fails, the admin needs to know what happened and what to do next 
 | SOAP Metadata API failure (FUE/HCB) | SOAP fault or malformed XML response | Category appears in `FailedCategories__c`. `ErrorDetails__c` includes SOAP faultcode + faultstring. | Check Setup for the specific settings manually. |
 | ContentDocumentLink creation fails on export | Insufficient sharing on run record | Toast error: "Export failed - could not attach file to scan run. Contact your admin." | Check that running user has Edit on SecurityScanRun__c via Permission Set. |
 | Bulk status update exceeds 5,000 findings | Admin selects an unusually large set in one operation | Toast error: "Bulk update is limited to 5,000 findings at a time. Select fewer findings and try again." | Select 5,000 or fewer findings and retry. |
+| `getScoreCounts()` failure | QueryException or unexpected error in counts query | Display stored `Score__c` and `Grade__c` from the run record as fallback. Append a non-blocking note near the score ring: "Live score unavailable - showing score at scan completion." Do not block the UI. | Refresh the page to retry. If persistent, check `SecurityFinding__c` field access on the Permission Set. |
+| `getOrgInfo()` failure | QueryException or permission issue on LWC init | Toast warning: "Unable to determine org type. Proceed with caution." Treat as production: show the red persistent banner as the safe default. Do not silently assume sandbox - missing the production warning is a worse outcome than a false positive warning. | Refresh the page. If persistent, verify the running user has Read on `Organization` (standard object, always accessible to authenticated users - persistent failure indicates an unusual org restriction). |
 
 **UI principle:** Every error state shows (1) what happened, (2) which categories are affected if applicable, (3) what the admin should do next. Generic "An error occurred" messages are not acceptable.
 
@@ -1057,7 +1088,8 @@ When something fails, the admin needs to know what happened and what to do next 
 | `getOrgInfo()` production | Mock `Organization.IsSandbox = false`; verify `isSandbox = false` returned, persistent red banner shown, confirmation modal uses production variant |
 | Acknowledge finding | `Status__c` = Acknowledged, `AcknowledgedBy__c` and `AcknowledgedDate__c` set |
 | Export findings | `ContentVersion` record created, linked to `SecurityScanRun__c`, CSV readable |
-| Paginated fetch (KEYSET) | `getCurrentScanFindings(runId, null, null, 10)` returns 10 rows ordered by `SeverityRank__c ASC, Id ASC` and `hasMore=true`; second call passing `lastSeenId` and `lastRank` from previous page returns next 10 rows; final page returns `hasMore=false`. Verify Critical findings appear before Informational findings across pages. |
+| Paginated fetch (KEYSET) | `getCurrentScanFindings(runId, null, null, 10, null)` returns 10 rows ordered by `SeverityRank__c ASC, Id ASC` and `hasMore=true`; second call passing `lastSeenId` and `lastRank` from previous page returns next 10 rows; final page returns `hasMore=false`. Verify Critical findings appear before Informational findings across pages. |
+| `getScoreCounts()` after status change | Mark 1 Critical finding as Remediated. Call `getScoreCounts(runId)`. Verify `criticalOpen` = original Critical count - 1. Mark as False Positive instead - verify same result. Mark as Acknowledged - verify `criticalOpen` unchanged (Acknowledged is not excluded from score). |
 
 ### Negative Tests
 | Step | Expected |
@@ -1110,3 +1142,6 @@ If a future version exposes scan findings to an Agentforce agent (e.g., "explain
 
 ### Data Quality for AI
 Finding text (Description, Impact, Remediation) is populated from `SecurityCheckDef__mdt` records - controlled, structured content. No user-generated free text is fed into findings except `AcknowledgementNote__c`, which is never sent to any AI model.
+
+### i18n - v2 Gap
+v1 is English-only. All LWC UI strings are hardcoded in templates and JavaScript. All 76 CMT check definitions contain English-only Description, Impact, and Remediation text. v2 consideration: extract LWC UI strings to Custom Labels for Translation Workbench support. CMT check definitions remain English in v1 - multi-language support would require per-locale CMT record sets or a Translation Workbench extension point.
