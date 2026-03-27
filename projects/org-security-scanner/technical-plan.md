@@ -706,7 +706,7 @@ Single-page application. No full page reloads. Three views (Dashboard, Findings 
 [ App Header Bar - 72px: shield icon, title, score ring, Run button, last scan chips ]
 [ Tab Strip - 44px: Dashboard | Findings (N) | History ]
 [ Content Area ]
-  |-- [ Left Panel - 320px fixed sticky ]
+  |-- [ Left Panel - 260px fixed sticky, collapsible ]
   |-- [ Right Panel - flex grow, scrollable ]
         |-- Dashboard: heatmap (13 cells) + recent findings + scan stats
         |-- Findings Explorer: filter bar + findings list
@@ -719,7 +719,8 @@ Single-page application. No full page reloads. Three views (Dashboard, Findings 
 
 | State | Behavior |
 |---|---|
-| No scan yet | Empty state illustration + CTA. Tab strip disabled. |
+| Initializing | Page skeleton shown from LWC mount until all three @wire calls resolve (getScanRuns, getOrgInfo, getOrgSecuritySettings). Render the structural layout (header bar outline, tab strip, left panel, content area) as grey shimmer placeholder blocks using SLDS `slds-is-loading` shimmer pattern. Prevents blank-screen flash and layout shift when data arrives. Transition to the appropriate state when all wires resolve. |
+| No scan yet | Empty state illustration + CTA. Tab strip disabled. Onboarding context below illustration (4 bullets): "Checks 76 security configurations across 13 categories. Read-only - makes no changes to your org. Typical scan time: 2-5 minutes. Results stored in-org, auto-deleted after [MaxScanRuns__c] scans." Last value read from `getOrgSecuritySettings()`. |
 | Production org | Persistent red banner across the top: "PRODUCTION ORG - changes to finding status will affect your live org." `IsProductionScan__c` badge shown in header. |
 | Scan running | Button replaced by spinner "Scan Running...". Progress view shown - renders a 13-item checklist of all categories; completed categories ticked (green), failed categories marked red, remaining categories grey. Data from `getScanRunStatus().completedCategories` and `failedCategories` polled on the adaptive interval. Tab strip disabled. Adaptive polling: starts 2s, backs off to 5s after 20s, to 10s after 60s. `clearInterval` on Completed/Failed/Cancelled. v2: replace with `Scan_Progress__e` Platform Event + `lightning/empApi`. |
 | Scan complete | Toast notification. Dashboard activates. Left panel populates. |
@@ -731,7 +732,8 @@ Single-page application. No full page reloads. Three views (Dashboard, Findings 
 ### App Header Bar
 
 - Left: `utility:shield` icon + "Org Security Scanner" + "Salesforce Org Security Analysis"
-- Right: Score Ring (SVG arc, 0-100, grade A-F) + "Run Security Check" button (`variant="brand"`)
+- Right: Score Ring (SVG arc, 0-100, grade A-F) + "Run Security Check" button (`variant="brand"`) + "Export CSV" icon button (`utility:download`, placed left of Run button). Export exports all findings for the current scan (not filtered subset - the CSV is a compliance artifact). Export button shows a spinner during generation. On success: toast "CSV exported - [Download]" where Download opens the ContentDocument. On failure: show error toast per the error states table. Export button is disabled during a running scan and when no scan exists.
+- Score Ring: clicking or hovering the ring shows an `slds-popover` score breakdown. Content: "Starting score: 100. Critical: -[N] ([count] x [deduct], cap [cap]). High: -[N]. Medium: -[N]. Low: -[N]. Info: -[N]. Excluded: [R+FP count] Remediated/False Positive. Final: [score] (Grade [letter])." Values computed from `getScoreCounts()` result and `getOrgSecuritySettings()` CMT weights - both already in the LWC. Helps admins explain the score to stakeholders.
 - Center: Last scan chips (timestamp, operator, finding count)
 - Click button: `lightning-modal` confirmation before scan starts. If `getOrgInfo().isSandbox = false`, the modal shows a red production warning: "You are about to scan a PRODUCTION org. This is read-only but may surface sensitive configuration details. Proceed?" with a red "Scan Production" confirm button. Sandbox confirmation is the standard neutral modal.
 - 5-minute cooldown with countdown, starting from scan completion/failure detection (not from button click). If the scan takes 8 minutes, the cooldown expires during the scan and the button is available immediately on completion. Cancelled scans bypass the cooldown entirely - the admin should be able to re-run immediately after cancelling.
@@ -781,7 +783,14 @@ Child components inherit via CSS cascade. JavaScript uses `data-severity` attrib
 
 Color is never the sole indicator - icon always accompanies it (accessibility).
 
-### Left Panel (Persistent, 320px)
+**WCAG contrast requirement:** `--color-medium` (`#f4bc25` yellow) on a white background produces a contrast ratio of ~1.7:1 - WCAG AA requires 4.5:1 for normal text and 3:1 for large text. Both fail. Fix:
+- Severity label text (e.g. "Medium") always uses `--lwc-colorTextDefault` (dark grey), never the severity color. Only the dot/badge background uses the severity color token.
+- Heatmap amber cells ("1-3 findings"): use dark text (`--lwc-colorTextDefault`) on the amber background, not white text. Amber background with white text also fails contrast.
+- `--color-medium` is acceptable as a background color with dark foreground text or as an icon fill where the icon is large enough to meet the 3:1 large-text threshold. It must not be used as foreground text color on white.
+
+### Left Panel (Persistent, 260px, collapsible)
+
+Width reduced from 320px to 260px. At 1366px viewport (common in government/NGO), the Salesforce nav (~220px) + 320px left panel + 45% detail panel (~515px) leaves only ~311px for the findings list - unusable. At 260px the findings list retains ~371px with the detail panel open, which is workable. The panel has a collapse toggle arrow on its right edge; when collapsed it renders as a 40px icon strip so admins working in the detail panel can recover full width. Collapsed state persisted to `localStorage` across sessions.
 
 - **Severity Breakdown**: 5 rows - colored dot + label + `lightning-progress-bar` + count. Click filters Findings Explorer. Counts are driven by `getScoreCounts()` results after any status change (not the `SecurityScanRun__c` parent record counts, which are frozen at scan completion). On initial load, derive from the parent record counts; after any `updateFindingStatus` / `bulkUpdateFindingStatus`, refresh from `getScoreCounts()`.
 - **Quick Stats**: 3-tile grid - Open / Critical / Pending Recommendations. Each clickable. Same data source rule as Severity Breakdown.
@@ -791,7 +800,7 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 ### Dashboard View
 
 **Category Heatmap (13 cells, CSS Grid 4-5 columns):**
-- Each cell: SLDS icon + name + count badge
+- Each cell: SLDS icon + CategoryCode as primary label (UA, GU, SRA, SA, CAI, AA, LA, AGA, MS, FUE, CE, MON, HCB) + count badge. Full category name rendered as `title` attribute tooltip on hover and as `aria-label` for screen readers. Short codes ensure uniform cell width - long names like "Connected Apps & Integrations" (31 chars) overflow at common grid cell widths.
 - Background: 0 findings = green, 1-3 = light amber, 4-9 = medium amber, 10+ = light red
 - Critical present = `2px solid var(--color-critical)` border (uses CSS custom property from root)
 - Click fires `categoryselect` event
@@ -817,12 +826,13 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 
 **Findings List:**
 - Static sort label above list: "Sorted by severity - Critical first" (no sort control in v1; the KEYSET query enforces `SeverityRank__c ASC, Id ASC`)
+- Severity group headers: a thin grey divider with label between severity groups ("Critical - 8 findings", "High - 15 findings", etc.). Template `if:true` checks if the current row's `SeverityRank__c` differs from the previous row and renders the divider. CSS only - no new component or state required. Static labels, not collapsible sections.
 - `template:for:each` over `<ul>` with standard scroll (no virtual scroll in v1)
 - Paginated: 100 findings per page, "Load More" button at bottom
 - Each row: Type icon | Severity badge | Category | Check Name | Affected Component | Status badge | Row action menu (`utility:threedots`)
 - Automated findings: 3px solid blue left border
 - Recommendation findings: 3px solid purple left border + "ACTION REQUIRED" badge when Open
-- Row actions: View Details, Acknowledge, Mark Remediated, Mark False Positive, Accept Risk
+- Row actions: **View Details** and **Acknowledge** execute immediately (safe, non-destructive). **Mark Remediated**, **Mark False Positive**, and **Accept Risk** open the detail panel's Status tab with the target status pre-selected - they do NOT execute in one click. This enforces the note requirement for Risk Accepted/False Positive and prevents accidental score changes from a mis-click.
 
 ### Finding Detail Panel
 
@@ -842,7 +852,7 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 
 **Tab 1 - Details:**
 - Category, Affected Component (linked if navigable via `NavigationMixin`)
-- **Risk** section (from `Description__c`): what was detected and why it matters. Truncated at 300 chars with "Read more" expander.
+- **Risk** section (from `Description__c`): what was detected and why it matters. Shown in full - no truncation. At 45% panel width (~600px on 1440px screen), even 800-char descriptions render as ~10 lines within the scrollable panel. Impact and Remediation have distinct visual containers (amber box, shade box) that clearly delimit the end of Description - no ambiguity without truncation. Add truncation in v2 only if CMT descriptions exceed 2,000 characters.
 - **Impact** section (from `Impact__c`): business and security consequences if left unaddressed. Displayed in an amber `slds-box slds-theme_warning` panel so it is visually distinct.
 - **How to Fix** section (from `Remediation__c`): step-by-step remediation instructions in `slds-box slds-theme_shade`.
 - Amber alert box for Recommendation-type findings ("Manual review required - this check cannot be automated")
@@ -850,8 +860,14 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 - Salesforce Doc link (if present): "Official Documentation" button at bottom
 
 **Tab 2 - Status:**
-- Status change form with allowed next-states (state machine enforced)
-- Note field (required for Risk Accepted and False Positive)
+- Status change form showing only valid next-states (state machine enforced - render only allowed transitions as radio buttons, never all 5 values)
+- Allowed transitions:
+  - Open -> Acknowledged, Remediated, Risk Accepted, False Positive
+  - Acknowledged -> Remediated, Risk Accepted, False Positive
+  - Remediated -> Open (reopen if fix was reverted)
+  - Risk Accepted -> Open (revoke acceptance)
+  - False Positive -> Open (reconsider classification)
+- Note field (required for Risk Accepted and False Positive - Save button disabled until note is entered for these two transitions)
 - **Submit button debounce:** After clicking Save, disable the status form buttons for the duration of the `updateFindingStatus` call + `refreshApex` cycle (typically 1-2 seconds). Without this, rapid Prev/Next + Save clicks produce near-simultaneous Apex calls - each triggers its own `refreshApex` on `getFindingDetail`, causing a flicker storm and potentially hitting the 25 concurrent long-running requests per user limit in some Salesforce editions.
 - `AcknowledgedBy__c` and `AcknowledgedDate__c` set on every save where status transitions away from Open. Overwritten on each subsequent change (e.g. Open -> Acknowledged -> Risk Accepted updates both fields each time). Tracks the last admin who acted, not the first. This is intentional - the full change history is available via Salesforce field history tracking. `Status__c`, `AcknowledgedBy__c`, and `AcknowledgedDate__c` must all have field history tracking enabled on `SecurityFinding__c`.
 
@@ -869,6 +885,8 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 - Below 768px: heatmap shifts to 2-column grid
 - Below 768px: finding row shows Type + Severity + Name only
 - Below 768px: detail panel = full-screen overlay. Implemented via CSS class toggle (`slds-hide` / remove) on the findings list, NOT `if:true/false` conditional rendering. `if:true/false` destroys and recreates the DOM, resetting native browser scroll position to the top. CSS visibility toggle keeps the list DOM alive and preserves scroll position so the admin returns to finding #85 after closing the overlay, not to finding #1.
+- Below 768px: Add a visible "Back to findings" text link directly below the Close X button in the detail panel. Minimum 44x44px touch target per WCAG 2.1. Sized for thumb tap. Renders in addition to (not replacing) the Close X.
+- Below 768px: Device back button support - push a fake history entry (`history.pushState`) when the detail panel opens; listen for `popstate` to trigger the panel close handler. Android back button and iOS swipe-back then close the panel naturally. Swipe-to-dismiss gesture is v2 (complex in LWC shadow DOM).
 - SLDS responsive grid: `slds-large-size`, `slds-medium-size`, `slds-size` classes
 
 ---
