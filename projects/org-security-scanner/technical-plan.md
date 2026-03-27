@@ -405,6 +405,7 @@ Tests:
   SecScanFindingsControllerTest.cls
   SecScanCategoryRunnerTest.cls           - enforces buildFinding() normalization contract
   SecScanRetentionBatchTest.cls           - verifies old runs deleted, findings cascade-deleted
+  SecScanOrphanCleanupSchedulableTest.cls - schedule the job, verify it appears in CronTrigger, unschedule. Minimal coverage sufficient for deployment.
 
 Testing strategy for private runner methods: annotate private detection methods with @TestVisible.
 Runner tests call the public execute() method for integration-level coverage and the @TestVisible
@@ -463,6 +464,13 @@ private static String getBaseUrl() {
 ```apex
 // SecScanRunnerChain.execute()
 public void execute(QueueableContext ctx) {
+    // Cancellation check - must be first. Admin may have cancelled while this job was queued.
+    SecurityScanRun__c run = [SELECT Status__c FROM SecurityScanRun__c WHERE Id = :scanRunId LIMIT 1];
+    if (run.Status__c == 'Cancelled') {
+        SecScanOrchestrator.finalizeScan(scanRunId); // mark Completed with whatever ran
+        return;
+    }
+
     SecScanCategoryRunner runner =
         (SecScanCategoryRunner) Type.forName(runners[currentIndex]).newInstance();
     try {
@@ -574,7 +582,10 @@ public void execute(Database.BatchableContext ctx, List<SecurityScanRun__c> scop
 // SecScanOrchestrator.finalizeScan() - after setting Status = Completed
 OrgSecurityScanner_Setting__mdt settings = OrgSecurityScanner_Setting__mdt.getInstance('Default');
 Integer maxRuns = settings != null && settings.MaxScanRuns__c != null ? (Integer) settings.MaxScanRuns__c : 5;
-Database.executeBatch(new SecScanRetentionBatch(maxRuns), 200);
+Database.executeBatch(new SecScanRetentionBatch(maxRuns), 1);
+// scope=1 is required: scope=200 means execute() receives 200 runs at once.
+// At 100 findings/run: 200*100 = 20,000 child deletes in one transaction - exceeds 10,000 DML row limit.
+// scope=1: one run + its children per transaction. Safe at any realistic finding volume.
 
 // SecScanOrphanCleanupSchedulable.execute() - nightly at 02:00, same call
 // Handles runs that crashed before reaching finalizeScan() - without this, stuck Running runs
@@ -582,9 +593,24 @@ Database.executeBatch(new SecScanRetentionBatch(maxRuns), 200);
 // System.schedule('SecScan Nightly Cleanup', '0 0 2 * * ?', new SecScanOrphanCleanupSchedulable());
 // - Register once at installation (Execute Anonymous or post-install script).
 
-// Orphaned stuck runs and accumulated Cancelled runs handled in SecScanRetentionBatch.start():
-// WHERE Status__c IN ('Running', 'Cancelled') AND StartedAt__c < :DateTime.now().addHours(-24)
-// (Cancelled runs older than 24h are pruned to prevent indefinite accumulation)
+// SecScanRetentionBatch.start() - two-step pattern (required - cannot express in one QueryLocator):
+// Step 1: Imperative SOQL to build the keep-set (N most recent completed runs).
+//   SOQL does not support NOT IN (SELECT ... ORDER BY ... LIMIT N) as a subquery.
+//   Must query the IDs to keep first, then exclude them in the QueryLocator.
+//
+//   List<SecurityScanRun__c> recent = [SELECT Id FROM SecurityScanRun__c
+//       WHERE Status__c = 'Completed' ORDER BY CompletedAt__c DESC LIMIT :maxRuns];
+//   Set<Id> keepIds = new Map<Id, SecurityScanRun__c>(recent).keySet();
+//
+// Step 2: Return QueryLocator combining both cleanup concerns:
+//   return Database.getQueryLocator([
+//       SELECT Id FROM SecurityScanRun__c
+//       WHERE (Status__c = 'Completed' AND Id NOT IN :keepIds)
+//          OR (Status__c IN ('Running', 'Cancelled') AND StartedAt__c < :cutoff)
+//   ]);
+// This single QueryLocator handles both: completed runs beyond the retention limit,
+// and orphaned/cancelled runs older than 24h. The developer must NOT assume this
+// is a simple single-condition query - the two-step is mandatory.
 ```
 
 UI shows on History tab: "Storing X of [MaxScanRuns] max runs. Oldest auto-deleted."
@@ -775,6 +801,16 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 
 **Decision: Slide-in right panel** (not modal) - keeps list visible for sequential browsing. 45% width. Full-screen on mobile. Panel visibility controlled by CSS class toggle (`slds-hide`) on both the panel and the findings list - never by `if:true/false` conditional rendering. Conditional rendering destroys the DOM and resets browser scroll position; CSS toggle preserves it.
 
+**Accessibility (required for v1):**
+- Panel root element: `role="dialog"` + `aria-modal="true"` + `aria-label="Finding Detail"`
+- On open: move focus to the Close button (first focusable element in panel)
+- Focus trap: Tab and Shift+Tab cycle within the panel while it is open; focus must not reach elements behind the overlay
+- Escape key closes panel and returns focus to the finding row that triggered the open
+- On close: return focus to the triggering row in the findings list
+- Heatmap cells: each clickable `<div>` must have `role="button"` + `tabindex="0"` + `aria-label="[Category]: [N] findings"` (divs are not keyboard-accessible by default)
+- Severity badges: `aria-label="Severity: Critical"` on each badge (color + icon alone is insufficient for screen readers)
+- Scan progress region: `aria-live="polite"` on the progress container so screen readers announce category completions
+
 **Header:** Close X | Prev/Next navigation "Finding 3 of 47" | Check Name | Severity badge | Type pill
 
 **Tab 1 - Details:**
@@ -797,6 +833,7 @@ Color is never the sole indicator - icon always accompanies it (accessibility).
 - Production runs show a red "PROD" badge; sandbox runs show a grey "SANDBOX" badge
 - Click to view in historical mode (banner warning, status changes disabled)
 - Shows "Storing X of [MaxScanRuns__c] max runs. Oldest auto-deleted." (value read from `OrgSecurityScanner_Setting__mdt`)
+- Null-safe score rendering: if `Score__c` is null (scan crashed before `finalizeScan()` ran), display "-" for both score and grade. Never display 0 or blank - that implies a scan completed with a zero score, which is misleading. Failed/crashed scans show Status badge "Failed" with no score column values.
 
 ### Mobile (Salesforce Mobile App)
 
@@ -894,20 +931,20 @@ Root calls `event.stopPropagation()` on all handled cross-branch events.
 
 **@AuraEnabled rule:** Every method called by LWC must be annotated `@AuraEnabled(cacheable=true)` or `@AuraEnabled(cacheable=false)`. Never omit the annotation and never omit the `cacheable` parameter - the default (`cacheable=false`) is implicit but must be explicit for readability. **Critical:** `cacheable=true` methods cannot perform DML. If DML is added to a cacheable method, Salesforce throws at runtime (not compile time). Only read-only methods are ever marked cacheable.
 
-**Cacheable rule:** Methods that return org configuration or static data = `cacheable=true`. Methods that return live scan/finding state = NOT cacheable (stale LDS cache causes stale UI that is hard to reproduce). Imperative calls are always non-cached.
+**Cacheable rule:** Methods that return org configuration or static data = `cacheable=true`. Methods that return live scan/finding state = `cacheable=true` only when used with `@wire` AND `refreshApex()` is called after every mutation that affects the result. Without explicit `refreshApex()`, do not use `cacheable=true` on live-state methods - stale LDS cache causes stale UI that is hard to reproduce. Imperative calls are always `cacheable=false`.
 
 **`SecScanController`:**
 - `runSecurityScan()` - NOT cacheable (mutation). Validates PS, concurrency guard, checks sysadmin flag, reads `Organization.IsSandbox`, captures `sessionId`, enqueues orchestrator. Sets `IsProductionScan__c = true` on the new run if `IsSandbox = false`. Returns `SecScanApiResponse<Id>`.
 - `getOrgInfo()` - **cacheable=true**. Returns `{ isSandbox: Boolean, orgId: String, orgName: String }`. Org type does not change mid-session. Called on LWC init to drive production warning modal and persistent banner.
-- `getScanRuns()` - **NOT cacheable**. Returns list of `SecurityScanRun__c` with counts. Live scan status must not be served from LDS cache.
+- `getScanRuns()` - **cacheable=true**. Returns list of `SecurityScanRun__c` with counts. Used with `@wire`. Stale-cache concern is resolved by explicit `refreshApex()` after `runSecurityScan` - do not mark non-cacheable to work around this, as `@wire` requires `cacheable=true`.
 - `getOrgSecuritySettings()` - **cacheable=true**. Returns `OrgSecurityScanner_Setting__mdt.getInstance('Default')` field values as `OrgSecuritySettingsDTO` (typed inner class). CMT values do not change during a session.
 - `getScanRunStatus(String scanRunId)` - **NOT cacheable** (polled). Returns `{ status, failedCategories, isPartialScan }`. `SecScanApiResponse`.
 - `cancelScan(String scanRunId)` - NOT cacheable (mutation). Sets `Status__c = 'Cancelled'`. The running Queueable chain cannot be aborted externally - each `SecScanRunnerChain.execute()` checks `Status__c` at the start of its transaction; if Cancelled, it skips the current category and does not enqueue the next link. The scan halts at the next category boundary, not immediately.
-- `exportFindingsCsv(String scanRunId)` - NOT cacheable (mutation). Generates CSV from findings. `RawEvidence__c` is excluded from CSV columns (too large and already scrubbed - admins use the detail panel for evidence). Creates `ContentVersion` with the CSV body. Creates `ContentDocumentLink` with `ShareType = 'I'` (Inferred from parent) and `Visibility = 'InternalUsers'`. Returns `ContentDocumentId`. Never returns raw String.
+- `exportFindingsCsv(String scanRunId)` - NOT cacheable (mutation). Generates CSV from findings. Creates `ContentVersion` with the CSV body. Creates `ContentDocumentLink` with `ShareType = 'I'` (Inferred from parent) and `Visibility = 'InternalUsers'`. Returns `ContentDocumentId`. Never returns raw String. CSV columns (in order): `CheckId`, `CheckName`, `Category`, `Severity`, `FindingType`, `Status`, `AffectedComponent`, `AffectedComponentType`, `Description`, `Impact`, `Remediation`, `AcknowledgedBy` (user name, not ID), `AcknowledgedDate`, `SalesforceDocUrl`. Header row uses field labels. `RawEvidence__c` excluded (too large, scrubbed - admins use the detail panel for evidence).
 
 **`SecScanFindingsController`:**
 - `getCurrentScanFindings(String scanRunId, String lastSeenId, Integer lastRank, Integer pageSize)` - **NOT cacheable**. KEYSET paginated (default 100), severity-first composite sort. Both `lastSeenId` and `lastRank` = null for first page. Returns `SecScanApiResponse<FindingsPageDTO>` where `FindingsPageDTO` has `List<SecurityFinding__c> findings`, `Boolean hasMore`, `String lastSeenId`, `Integer lastRank`.
-- `getFindingDetail(String findingId)` - **NOT cacheable**. Single finding all fields. Finding status can change while panel is open.
+- `getFindingDetail(String findingId)` - **cacheable=true**. Single finding all fields. Used with `@wire` (reactive to `selectedFindingId`). `refreshApex()` called after `updateFindingStatus` handles staleness. Must not be marked non-cacheable - `@wire` requires `cacheable=true`.
 - `updateFindingStatus(String findingId, String status, String note)` - NOT cacheable (mutation). Returns updated record.
 - `bulkUpdateFindingStatus(List<String> findingIds, String status, String note)` - NOT cacheable (mutation). Cap: throws `SecScanException` if `findingIds.size() > 5000`. Returns count. (200 was wrong - that is the trigger chunk size, not the DML row limit. Salesforce synchronous DML supports up to 10,000 rows. 5,000 is a practical LWC payload ceiling to avoid HTTP timeout on very large selections.)
 
@@ -959,10 +996,10 @@ Edit the `Default` record of `OrgSecurityScanner_Setting__mdt` in Setup > Custom
 |---|---|---|
 | 1 - Data Model | `SecurityCheckDef__mdt` (type + 76 records), `OrgSecurityScanner_Setting__mdt` (type + Default record), `SecurityScanRun__c` (+ all fields), `SecurityFinding__c` (+ all fields) | Apex classes reference these - must exist first |
 | 2 - Apex Foundation | `SecScanException`, `SecScanSessionExpiredException`, `SecScanApiResponse`, `SecScanEvidenceUtil`, `SecScanFindingDTO`, `SecScanToolingService`, `SecScanMetadataService`, `SecScanCategoryRunner` | All runners extend/use these |
-| 3 - Apex Runners | All 13 `SecScanRunner*.cls` | Extend base class from Phase 2 |
-| 4 - Apex Orchestration | `SecScanRunnerChain`, `SecScanOrchestrator`, `SecScanRetentionBatch`, `SecScanRunnerContinuation`, `SecScanOrphanCleanupSchedulable` | Reference runners and each other. `SecScanRetentionBatch` called by `finalizeScan()` and nightly scheduler. `SecScanRunnerContinuation` called by AA/LA runners - must exist before runners deploy. |
+| 3 - Apex Orchestration | `SecScanRunnerChain`, `SecScanRunnerContinuation`, `SecScanOrchestrator`, `SecScanRetentionBatch`, `SecScanOrphanCleanupSchedulable` | Must deploy together in one unit before runners. `SecScanRunnerChain` calls `SecScanOrchestrator.finalizeScan()` and `SecScanOrchestrator.startScan()` calls `SecScanRunnerChain` - mutual reference, safe when deployed together. `SecScanRunnerContinuation` calls `new SecScanRunnerChain(...)` - all in same unit. AA/LA runners call `new SecScanRunnerContinuation(...)` at compile time - this class must exist before runners deploy. Deploying Chain and Continuation in Phase 4 (after runners) causes a compile error in Phase 3 runners. |
+| 4 - Apex Runners | All 13 `SecScanRunner*.cls` | Extend `SecScanCategoryRunner` (Phase 2). AA/LA runners call `new SecScanRunnerContinuation(...)` (Phase 3 - exists). All compile-time dependencies satisfied. |
 | 5 - Apex Controllers | `SecScanController`, `SecScanFindingsController` | Reference all objects and orchestrator |
-| 6 - Apex Tests | All `*Test.cls` | Reference everything above |
+| 6 - Apex Tests | All `*Test.cls` + `SecScanOrphanCleanupSchedulableTest` | Reference everything above |
 | 7 - Config | `OrgSecurityScanner_Admin` Permission Set, `OrgSecurityScanner` Tab | Reference objects |
 | 8 - LWC Leaves | `securityScoreRing`, `scanRunMetadata`, `securityCategoryCell`, `securitySeverityBreakdown`, `securityStatusChangeForm`, `securityScanProgress` | No child LWC dependencies |
 | 9 - LWC Mid | `securityCategoryHeatmap`, `securityRecentFindings`, `securityFindingsList`, `securityFindingDetail`, `securityLeftPanel`, `securityFilterBar` | Use leaf components |
@@ -1036,6 +1073,7 @@ When something fails, the admin needs to know what happened and what to do next 
 | All 13 jobs complete | 13 `AsyncApexJob` records show Completed status |
 | Final job | Sets `Status__c = Completed` and `CompletedAt__c` |
 | Error in middle category | Chain continues, failed code in `FailedCategories__c` |
+| Cancel scan mid-chain | Set `Status__c = 'Cancelled'` after 3 categories complete. Verify: chain halts at next execute(), `finalizeScan()` called, `Score__c` reflects only completed categories (not null, not zero), `FailedCategories__c` is empty (no errors - clean stop), `Status__c` remains `Cancelled` (finalizeScan must not overwrite to Completed on a Cancelled run). |
 
 ### Scale Tests
 | Step | Expected |
