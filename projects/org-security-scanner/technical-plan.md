@@ -353,6 +353,11 @@ SecScanRunnerChain.cls            - Generic Queueable chain (Queueable + AllowsC
                                     Consider increasing the session timeout or using Named
                                     Credential configuration (v2)." and marks remaining categories failed.
                                     Appends failed category code to FailedCategories__c on error.
+                                    logError() appends to ErrorDetails__c using format:
+                                    "[CategoryCode] ExceptionType: message\nStackTrace\n---\n"
+                                    Before appending, checks current field length. If appending
+                                    would exceed 32,000 chars (safe margin below 32,768 limit),
+                                    appends "[truncated - additional errors omitted]" and stops.
                                     Appends completed category code to CompletedCategories__c on
                                     success (after runner.execute() returns without exception).
                                     ANTI-PATTERN AVOIDED: does NOT use Test.isRunningTest() in
@@ -360,9 +365,14 @@ SecScanRunnerChain.cls            - Generic Queueable chain (Queueable + AllowsC
                                     Tests set chainEnabled = false before calling execute() to prevent
                                     chained enqueue without diverging production behavior.
 SecScanOrchestrator.cls           - Entry point Queueable
-                                    Creates SecurityScanRun__c
-                                    Receives sessionId from SecScanController (sync context)
-                                    Starts chain
+                                    Does NOT create SecurityScanRun__c. The record is created
+                                    by SecScanController.startScan() as the first step of the
+                                    insert-first concurrency guard (Status__c = 'Pending').
+                                    SecScanOrchestrator receives the already-created runId and
+                                    sessionId as constructor parameters.
+                                    execute(): (1) update SecurityScanRun__c Status__c = 'Running',
+                                    StartedAt__c = Datetime.now(); (2) enqueue SecScanRunnerChain
+                                    with the full runner class list and index 0.
 SecScanRetentionBatch.cls         - Database.Batchable, scope 1 (NOT 200 - scope=200 means 200 runs
                                     per execute() transaction; at 100 findings/run = 20,000 child deletes,
                                     exceeding the 10,000 DML row limit. scope=1: one run + its children
@@ -599,7 +609,7 @@ Then `saveFindings()` normally. Stays under the 10,000 DML row limit.
 | Category | API Used | Detection Approach | Heap Guard |
 |---|---|---|---|
 | UA | Standard SOQL | `SELECT Id FROM PermissionSet WHERE PermissionsModifyAllData=true` | No - SOQL only, no large body fetches |
-| GU | Tooling API | `SELECT Id,PermissionsApiEnabled FROM Profile WHERE UserType='Guest'` | No - bulk in-memory Map, no body fetches. Max ~3 callouts. |
+| GU | Tooling API | `SELECT Id,PermissionsApiEnabled FROM Profile WHERE UserType='Guest'` | No - bulk in-memory Map, no body fetches. Max ~3 callouts. **Note:** GU loads all Guest profiles + permission data into a `Map<Id, Map<String,Object>>`. In orgs with 100+ Guest profiles (unusual but possible in large Experience Cloud deployments), heap pressure can build. No continuation pattern exists for GU in v1 - if heap overflows, the entire GU category fails. Monitor in scale testing; if GU fails in large orgs, add a heap check before each profile batch and a GU-specific continuation. |
 | SRA | Standard SOQL + Tooling | OWD via `EntityDefinition`, ScopeRule vs RestrictionRule | No - metadata queries only |
 | SA | Tooling API | `SELECT SessionTimeout,RequireHttpOnly,EnableClickjackNonsetupUser,EnableCsrfOnGet,LockSessionsToDomain FROM SecuritySettings` | No - small result set |
 | CAI | Tooling API | `SELECT IncludesSessionId FROM WorkflowOutboundMessage WHERE IncludesSessionId=true` | No - metadata queries only |
@@ -651,6 +661,32 @@ public void execute(Database.BatchableContext ctx, List<SecurityScanRun__c> scop
     delete [SELECT Id FROM SecurityFinding__c WHERE ScanRun__c IN :runIds]; // explicit child delete
     delete scope; // parent delete - no cascade DML surprise
 }
+
+// SecScanOrchestrator.finalizeScan() responsibilities (called from SecScanRunnerChain after last runner,
+// or from SecScanRunnerChain/SecScanRunnerContinuation on Cancelled):
+//
+// 1. CRITICAL guard: query current Status__c first. Only set Status__c = 'Completed' if
+//    current status is NOT 'Cancelled'. A cancelled scan must remain Cancelled.
+//
+// 2. Set CompletedAt__c = Datetime.now().
+//
+// 3. TotalChecksRun__c = count of SecurityCheckDef__mdt WHERE IsActive__c = true.
+//    Uses active check count, not hardcoded 76 - reflects disabled checks accurately.
+//    Admin can see "73 of 76 checks ran" if 3 were disabled.
+//
+// 4. Aggregate counts by severity from SecurityFinding__c WHERE ScanRun__c = :runId.
+//    Five aggregate SOQL queries (one per severity) - safe, within Queueable limits.
+//    Sets CriticalCount__c, HighCount__c, MediumCount__c, LowCount__c, InfoCount__c,
+//    TotalFindings__c.
+//
+// 5. Compute Score__c and Grade__c from CMT deduction weights applied to the counts.
+//    Score = max(ScoreFloor, 100 - capped deductions). Exclude Remediated/False Positive
+//    from live counts before computing (query with Status__c NOT IN ('Remediated','False Positive')).
+//    0 findings = Score 100, Grade A.
+//
+// 6. Update the SecurityScanRun__c record (single DML).
+//
+// 7. Trigger SecScanRetentionBatch.
 
 // SecScanOrchestrator.finalizeScan() - after setting Status = Completed
 OrgSecurityScanner_Setting__mdt settings = OrgSecurityScanner_Setting__mdt.getInstance('Default');
@@ -719,7 +755,7 @@ Beyond the original 76:
 - **WITH USER_MODE graceful degradation**: Any admin summary query (e.g. aggregate counts, scan run list) that would fail silently if the running user lacks field access must wrap the query in a try/catch `QueryException`. On catch: return a partial result with a flag (e.g. `isPartialData: true`) rather than throwing. The UI displays a non-blocking warning. Controllers that are read-only views (getScanRuns, getScanRunStatus) must not throw on access gaps - only writes (updateFindingStatus) may throw.
 - **Dynamic SOQL bind safety**: No controller or runner ever concatenates user-supplied input into a SOQL string. All variable predicates use Apex bind variables (`:variable`). The only dynamic SOQL in the codebase is in `SecScanFindingsController` for optional filters (category, severity, status). These are built via a whitelist approach: each accepted filter value is validated against a hardcoded `Set<String>` of allowed values before appending to the WHERE clause. **Field names in the WHERE clause are always hardcoded string literals - never sourced from user input.** Unknown values are rejected and `SecScanApiResponse.errorMessage` is populated with `'Invalid filter value'` so the LWC can display a non-blocking warning. Silently dropping invalid values is avoided because it would widen results without any indication to the caller.
 - **`searchTerm` input cap:** `getCurrentScanFindings` caps `searchTerm` at 100 characters before processing. A 32KB search pattern produces a 32KB LIKE clause - heap and CPU concern on a call that runs frequently. `String.escapeSingleQuotes()` is applied after the cap. **Performance note:** SOQL LIKE with `%term%` on Text(255) fields does not use indexes. The `ScanRun__c` predicate narrows the result set first, but at 9,000+ findings the secondary LIKE scan within the partition is not instant. Document in the UI tooltip: "Search may be slow on large result sets."
-- `startScan()` concurrency guard: **v1 uses insert-first pattern** (promotes the v2 fix to v1 - the original FOR UPDATE approach has a DoS gap). Pattern: (1) insert the `SecurityScanRun__c` record with `Status__c = 'Pending'`. (2) Query `SELECT COUNT() FROM SecurityScanRun__c WHERE Status__c IN ('Pending','Running') FOR UPDATE`. (3) If count > 1, delete the just-inserted record and throw `SecScanException('A scan is already in progress')`. (4) Otherwise proceed with enqueue. The FOR UPDATE in step 2 locks the counted rows, preventing two concurrent inserts from both proceeding. The insert-first approach prevents the gap where two simultaneous API calls both see an empty set and both pass - if both insert, the count check catches the second one. Without this, a malicious or accidental burst of concurrent API calls could flood the Flex Queue (100-job limit) with scan Queueables, saturating the org's async processing capacity and blocking other business processes.
+- `startScan()` concurrency guard: **v1 uses insert-first pattern** (promotes the v2 fix to v1 - the original FOR UPDATE approach has a DoS gap). `startScan()` is the sole creator of `SecurityScanRun__c` records - `SecScanOrchestrator` receives the already-created `runId` and only updates the status to `Running`. Pattern: (1) insert the `SecurityScanRun__c` record with `Status__c = 'Pending'`. (2) Query `SELECT COUNT() FROM SecurityScanRun__c WHERE Status__c IN ('Pending','Running') FOR UPDATE`. (3) If count > 1, delete the just-inserted record and throw `SecScanException('A scan is already in progress')`. (4) Otherwise: capture session ID, enqueue `SecScanOrchestrator(runId, sessionId)`. The orchestrator's `execute()` updates the record to `Running`, sets `StartedAt__c`, and enqueues the first `SecScanRunnerChain`. The FOR UPDATE in step 2 locks the counted rows, preventing two concurrent inserts from both proceeding. Without this, a burst of concurrent API calls could flood the Flex Queue (100-job limit), saturating the org's async processing capacity.
 - `startScan()` reads `[SELECT IsSandbox FROM Organization LIMIT 1]`. If `IsSandbox = false`: checks `AllowProductionScan__c` on `OrgSecurityScanner_Setting__mdt` - if false (default), throws `SecScanException('Production scanning is disabled. Enable AllowProductionScan__c in OrgSecurityScanner_Setting__mdt.')`. If `AllowProductionScan__c = true`: sets `IsProductionScan__c = true` on the new run record. The LWC confirmation modal is a second gate, not the only gate. Secure default is deny.
 - `startScan()` validates running user has `OrgSecurityScanner_Admin` Permission Set (defense-in-depth)
 - `startScan()` checks `PermissionsModifyAllData` on the running user's profile as a proxy for full metadata visibility. If false: does not block but sets `IsPartialScan__c = true`. UI shows: "Running as a user without full metadata visibility - some Tooling API results may be incomplete." Note: this is not an exact System Administrator role check - it is a practical proxy for whether the session will return complete Tooling API results.
@@ -1044,7 +1080,35 @@ Root calls `event.stopPropagation()` on all handled cross-branch events.
 
 **`refreshApex()` success guard:** Only call `refreshApex()` when `SecScanApiResponse.success === true`. If `runSecurityScan()` fails (concurrency guard, permission error, etc.), do NOT call `refreshApex()` on `getScanRuns` - a failed scan should not trigger a list refresh that might display stale or confusing intermediate state. LWC error handler: check `response.success` first; on false, display `response.errorMessage` as an error toast without refreshing any wire.
 
+**Post-scan completion sequence (when polling detects `Status = 'Completed'` or `'Failed'` or `'Cancelled'`):**
+1. `clearInterval(this._pollInterval)` - stop polling immediately.
+2. `refreshApex(this._scanRunsWire)` - adds the completed run to history list and updates header chips.
+3. Call `getScoreCounts(this.currentScanId)` imperatively - updates live score ring and Left Panel severity counts.
+4. Call `getCurrentScanFindings` imperatively (first page, null cursor) - auto-loads findings into Findings Explorer.
+5. Switch `activeView` to `'dashboard'` if currently on the scan progress view.
+6. Show toast: "Scan complete - [N] findings detected." For `Failed`: amber toast "Scan failed - [N] categories could not complete." For `Cancelled`: amber toast "Scan cancelled after [N] categories."
+7. Start 5-minute cooldown timer.
+On `Failed` or `Cancelled`: same sequence except step 4 only runs if `TotalFindings__c > 0`.
+
+**`disconnectedCallback` (required - prevents memory leak and ghost Apex calls):**
+`securityScanner` root must implement `disconnectedCallback()` to clean up:
+```js
+disconnectedCallback() {
+    if (this._pollInterval) {
+        clearInterval(this._pollInterval);
+        this._pollInterval = undefined;
+    }
+}
+```
+Without this, navigating away from the app while a scan is running leaves the `setInterval` firing against a destroyed component, making repeated `getScanRunStatus` Apex calls indefinitely.
+
 **SVG score ring implementation note:** `securityScoreRing` uses SVG `stroke-dasharray` / `stroke-dashoffset` for the arc animation - not a canvas element. Canvas is not supported in LWC shadow DOM without workarounds. Test score ring at score=0 (full empty arc) and score=100 (full filled arc) - edge cases can produce NaN dashoffset or invisible arcs if the math is not null-safe.
+
+**ContentDocumentId -> download URL:** `exportFindingsCsv` returns a `ContentDocumentId` in `SecScanApiResponse.data`. The LWC constructs the download URL as:
+```js
+const downloadUrl = `/sfc/servlet.shepherd/document/download/${contentDocumentId}?operationContext=S1`;
+```
+The `operationContext=S1` parameter ensures the correct content-disposition headers for a file download. The LWC renders this as an `<a href={downloadUrl} target="_blank">` inside the success toast - admins click it to download. Do NOT use `NavigationMixin` for file downloads - it does not support binary content disposition.
 
 ### Apex Controller Methods
 
@@ -1058,7 +1122,7 @@ Root calls `event.stopPropagation()` on all handled cross-branch events.
 - `getScanRuns()` - **cacheable=true**. Returns list of `SecurityScanRun__c` with counts. Used with `@wire`. Stale-cache concern is resolved by explicit `refreshApex()` after `runSecurityScan` - do not mark non-cacheable to work around this, as `@wire` requires `cacheable=true`.
 - `getOrgSecuritySettings()` - **cacheable=true**. Returns `OrgSecurityScanner_Setting__mdt.getInstance('Default')` field values as `OrgSecuritySettingsDTO` (typed inner class). CMT values do not change during a session.
 - `getScanRunStatus(String scanRunId)` - **NOT cacheable** (polled). Returns `{ status, failedCategories, completedCategories, isPartialScan }`. `SecScanApiResponse`. `completedCategories` is the value of `CompletedCategories__c` - used by the scan progress view to tick completed categories in the 13-item checklist.
-- `cancelScan(String scanRunId)` - NOT cacheable (mutation). Sets `Status__c = 'Cancelled'`. The running Queueable chain cannot be aborted externally - each `SecScanRunnerChain.execute()` checks `Status__c` at the start of its transaction; if Cancelled, it skips the current category and does not enqueue the next link. The scan halts at the next category boundary, not immediately.
+- `cancelScan(String scanRunId)` - NOT cacheable (mutation). Before updating, queries current `Status__c`. If already in a terminal state (`Completed`, `Failed`, `Cancelled`), returns `SecScanApiResponse` with `errorMessage = 'Scan has already completed and cannot be cancelled.'` - no DML performed. If status is `Pending` or `Running`, sets `Status__c = 'Cancelled'`. The running Queueable chain cannot be aborted externally - each `SecScanRunnerChain.execute()` checks `Status__c` at the start of its transaction; if Cancelled, it skips the current category and does not enqueue the next link. The scan halts at the next category boundary, not immediately.
 - `exportFindingsCsv(String scanRunId)` - NOT cacheable (mutation). Generates CSV from findings. Creates `ContentVersion` with the CSV body. Creates `ContentDocumentLink` with `ShareType = 'I'` (Inferred from parent) and `Visibility = 'InternalUsers'`. Returns `ContentDocumentId`. Never returns raw String. CSV columns (in order): `CheckId`, `CheckName`, `Category`, `Severity`, `FindingType`, `Status`, `AffectedComponent`, `AffectedComponentType`, `Description`, `Impact`, `Remediation`, `AcknowledgedBy` (user name, not ID), `AcknowledgedDate`, `SalesforceDocUrl`. Header row uses field labels. `RawEvidence__c` excluded (too large, scrubbed - admins use the detail panel for evidence). CSV encoding: RFC 4180 compliant - fields containing commas, double quotes, or newlines are enclosed in double quotes; double quotes within field values are escaped as two consecutive double quotes (`""`). `Description__c`, `Impact__c`, and `Remediation__c` will contain commas and newlines - naive comma-joining corrupts the file. **Size guard - pre-emptive, not post-build:** The synchronous Apex heap limit is 6MB. Building a large CSV string and then checking its length is too late - the heap already crashed. Guard must run BEFORE building: count findings via `SELECT COUNT()`. If count > 3000 (conservative threshold - 3000 x ~2KB average = ~6MB), truncate `Description__c`, `Impact__c`, and `Remediation__c` to 500 chars each for all findings before building any string. Append `[truncated - see detail panel for full text]` to each truncated field. Document this in the ContentVersion `Description` field: "Text columns truncated - finding count exceeded safe export threshold." At typical v1 volumes (under 1,000 findings) this guard will never fire.
 
 **`SecScanFindingsController`:**
@@ -1166,6 +1230,32 @@ Edit the `Default` record of `OrgSecurityScanner_Setting__mdt` in Setup > Custom
 
 `packageAliases` is populated by `sf package create` and `sf package version create` - commit the updated `sfdx-project.json` after each command.
 
+### `config/project-scratch-def.json`
+
+```json
+{
+  "orgName": "Org Security Scanner Dev",
+  "edition": "Developer",
+  "features": ["EnableSetPasswordInApi", "Agentforce"],
+  "settings": {
+    "securitySettings": {
+      "sessionSettings": {
+        "sessionTimeout": "TwentyFourHours"
+      }
+    },
+    "lightningExperienceSettings": {
+      "enableLightningExperience": true
+    }
+  }
+}
+```
+
+**Feature notes:**
+- `Agentforce` - required for the AGA runner tests (`GenAiFunctionDefinition` Tooling API objects do not exist without this feature)
+- `EnableSetPasswordInApi` - required to set passwords on test users programmatically in Apex tests
+- `sessionTimeout: TwentyFourHours` - prevents session expiry during long test runs
+- Tooling API and `ContentVersion`/`ContentDocumentLink` are available in all Developer Edition scratch orgs by default - no feature flag needed
+
 ### Package Lifecycle Commands
 
 ```bash
@@ -1262,6 +1352,13 @@ When something fails, the admin needs to know what happened and what to do next 
 | `searchTerm` exceeds 100 chars | Pass 150-char search term to `getCurrentScanFindings`. Verify term is silently capped to 100 chars before processing - no error thrown, results match truncated pattern. |
 | `buildFinding()` called with blank `Severity__c` | Verify `buildFinding()` sets `Severity__c = 'Low'` and insert succeeds without picklist validation error. |
 | `buildFinding()` called with blank `FindingType__c` | Verify `buildFinding()` sets `FindingType__c = 'Automated'`. |
+| `cancelScan()` on already-Completed scan | Call `cancelScan()` on a run with `Status__c = 'Completed'`. Verify: returns `success = false`, `errorMessage` contains "already completed", no DML performed, run remains `Completed`. |
+| `cancelScan()` on Pending/Running scan | Verify `Status__c` transitions to `Cancelled` successfully. |
+| `finalizeScan()` with disabled checks | Set 3 `SecurityCheckDef__mdt` records to `IsActive__c = false`. Run scan. Verify `TotalChecksRun__c = 73` (not 76). |
+| `finalizeScan()` with 0 findings | Run scan that produces 0 findings. Verify `Score__c = 100`, `Grade__c = 'A'`, `TotalFindings__c = 0`. |
+| `finalizeScan()` status guard on Cancelled run | Set `Status__c = 'Cancelled'` before calling `finalizeScan()`. Verify status remains `Cancelled` after finalizeScan - NOT overwritten to `Completed`. |
+| `ErrorDetails__c` overflow protection | Simulate 6 runner failures each with a 6,000-char stack trace. Verify `ErrorDetails__c` does not exceed 32,768 chars and ends with truncation marker. |
+| `disconnectedCallback` polling cleanup | Mount the component, trigger a scan (starts polling). Unmount the component. Verify no further `getScanRunStatus` Apex calls are made after unmount. |
 
 ### Async Chain Tests
 | Step | Expected |
