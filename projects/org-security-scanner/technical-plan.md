@@ -346,9 +346,19 @@ SecScanRetentionBatch.cls         - Database.Batchable, scope 1 (NOT 200 - scope
 SecScanOrphanCleanupSchedulable.cls - Schedulable wrapper. Fires SecScanRetentionBatch nightly.
                                     Handles runs that never reached finalizeScan() (scan crashed before
                                     the final Queueable executed). Without this, stuck Running runs
-                                    accumulate indefinitely. Schedule at installation: daily at 02:00.
-                                    System.schedule('SecScan Nightly Cleanup', '0 0 2 * * ?',
-                                        new SecScanOrphanCleanupSchedulable());
+                                    accumulate indefinitely. Scheduled automatically by
+                                    SecScanPostInstallHandler on package install/upgrade.
+SecScanPostInstallHandler.cls     - Implements InstallHandler. Runs on fresh install AND upgrade.
+                                    On install: System.schedule('SecScan Nightly Cleanup',
+                                        '0 0 2 * * ?', new SecScanOrphanCleanupSchedulable()).
+                                    On upgrade: abort existing job first (query CronTrigger for
+                                    name = 'SecScan Nightly Cleanup'), then reschedule - prevents
+                                    duplicate scheduled jobs across package upgrades.
+                                    Returns silently on failure (cannot throw from InstallHandler -
+                                    a thrown exception rolls back the install).
+SecScanPostUninstallHandler.cls   - Implements UninstallHandler. Aborts the scheduled job on
+                                    package removal. Queries CronTrigger by name and calls
+                                    System.abortJob(). Silent on failure (job may already be absent).
 SecScanRunnerContinuation.cls     - Heap-safe continuation Queueable for AA and LA runners
                                     Constructor: (Id scanRunId, List<String> runners, Integer currentIndex,
                                     String sessionId, Integer pageOffset)
@@ -418,6 +428,8 @@ Tests:
   SecScanCategoryRunnerTest.cls           - enforces buildFinding() normalization contract
   SecScanRetentionBatchTest.cls           - verifies old runs deleted, findings cascade-deleted
   SecScanOrphanCleanupSchedulableTest.cls - schedule the job, verify it appears in CronTrigger, unschedule. Minimal coverage sufficient for deployment.
+  SecScanPostInstallHandlerTest.cls       - simulate fresh install and upgrade contexts. Verify job scheduled on install. Verify old job aborted and new job created on upgrade (no duplicate CronTrigger entries).
+  SecScanPostUninstallHandlerTest.cls     - verify scheduled job is aborted. Silent on already-absent job.
 
 Testing strategy for private runner methods: annotate private detection methods with @TestVisible.
 Runner tests call the public execute() method for integration-level coverage and the @TestVisible
@@ -1043,7 +1055,7 @@ Edit the `Default` record of `OrgSecurityScanner_Setting__mdt` in Setup > Custom
 |---|---|---|
 | 1 - Data Model | `SecurityCheckDef__mdt` (type + 76 records), `OrgSecurityScanner_Setting__mdt` (type + Default record), `SecurityScanRun__c` (+ all fields), `SecurityFinding__c` (+ all fields) | Apex classes reference these - must exist first |
 | 2 - Apex Foundation | `SecScanException`, `SecScanSessionExpiredException`, `SecScanApiResponse`, `SecScanEvidenceUtil`, `SecScanFindingDTO`, `SecScanToolingService`, `SecScanMetadataService`, `SecScanCategoryRunner` | All runners extend/use these |
-| 3 - Apex Orchestration | `SecScanRunnerChain`, `SecScanRunnerContinuation`, `SecScanOrchestrator`, `SecScanRetentionBatch`, `SecScanOrphanCleanupSchedulable` | Must deploy together in one unit before runners. `SecScanRunnerChain` calls `SecScanOrchestrator.finalizeScan()` and `SecScanOrchestrator.startScan()` calls `SecScanRunnerChain` - mutual reference, safe when deployed together. `SecScanRunnerContinuation` calls `new SecScanRunnerChain(...)` - all in same unit. AA/LA runners call `new SecScanRunnerContinuation(...)` at compile time - this class must exist before runners deploy. Deploying Chain and Continuation in Phase 4 (after runners) causes a compile error in Phase 3 runners. |
+| 3 - Apex Orchestration | `SecScanRunnerChain`, `SecScanRunnerContinuation`, `SecScanOrchestrator`, `SecScanRetentionBatch`, `SecScanOrphanCleanupSchedulable`, `SecScanPostInstallHandler`, `SecScanPostUninstallHandler` | Must deploy together in one unit before runners. `SecScanRunnerChain` calls `SecScanOrchestrator.finalizeScan()` and `SecScanOrchestrator.startScan()` calls `SecScanRunnerChain` - mutual reference, safe when deployed together. `SecScanRunnerContinuation` calls `new SecScanRunnerChain(...)` - all in same unit. AA/LA runners call `new SecScanRunnerContinuation(...)` at compile time - this class must exist before runners deploy. Deploying Chain and Continuation in Phase 4 (after runners) causes a compile error in Phase 3 runners. Post-install/uninstall handlers reference `SecScanOrphanCleanupSchedulable` - same unit. |
 | 4 - Apex Runners | All 13 `SecScanRunner*.cls` | Extend `SecScanCategoryRunner` (Phase 2). AA/LA runners call `new SecScanRunnerContinuation(...)` (Phase 3 - exists). All compile-time dependencies satisfied. |
 | 5 - Apex Controllers | `SecScanController`, `SecScanFindingsController` | Reference all objects and orchestrator |
 | 6 - Apex Tests | All `*Test.cls` + `SecScanOrphanCleanupSchedulableTest` | Reference everything above |
@@ -1053,6 +1065,57 @@ Edit the `Default` record of `OrgSecurityScanner_Setting__mdt` in Setup > Custom
 | 10 - LWC Top | `securityDashboard`, `securityFindingsExplorer`, `securityScanHistory`, `securityScannerHeader` | Use mid components |
 | 11 - LWC Root | `securityScanner`, `securityScannerTabs` | Orchestrates everything |
 | 12 - App Shell | `OrgSecurityScannerApp_Page` Flexipage, `OrgSecurityScannerApp` Lightning App | References LWC and tab |
+
+---
+
+## Package Configuration
+
+**Type:** Unlocked Package (no namespace). Installable via URL. CMT records, Permission Set, and all metadata deploy with the package. Subscriber org data (`SecurityScanRun__c`, `SecurityFinding__c` records) is preserved on upgrade.
+
+### `sfdx-project.json`
+
+```json
+{
+  "packageDirectories": [
+    {
+      "path": "force-app",
+      "default": true,
+      "package": "OrgSecurityScanner",
+      "versionName": "v1.0",
+      "versionNumber": "1.0.0.NEXT",
+      "definitionFile": "config/project-scratch-def.json"
+    }
+  ],
+  "name": "OrgSecurityScanner",
+  "namespace": "",
+  "sourceApiVersion": "66.0",
+  "packageAliases": {}
+}
+```
+
+`packageAliases` is populated by `sf package create` and `sf package version create` - commit the updated `sfdx-project.json` after each command.
+
+### Package Lifecycle Commands
+
+```bash
+# 1. Create the package (one-time)
+sf package create --name "OrgSecurityScanner" --package-type Unlocked --path force-app --target-dev-hub <DevHub>
+
+# 2. Create a new version
+sf package version create --package "OrgSecurityScanner" --installation-key-bypass --wait 20 --target-dev-hub <DevHub>
+
+# 3. Promote to released (required before installing in production)
+sf package version promote --package "OrgSecurityScanner@1.0.0-1" --target-dev-hub <DevHub>
+
+# 4. Install in a target org
+sf package install --package "OrgSecurityScanner@1.0.0-1" --target-org <alias> --wait 10
+```
+
+### Post-Install Behavior
+`SecScanPostInstallHandler` runs automatically after `sf package install`. It schedules the nightly cleanup job - no manual Execute Anonymous step required. On upgrade, it aborts the existing scheduled job and reschedules to prevent duplicates.
+
+### Uninstall Behavior
+`SecScanPostUninstallHandler` aborts the scheduled job before package removal. `SecurityScanRun__c` and `SecurityFinding__c` data is deleted when the objects are removed (subscriber must export first if needed).
 
 ---
 
