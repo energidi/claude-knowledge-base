@@ -137,6 +137,197 @@ The data retention query in `SecScanOrchestrator` avoids OFFSET entirely - it fe
 
 ---
 
+### Security Check Definitions - All 76 Records
+
+Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, CE=2, MON=4, HCB=3 = **76 total**
+
+**Finding Type:** A = Automated (violation directly detected), R = Recommendation (heuristic - requires manual admin review to confirm)
+**Detection:** SOQL = standard Salesforce SOQL, Tooling = Tooling API REST, SOAP = Metadata API SOAP
+
+---
+
+#### UA - User Access (7 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| UA-001 | Custom profile with Modify All Data | Critical | A | A non-System-Administrator profile has `PermissionsModifyAllData=true` | SOQL: `PermissionSet WHERE PermissionsModifyAllData=true AND IsOwnedByProfile=true AND Profile.Name != 'System Administrator'` |
+| UA-002 | Permission Set granting Modify All Data | Critical | A | A standalone permission set with `PermissionsModifyAllData=true` is assigned to active users | SOQL: `PermissionSetAssignment WHERE PermissionSet.PermissionsModifyAllData=true AND PermissionSet.IsOwnedByProfile=false AND Assignee.IsActive=true` |
+| UA-003 | Profile with Manage Users permission | High | A | A non-admin profile has `PermissionsManageUsers=true` - allows creating and modifying other admins | SOQL: `PermissionSet WHERE PermissionsManageUsers=true AND IsOwnedByProfile=true AND Profile.Name != 'System Administrator'` |
+| UA-004 | Permission Set granting API access to standard users | High | A | A standalone pset with `PermissionsApiEnabled=true` is assigned to active standard users | SOQL: `PermissionSetAssignment WHERE PermissionSet.PermissionsApiEnabled=true AND PermissionSet.IsOwnedByProfile=false AND Assignee.IsActive=true AND Assignee.Profile.UserType='Standard'` |
+| UA-005 | Inactive users with active CRM licenses | Medium | A | Active standard users who have never logged in or last logged in > 90 days ago | SOQL: `User WHERE IsActive=true AND Profile.UserType='Standard' AND (LastLoginDate < LAST_N_DAYS:90 OR LastLoginDate=null)` |
+| UA-006 | Active users without MFA enrolled | Medium | A | Active standard users with no MFA factor registered (no entry in UserMFAFactor) | SOQL: `User WHERE IsActive=true AND Profile.UserType='Standard'` minus `SELECT UserId FROM UserMFAFactor` |
+| UA-007 | Users with delegated admin access | Low | A | Users assigned a delegated administration group - can manage other users' access without being sysadmin | SOQL: `DelegatedAdminUserGroup` WHERE group has Manage Users authority |
+
+**Key Impact/Remediation notes:**
+- UA-001/002: Any user gains full read/write on all org data. Remove MDA; use scoped object permissions.
+- UA-003: Can create new System Administrators. Restrict to a single designated IT admin.
+- UA-004: API access bypasses UI controls; enables programmatic bulk extraction. Use integration-only user + Named Credentials.
+- UA-005: Dormant accounts can't be detected by login anomaly alerts. Deactivate quarterly.
+- UA-006: Single-factor accounts vulnerable to credential stuffing. Enable MFA enforcement in Identity Verification settings.
+- UA-007: Delegated admins can indirectly escalate privileges. Review group membership scope.
+
+---
+
+#### GU - Guest User (12 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| GU-001 | Guest profile has Modify All Data | Critical | A | Any Experience Cloud guest profile has `PermissionsModifyAllData=true` | SOQL: `PermissionSet WHERE IsOwnedByProfile=true AND Profile.UserType='Guest' AND PermissionsModifyAllData=true` |
+| GU-002 | Guest profile has API Enabled | Critical | A | Any guest profile has `PermissionsApiEnabled=true` - unauthenticated callers reach Salesforce API | SOQL: `PermissionSet WHERE IsOwnedByProfile=true AND Profile.UserType='Guest' AND PermissionsApiEnabled=true` |
+| GU-003 | Guest profile can Create on Account or Contact | Critical | A | Guest object permissions allow Create=true on Account or Contact | Tooling: `ObjectPermissions WHERE Parent.Profile.UserType='Guest' AND SObjectType IN ('Account','Contact') AND PermissionsCreate=true` |
+| GU-004 | Guest profile can Create on Case or Lead | High | A | Guest object permissions allow Create=true on Case or Lead | Tooling: `ObjectPermissions WHERE Parent.Profile.UserType='Guest' AND SObjectType IN ('Case','Lead') AND PermissionsCreate=true` |
+| GU-005 | Guest profile has View All Records on any object | High | A | Guest user has `PermissionsViewAllRecords=true` on any object - bypasses sharing for unauthenticated users | Tooling: `ObjectPermissions WHERE Parent.Profile.UserType='Guest' AND PermissionsViewAllRecords=true` |
+| GU-006 | Experience site allows guests to see other members | High | A | Any live Experience Cloud network has `AllowMembersToSeeEachOther=true` | Tooling: `Network WHERE Status='Live' AND AllowMembersToSeeEachOther=true` |
+| GU-007 | Guest profile has Edit on sensitive standard objects | High | A | Guest has Edit permission on Account, Contact, Case, Lead, or Opportunity | Tooling: `ObjectPermissions WHERE Parent.Profile.UserType='Guest' AND PermissionsEdit=true AND SObjectType IN ('Account','Contact','Case','Lead','Opportunity')` |
+| GU-008 | Guest profile has Custom Permissions | Medium | A | Any custom permission assigned to a guest profile - may bypass sharing or trigger elevated logic | SOQL: `SetupEntityAccess WHERE SetupEntityType='CustomPermission' AND Parent.Profile.UserType='Guest'` |
+| GU-009 | Guest profile has FLS read on PII fields | Medium | A | Guest profile has read access on fields matching PII name patterns (BirthDate, SSN, TaxId, BankAccount, PassportNumber) | Tooling: `FieldPermissions WHERE Parent.Profile.UserType='Guest' AND PermissionsRead=true AND Field LIKE '%BirthDate%'` (repeated per PII pattern) |
+| GU-010 | Guest profile can read Attachments or Files | Medium | A | Guest has Read on ContentVersion or Attachment | Tooling: `ObjectPermissions WHERE Parent.Profile.UserType='Guest' AND SObjectType IN ('ContentVersion','Attachment') AND PermissionsRead=true` |
+| GU-011 | No login rate limiting on Experience sites | Low | R | No lockout policy configured on live Experience networks - brute-force risk on community login | Tooling: `Network WHERE Status='Live'` - check `MaxFailedLoginAttempts` per network |
+| GU-012 | Active Experience Cloud site count | Info | A | Total count of live Experience sites - informational attack surface inventory (fires if count >= 1) | Tooling: `SELECT COUNT() FROM Network WHERE Status='Live'` |
+
+---
+
+#### SRA - Sharing / Record Access (7 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| SRA-001 | Account OWD set to Public Read/Write | Critical | A | Org-wide default for Account is `PublicReadWrite` | Tooling: `EntityDefinition WHERE QualifiedApiName='Account'` - check `InternalSharingModel` |
+| SRA-002 | Contact OWD set to Public Read/Write | Critical | A | Org-wide default for Contact is `PublicReadWrite` | Tooling: `EntityDefinition WHERE QualifiedApiName='Contact'` - check `InternalSharingModel` |
+| SRA-003 | Sensitive object OWD set to Public Read/Write | High | A | Opportunity, Lead, or Case OWD is `PublicReadWrite` | Tooling: `EntityDefinition WHERE QualifiedApiName IN ('Opportunity','Lead','Case')` |
+| SRA-004 | External OWD more permissive than internal | High | A | Any object where `ExternalSharingModel` > `InternalSharingModel` (portal users have more access than employees) | Tooling: `EntityDefinition` - compare both sharing model fields per object |
+| SRA-005 | Sharing rules grant access to All Internal Users | Medium | A | Criteria- or ownership-based sharing rules that share to the `AllInternalUsers` public group | SOQL: `AccountSharingRule` / `ContactSharingRule` etc. WHERE `SharedToType='AllInternalUsers'` |
+| SRA-006 | Experience Cloud Sharing Sets with broad access | Low | A | Sharing Sets configured for portal users that grant access via broad relationship criteria | SOQL: `Portal` + `SharingSetRule` records with unrestricted relationship criteria |
+| SRA-007 | Salesforce Health Check score below threshold | Info | A | Native Salesforce Security Health Check score is below `PortalHealthScoreThreshold__c` (default: 70) | SOAP: Metadata API `SecurityHealthCheck` - parse overall score |
+
+---
+
+#### SA - Session / Authentication (10 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| SA-001 | MFA not enforced at org level | Critical | A | `SecuritySettings.MultiFactorAuthentication` is not set to Required | Tooling: `SELECT MultiFactorAuthentication FROM SecuritySettings` |
+| SA-002 | Password never expires on active profiles | Critical | A | One or more active profiles have `PasswordExpiration='Never'` | Tooling: `ProfilePasswordPolicy WHERE PasswordExpiration='Never'` |
+| SA-003 | Session timeout exceeds 8 hours | High | A | `SessionSettings.SessionTimeout` value > 480 minutes | Tooling: `SELECT SessionTimeout FROM SessionSettings` (part of SecuritySettings) |
+| SA-004 | Sessions not locked to originating IP address | High | A | `SecuritySettings.LockSessionsToIp` is false | Tooling: `SELECT LockSessionsToIp FROM SecuritySettings` |
+| SA-005 | Clickjack protection disabled for non-setup pages | High | A | `SecuritySettings.EnableClickjackNonsetupUser` is false | Tooling: `SELECT EnableClickjackNonsetupUser FROM SecuritySettings` |
+| SA-006 | CSRF protection disabled on GET requests | High | A | `SecuritySettings.EnableCsrfOnGet` is false | Tooling: `SELECT EnableCsrfOnGet FROM SecuritySettings` |
+| SA-007 | CSRF protection disabled on POST requests | Medium | A | `SecuritySettings.EnableCsrfOnPost` is false | Tooling: `SELECT EnableCsrfOnPost FROM SecuritySettings` |
+| SA-008 | HttpOnly cookie attribute not enforced | Medium | A | `SecuritySettings.RequireHttpOnly` is false | Tooling: `SELECT RequireHttpOnly FROM SecuritySettings` |
+| SA-009 | Password minimum length below 8 characters | Medium | A | Any active profile password policy has `MinPasswordLength < 8` | Tooling: `ProfilePasswordPolicy WHERE MinPasswordLength < 8` |
+| SA-010 | No login IP restriction on System Administrator profile | Low | R | System Administrator profile has no LoginIpRange records configured | SOQL: `LoginIpRange WHERE Parent.Name='System Administrator'` - fires if 0 rows |
+
+---
+
+#### CAI - Connected Apps / Integration (8 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| CAI-001 | Connected App with IP restriction relaxed | Critical | A | A Connected App has `IpRelaxation` set to `BYPASS` or `RELAX` - OAuth tokens usable from any IP | Tooling: `ConnectedApplication WHERE IpRelaxation != 'ENFORCE'` |
+| CAI-002 | Connected App requesting full org access scope | Critical | A | Connected App scopes include `full` or the combination of `api` + `web` - over-privileged API access | Tooling: `ConnectedApplication` - parse `Scopes` field for `full` or `api`+`web` |
+| CAI-003 | Connected App allows all users to self-authorize | High | A | `ConnectedApplication.PolicyAction='ALLUSERS'` - any org user can authorize without admin pre-approval | Tooling: `ConnectedApplication WHERE PolicyAction='ALLUSERS'` |
+| CAI-004 | Outbound Message transmits session ID | High | A | A Workflow Outbound Message has `IncludesSessionId=true` - session token sent to external system | Tooling: `WorkflowOutboundMessage WHERE IncludesSessionId=true` |
+| CAI-005 | Named Credential using Basic authentication | High | A | A Named Credential uses `AuthProtocol='PASSWORD'` - username/password stored in platform | Tooling: `NamedCredential WHERE AuthProtocol='PASSWORD'` |
+| CAI-006 | Connected App refresh tokens never expire | Medium | A | `ConnectedApplication.RefreshTokenValidityPeriod=0` (unlimited) | Tooling: `ConnectedApplication WHERE RefreshTokenValidityPeriod=0` |
+| CAI-007 | External Auth Provider without registration handler | Medium | R | Social/OIDC Auth Provider configured without a custom `RegistrationHandlerClass` - default handler may auto-provision users | Tooling: `AuthProvider WHERE RegistrationHandlerClass=null` |
+| CAI-008 | Large Connected App inventory | Low | A | Total installed Connected Apps > 25 | Tooling: `SELECT COUNT() FROM ConnectedApplication WHERE ConnectedApplication.Count > 25` |
+
+---
+
+#### AA - Apex Automation (8 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| AA-001 | Apex class uses `without sharing` with DML | High | R | ApexClass body contains `without sharing` AND DML keyword - sharing model bypassed for data writes | Tooling: `ApexClass` body scan - regex `without\s+sharing` AND `\b(insert|update|delete|upsert|merge)\b` |
+| AA-002 | Apex trigger declared `without sharing` | High | R | ApexTrigger body contains `without sharing` | Tooling: `ApexTrigger` body scan - regex `without\s+sharing` |
+| AA-003 | Hardcoded credentials in Apex class bodies | High | R | ApexClass body matches credential patterns: `password=`, `apiKey=`, `token=`, `secret=`, `privateKey=`, `client_secret=` followed by a non-empty quoted value | Tooling: `ApexClass` body scan - case-insensitive regex per credential keyword |
+| AA-004 | Dynamic SOQL with string concatenation | Medium | R | ApexClass body uses `Database.query(` combined with string concatenation `+` - potential SOQL injection | Tooling: `ApexClass` body scan - regex `Database\.query\s*\(.*\+` |
+| AA-005 | Apex callout to HTTP (non-HTTPS) endpoint | Medium | R | ApexClass body calls `setEndpoint(` with a literal `http://` URL | Tooling: `ApexClass` body scan - regex `setEndpoint\s*\(\s*['"]http://` |
+| AA-006 | Deprecated cryptographic hash algorithms | Medium | R | ApexClass body calls `Crypto.generateDigest` with `MD5` or `SHA1` - weak hashing | Tooling: `ApexClass` body scan - regex `generateDigest\s*\(\s*['"](?:MD5|SHA1|SHA-1)` |
+| AA-007 | High proportion of `without sharing` classes | Low | A | More than 25% of all Apex classes in the org declare `without sharing` | Tooling: `ApexClass` body scan - ratio of `without sharing` count vs total class count |
+| AA-008 | Apex class with no sharing declaration | Info | R | ApexClass body has no `with sharing`, `without sharing`, or `inherited sharing` keyword - implicit sharing behaviour | Tooling: `ApexClass` body scan - class header regex without any sharing keyword |
+
+---
+
+#### LA - LWC / Aura (3 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| LA-001 | LWC component uses `lwc:dom="manual"` | High | R | LWC bundle source contains `lwc:dom="manual"` - enables raw innerHTML, bypasses LWC XSS protection | Tooling: `LightningComponentBundle` resource scan - string `lwc:dom="manual"` |
+| LA-002 | Component accesses `document.cookie` or `localStorage` | Medium | R | LWC or Aura bundle JS contains `document.cookie` or `localStorage.setItem` - sensitive data stored outside Salesforce session management | Tooling: Bundle JS source scan - regex `document\.cookie|localStorage\.setItem` |
+| LA-003 | Aura component suppresses errors via `$A.reportError` | Low | R | AuraDefinitionBundle JS contains `$A.reportError` - security exceptions may be silently hidden | Tooling: `AuraDefinitionBundle` source scan - string `$A.reportError` |
+
+---
+
+#### AGA - Agentforce / AI (5 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| AGA-001 | Agentforce Action without confirmation required | Critical | A | `GenAiFunctionDefinition` record has `IsConfirmationRequired=false` - AI can take autonomous destructive actions | Tooling: `SELECT Name,IsConfirmationRequired FROM GenAiFunctionDefinition WHERE IsConfirmationRequired=false` |
+| AGA-002 | Agentforce accessible to all user profiles | High | A | Copilot/Agent permission set is assigned to all standard users with no profile restriction | Tooling: `GenAiAgent` + check PS assignment breadth |
+| AGA-003 | Agent Topic accesses sensitive standard objects | High | R | Agent topic definition references Account, Contact, Opportunity, Case, or Financial objects without row-level filter | Tooling: `GenAiPluginDefinition` source scan for sensitive object names |
+| AGA-004 | AI grounding without data masking on PII objects | Medium | R | Agentforce grounding configured on PII-containing objects with no masking rules | Tooling: `GenAiGroundingRule` - check for PII object types without masking |
+| AGA-005 | Agentforce license count vs. restricted access | Info | A | Count of Einstein/Copilot licenses vs. users with explicit Copilot PS - gap indicates potential over-provisioning | SOQL: `UserPackageLicense WHERE PackageLicense.NamespacePrefix IN ('AIAnalytics','Einstein')` |
+
+---
+
+#### MS - Metadata Secrets (4 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| MS-001 | Hardcoded secrets in Custom Metadata records | Critical | A | CMT records have field API names matching `*Token*`, `*Key*`, `*Secret*`, `*Password*`, `*Credential*` with non-empty values | SOQL: query `CustomField` for CMT objects with credential-pattern names, then query actual record values |
+| MS-002 | Custom Settings with credential-like fields | High | A | Custom Setting (List or Hierarchy) has fields with credential-pattern API names containing values | SOQL: `CustomField` for Custom Setting types with `*Token*`/`*Key*`/`*Secret*`/`*Password*` names, then query values |
+| MS-003 | Remote Site Settings with HTTP endpoints | High | A | Active `RemoteSiteSetting` records have URLs starting with `http://` - callout data transmitted unencrypted | SOQL: `RemoteSiteSetting WHERE IsActive=true AND SiteURL LIKE 'http://%'` |
+| MS-004 | Named Credentials using Basic authentication | Medium | A | Named Credential records use `AuthProtocol='PASSWORD'` - stores username/password in platform credential store | Tooling: `NamedCredential WHERE AuthProtocol='PASSWORD'` |
+
+---
+
+#### FUE - File Upload / Export (3 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| FUE-001 | Dangerous file extensions allowed | High | A | `FileUploadAndDownloadSecuritySettings` does not block executable types (exe, bat, cmd, vbs, ps1, sh, jar, msi, dll, scr) | SOAP: retrieve `FileUploadAndDownloadSecuritySettings` - check `FileExtensionDisposition` entries |
+| FUE-002 | Files configured to execute inline in browser | High | A | One or more file extension dispositions set to `INLINE` - files open in browser, enabling XSS via SVG/HTML uploads | SOAP: `FileUploadAndDownloadSecuritySettings` - check `ExecuteInBrowser` disposition flag |
+| FUE-003 | No maximum file upload size configured | Medium | A | `FileUploadAndDownloadSecuritySettings.MaxUploadSizeInBytes` is null or 0 - no size limit, DoS risk | SOAP: `FileUploadAndDownloadSecuritySettings` - check `MaxUploadSizeInBytes` |
+
+---
+
+#### CE - Certificate / Encryption (2 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| CE-001 | Expired active certificate | Critical | A | One or more `Certificate` records have `ExpirationDate <= TODAY()` | SOQL: `SELECT DeveloperName,ExpirationDate FROM Certificate WHERE ExpirationDate <= TODAY` |
+| CE-002 | Certificate expiring within 30 days | High | A | One or more `Certificate` records expire within 30 days | SOQL: `SELECT DeveloperName,ExpirationDate FROM Certificate WHERE ExpirationDate > TODAY AND ExpirationDate <= NEXT_N_DAYS:30` |
+
+---
+
+#### MON - Monitoring (4 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| MON-001 | Login event monitoring not enabled | Critical | A | Event Monitoring is not capturing Login events - failed logins and unusual locations are unlogged | Tooling: check `EventType='Login'` in `EventMonitoringSettings` or verify `EventLogFile` availability |
+| MON-002 | Report/Dashboard export events not captured | High | A | Event Monitoring not capturing `ReportExport` or `DashboardExport` event types - bulk data extractions go unlogged | Tooling: check `EventMonitoringSettings` for export event types |
+| MON-003 | API usage events not monitored | High | A | Event Monitoring not capturing `ApiTotalUsage` or `RestApi` event types - programmatic bulk access is unlogged | Tooling: check `EventMonitoringSettings` for API event types |
+| MON-004 | Event log retention below 30 days | Medium | A | `EventMonitoringSettings.EventLogFileRetentionPeriodInDays < 30` - insufficient incident response window | Tooling: `EventMonitoringSettings WHERE EventLogFileRetentionPeriodInDays < 30` |
+
+---
+
+#### HCB - Health Check Baseline (3 checks)
+
+| CheckId | Name | Severity | Type | Trigger | Detection approach |
+|---|---|---|---|---|---|
+| HCB-001 | Health Check score below 75 (failing) | Critical | A | Salesforce native Security Health Check score < 75 | SOAP: Metadata API `SecurityHealthCheck` - parse overall score |
+| HCB-002 | Health Check score between 75 and 90 (needs attention) | High | A | Score >= 75 AND < 90 (fires only when HCB-001 did NOT fire) | SOAP: same `SecurityHealthCheck` call - conditional on score range |
+| HCB-003 | High-risk settings flagged in native Health Check | Medium | A | One or more items have `RiskType='HIGH_RISK'` in the native Health Check regardless of overall score | SOAP: `SecurityHealthCheck` - check individual item risk types |
+
+---
+
+**Cross-check notes for implementation:**
+- CAI-005 and MS-004 both detect Named Credentials with Basic auth - CAI-005 is the primary finding (CAI category runner), MS-004 is a separate confirmation from a metadata perspective. Both fire independently. Admins see both findings referencing the same records, which reinforces priority. This is intentional duplication.
+- SRA-007 (portal health score) and HCB-001/002 (org-wide health score) are distinct - different API calls, different scores.
+- AA-003 (hardcoded credentials in Apex) and MS-001/002 (CMT/Custom Setting secrets) cover different storage locations for the same risk class - both are needed.
+
+---
+
 ### `OrgSecurityScanner_Setting__mdt` Custom Metadata Type
 
 Replaces all hardcoded configuration values. Deployed as metadata with a single record (`DeveloperName = Default`) - zero manual setup on fresh install. Admins can edit values in Setup > Custom Metadata Types without a code deploy.
@@ -442,16 +633,16 @@ SecScanRunnerContinuation.cls     - Heap-safe continuation Queueable for AA and 
 
 13 Category Runners (each extends SecScanCategoryRunner):
   SecScanRunnerUserAccess.cls         - UA  - 7 checks
-  SecScanRunnerGuestUser.cls          - GU  - 15 checks (most API-intensive)
-                                        CRITICAL: all 15 checks must operate on data fetched
+  SecScanRunnerGuestUser.cls          - GU  - 12 checks (most API-intensive)
+                                        CRITICAL: all 12 checks must operate on data fetched
                                         in bulk - never one Tooling API call per profile per check.
                                         Pattern: one query fetches all Guest profiles + permissions,
                                         load into memory as Map<Id, Map<String,Object>>,
-                                        run all 15 checks against the in-memory collection.
-                                        Maximum callouts for GU: ~3 (profiles, settings, experience).
+                                        run all 12 checks against the in-memory collection.
+                                        Maximum callouts for GU: ~4 (profiles, object perms, field perms, network).
                                         Per-profile queries would exceed the 100-callout limit.
   SecScanRunnerSharingAccess.cls      - SRA - 7 checks
-  SecScanRunnerSessionAuth.cls        - SA  - 12 checks
+  SecScanRunnerSessionAuth.cls        - SA  - 10 checks
   SecScanRunnerConnectedApps.cls      - CAI - 8 checks
   SecScanRunnerApexAutomation.cls     - AA  - 8 checks
   SecScanRunnerLwcAura.cls            - LA  - 3 checks
@@ -662,7 +853,7 @@ Then `saveFindings()` normally. Stays under the 10,000 DML row limit.
 | Category | API Used | Detection Approach | Heap Guard |
 |---|---|---|---|
 | UA | Standard SOQL | `SELECT Id FROM PermissionSet WHERE PermissionsModifyAllData=true` | No - SOQL only, no large body fetches |
-| GU | Tooling API | `SELECT Id,PermissionsApiEnabled FROM Profile WHERE UserType='Guest'` | No - bulk in-memory Map, no body fetches. Max ~3 callouts. **Note:** GU loads all Guest profiles + permission data into a `Map<Id, Map<String,Object>>`. In orgs with 100+ Guest profiles (unusual but possible in large Experience Cloud deployments), heap pressure can build. No continuation pattern exists for GU in v1 - if heap overflows, the entire GU category fails. Monitor in scale testing; if GU fails in large orgs, add a heap check before each profile batch and a GU-specific continuation. |
+| GU | Tooling API | `SELECT Id,PermissionsApiEnabled FROM Profile WHERE UserType='Guest'` then `ObjectPermissions`, `FieldPermissions`, `Network` queries | No - bulk in-memory Map, max ~4 callouts. **Note:** GU loads all Guest profiles + object/field perms + network settings into in-memory Maps and runs all 12 checks against the collected data. In orgs with 100+ Guest profiles (large Experience Cloud deployments), heap pressure can build. No continuation pattern for GU in v1 - if heap overflows, entire GU category fails. Monitor in scale testing; add heap check before each batch if needed. |
 | SRA | Standard SOQL + Tooling | OWD via `EntityDefinition`, ScopeRule vs RestrictionRule | No - metadata queries only |
 | SA | Tooling API | `SELECT SessionTimeout,RequireHttpOnly,EnableClickjackNonsetupUser,EnableCsrfOnGet,LockSessionsToDomain FROM SecuritySettings` | No - small result set |
 | CAI | Tooling API | `SELECT IncludesSessionId FROM WorkflowOutboundMessage WHERE IncludesSessionId=true` | No - metadata queries only |
