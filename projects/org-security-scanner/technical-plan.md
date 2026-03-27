@@ -141,6 +141,8 @@ The data retention query in `SecScanOrchestrator` avoids OFFSET entirely - it fe
 
 Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, CE=2, MON=4, HCB=3 = **76 total**
 
+Each check table includes: trigger condition (`Description__c`), severity, finding type, and detection query. Impact and Remediation text follows each category table - all 76 checks are fully specified.
+
 **Finding Type:** A = Automated (violation directly detected), R = Recommendation (heuristic - requires manual admin review to confirm)
 **Detection:** SOQL = standard Salesforce SOQL, Tooling = Tooling API REST, SOAP = Metadata API SOAP
 
@@ -185,6 +187,20 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | GU-011 | No login rate limiting on Experience sites | Low | R | No lockout policy configured on live Experience networks - brute-force risk on community login | Tooling: `Network WHERE Status='Live'` - check `MaxFailedLoginAttempts` per network |
 | GU-012 | Active Experience Cloud site count | Info | A | Total count of live Experience sites - informational attack surface inventory (fires if count >= 1) | Tooling: `SELECT COUNT() FROM Network WHERE Status='Live'` |
 
+**GU Impact/Remediation:**
+- GU-001: Unauthenticated public internet users can read, edit, and delete all org data. Remove MDA from guest profile immediately. Guest profiles should have zero standard permissions beyond object-read on public content objects.
+- GU-002: Anonymous API access allows credential-free automation against your Salesforce org from any IP. Remove API Enabled from guest profile. API integrations must use named credentials with a dedicated integration user.
+- GU-003: Anonymous visitors can inject Account and Contact spam records at scale. Remove Create permission from guest profile on these objects. Use authenticated Experience Cloud members or Flows with system context for record creation.
+- GU-004: Junk Case and Lead records from anonymous visitors pollute sales and support pipelines. Remove Create permission from guest profile. Use form-to-case features with CAPTCHA instead.
+- GU-005: Unauthenticated users can see all records regardless of ownership or sharing rules. Remove PermissionsViewAllRecords from guest object settings. Grant Read access to only the specific records intended for public consumption using sharing rules or Apex-managed sharing.
+- GU-006: Community members can enumerate other members' profiles and contact details. Disable "Let guest users see other members" on each Experience network in Setup > Digital Experiences > [Site] > Administration > Members.
+- GU-007: Unauthenticated users can modify your org's core CRM data. Remove Edit permission on all sensitive objects from guest profile. Read-only access should be the maximum for unauthenticated visitors.
+- GU-008: Custom permissions assigned to guest users bypass standard sharing logic and may trigger privileged Apex. Remove all custom permissions from guest profiles. Only use custom permissions on authenticated Experience members with explicit need.
+- GU-009: PII visible to anonymous visitors creates GDPR and CCPA exposure. Remove FLS read on PII fields from guest profile or mask data before serving via Apex controller methods.
+- GU-010: Anonymous visitors can download confidential attachments and uploaded documents. Remove Read access on ContentVersion and Attachment from guest profile. Serve files via authenticated download endpoints only.
+- GU-011: Without rate limiting, automated tools can attempt thousands of password combinations against community logins. Configure max failed login attempts on each Experience network. Set password lockout duration in Setup.
+- GU-012: Informational. Each live Experience site is a publicly accessible entry point. Review whether all listed sites are intentionally public and actively maintained.
+
 ---
 
 #### SRA - Sharing / Record Access (7 checks)
@@ -198,6 +214,15 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | SRA-005 | Sharing rules grant access to All Internal Users | Medium | A | Criteria- or ownership-based sharing rules that share to the `AllInternalUsers` public group | SOQL: `AccountSharingRule` / `ContactSharingRule` etc. WHERE `SharedToType='AllInternalUsers'` |
 | SRA-006 | Experience Cloud Sharing Sets with broad access | Low | A | Sharing Sets configured for portal users that grant access via broad relationship criteria | SOQL: `Portal` + `SharingSetRule` records with unrestricted relationship criteria |
 | SRA-007 | Salesforce Health Check score below threshold | Info | A | Native Salesforce Security Health Check score is below `PortalHealthScoreThreshold__c` (default: 70) | SOAP: Metadata API `SecurityHealthCheck` - parse overall score |
+
+**SRA Impact/Remediation:**
+- SRA-001: Every user in the org can edit or delete any Account record without restriction. Change Account OWD to Private or Public Read Only in Setup > Sharing Settings. Use sharing rules or manual sharing to grant selective access.
+- SRA-002: Every user can edit or delete any Contact. Change Contact OWD to Controlled by Parent (recommended) or Private. This aligns Contact access with the owning Account.
+- SRA-003: Opportunity, Lead, or Case data visible to and editable by all users - sales pipeline and customer service data is fully public internally. Change OWD to Private. Add role-based sharing rules to restore legitimate access.
+- SRA-004: Portal or community users have broader data access than internal employees - typically a configuration mistake. Review ExternalSharingModel settings for each affected object. External OWD should never exceed internal OWD.
+- SRA-005: Sharing rules targeting All Internal Users grant every employee access to every record in the affected object - equivalent to Public Read/Write via sharing. Scope sharing rules to specific roles, public groups, or territories instead.
+- SRA-006: Sharing Sets grant portal users access to related records without explicit sharing. Review Sharing Set criteria. Restrict relationship-based access to the minimum objects and fields required for the portal use case.
+- SRA-007: Informational. Salesforce's native Security Health Check has flagged one or more settings below the configured threshold. Review the native Health Check in Setup > Security > Health Check for detailed remediation guidance per flagged item.
 
 ---
 
@@ -216,6 +241,18 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | SA-009 | Password minimum length below 8 characters | Medium | A | Any active profile password policy has `MinPasswordLength < 8` | Tooling: `ProfilePasswordPolicy WHERE MinPasswordLength < 8` |
 | SA-010 | No login IP restriction on System Administrator profile | Low | R | System Administrator profile has no LoginIpRange records configured | SOQL: `LoginIpRange WHERE Parent.Name='System Administrator'` - fires if 0 rows |
 
+**SA Impact/Remediation:**
+- SA-001: Users can access the org with only a password - vulnerable to phishing, credential stuffing, and password spray attacks. Enable MFA enforcement in Setup > Identity Verification > Require MFA for User Interface Logins. Users enroll on next login.
+- SA-002: Passwords for users on this profile never expire. Compromised credentials remain valid indefinitely. Set PasswordExpiration to 90 days or less on all active profiles in Setup > Password Policies.
+- SA-003: Sessions that remain valid for 8+ hours after inactivity increase the window for session hijacking from shared workstations. Set SessionTimeout to 2 hours or less in Setup > Session Settings.
+- SA-004: Session tokens stolen via network interception or XSS can be replayed from any IP globally. Enable "Lock sessions to the IP address from which they originated" in Setup > Session Settings.
+- SA-005: Pages can be embedded in attacker-controlled iframes and used for clickjacking attacks to trick admins into performing unintended actions. Enable "Enable clickjack protection for customer Visualforce pages with standard headers" in Setup > Session Settings.
+- SA-006: Attackers can craft malicious links that trigger GET-based state changes when clicked by authenticated users. Enable CSRF Protection on GET Requests in Setup > Session Settings.
+- SA-007: POST-based forms can be submitted cross-site by attackers who trick authenticated users into visiting a malicious page. Enable CSRF Protection on POST Requests in Setup > Session Settings.
+- SA-008: Session cookies readable by JavaScript allow XSS attacks to steal session tokens directly. Enable "Require HttpOnly attribute" in Setup > Session Settings. This prevents JavaScript from reading the session cookie.
+- SA-009: Short passwords are trivially cracked by dictionary attacks. Set minimum password length to 8 or more characters in Setup > Password Policies. 12+ is recommended for admin profiles.
+- SA-010: Admin accounts can be accessed from any network globally. Restrict System Administrator login IP ranges to known office networks and VPN egress IPs in Setup > Profiles > System Administrator > Login IP Ranges.
+
 ---
 
 #### CAI - Connected Apps / Integration (8 checks)
@@ -230,6 +267,16 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | CAI-006 | Connected App refresh tokens never expire | Medium | A | `ConnectedApplication.RefreshTokenValidityPeriod=0` (unlimited) | Tooling: `ConnectedApplication WHERE RefreshTokenValidityPeriod=0` |
 | CAI-007 | External Auth Provider without registration handler | Medium | R | Social/OIDC Auth Provider configured without a custom `RegistrationHandlerClass` - default handler may auto-provision users | Tooling: `AuthProvider WHERE RegistrationHandlerClass=null` |
 | CAI-008 | Large Connected App inventory | Low | A | Total installed Connected Apps > 25 | Tooling: `SELECT COUNT() FROM ConnectedApplication WHERE ConnectedApplication.Count > 25` |
+
+**CAI Impact/Remediation:**
+- CAI-001: OAuth tokens issued by this app bypass the org's IP restrictions entirely. Stolen tokens can be used from anywhere in the world. Set IP Relaxation to "Enforce IP restrictions" on the Connected App in Setup > Connected Apps.
+- CAI-002: This app can read and write any data in the org. A compromised OAuth token grants full administrative API access. Edit the Connected App's OAuth scopes. Use the minimum scopes required (e.g. `api` without `web`, or specific object scopes only). Revoke all existing tokens and re-authorize.
+- CAI-003: Any org user can grant this app access to their Salesforce data without admin knowledge. Change Admin-approved users to "All users may NOT self-authorize" and pre-authorize only required users/profiles via permission sets.
+- CAI-004: Outbound messages containing session IDs expose active session tokens to the receiving endpoint. If the endpoint is compromised, those tokens grant full API access. Remove `IncludesSessionId` from outbound message definitions. Use Named Credentials with OAuth for integration authentication instead.
+- CAI-005: Username and password stored in Salesforce are at risk if the org is breached or exported. Migrate to OAuth 2.0 Named Credentials. Use client credentials flow for server-to-server integrations.
+- CAI-006: If a refresh token is stolen, it provides indefinite access to the connected app. Set RefreshTokenValidityPeriod to 90 days or less on the Connected App's OAuth policies.
+- CAI-007: Without a custom registration handler, Salesforce may auto-create user accounts when users authenticate via the social/OIDC provider - account takeover via social login. Implement a custom Apex registration handler class that validates the incoming identity before creating or linking accounts.
+- CAI-008: Each connected app is a potential OAuth attack surface. Review all installed apps. Uninstall or disable any apps that are no longer in use. Document the business purpose of each remaining app.
 
 ---
 
@@ -246,6 +293,16 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | AA-007 | High proportion of `without sharing` classes | Low | A | More than 25% of all Apex classes in the org declare `without sharing` | Tooling: `ApexClass` body scan - ratio of `without sharing` count vs total class count |
 | AA-008 | Apex class with no sharing declaration | Info | R | ApexClass body has no `with sharing`, `without sharing`, or `inherited sharing` keyword - implicit sharing behaviour | Tooling: `ApexClass` body scan - class header regex without any sharing keyword |
 
+**AA Impact/Remediation:**
+- AA-001: Classes using `without sharing` bypass all record-level security when performing DML. An Apex bug or injection vulnerability in these classes exposes every record in the org. Add `with sharing` where possible. Use `without sharing` only in framework classes that have no direct user input and no SOQL/DML. Document each exception.
+- AA-002: Triggers with `without sharing` process every record that passes through them without respect to the running user's permissions. A malicious or buggy trigger can read and modify any record via the trigger context. Add `with sharing` to triggers. Triggers run in user context - they should respect sharing rules.
+- AA-003: Hardcoded credentials in Apex are visible to anyone with View Setup or access to the Apex source. Credentials in managed package metadata may be decompiled. Remove all hardcoded credentials immediately. Store secrets in Named Credentials, Custom Settings protected by CRUD/FLS, or an external secrets manager.
+- AA-004: String concatenation in dynamic SOQL allows injection of malicious WHERE clauses or SOQL operators. Use `String.escapeSingleQuotes()` on any user-supplied input. Prefer bind variables (`WHERE Name = :inputVar`) over concatenation.
+- AA-005: HTTP (not HTTPS) callouts transmit data unencrypted. Any network path between Salesforce and the endpoint can intercept the payload. Replace HTTP endpoint URLs with HTTPS equivalents. Update Remote Site Settings accordingly.
+- AA-006: MD5 and SHA-1 are cryptographically broken and collision-prone. Do not use for security-sensitive operations (password hashing, HMAC, digital signatures). Replace with `Crypto.generateDigest('SHA-256', ...)` or `Crypto.generateMac('hmacSHA256', ...)`.
+- AA-007: A codebase where >25% of classes bypass sharing indicates systemic over-privilege. Even if each individual class has a valid reason, the combined risk surface is large. Audit all `without sharing` classes. Migrate to `inherited sharing` where the caller's context is appropriate.
+- AA-008: Informational. Classes with no explicit sharing declaration inherit the caller's sharing context when invoked synchronously, or run without sharing when invoked asynchronously. This implicit behavior can be surprising. Add explicit `with sharing`, `without sharing`, or `inherited sharing` to every class for clarity.
+
 ---
 
 #### LA - LWC / Aura (3 checks)
@@ -255,6 +312,11 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | LA-001 | LWC component uses `lwc:dom="manual"` | High | R | LWC bundle source contains `lwc:dom="manual"` - enables raw innerHTML, bypasses LWC XSS protection | Tooling: `LightningComponentBundle` resource scan - string `lwc:dom="manual"` |
 | LA-002 | Component accesses `document.cookie` or `localStorage` | Medium | R | LWC or Aura bundle JS contains `document.cookie` or `localStorage.setItem` - sensitive data stored outside Salesforce session management | Tooling: Bundle JS source scan - regex `document\.cookie|localStorage\.setItem` |
 | LA-003 | Aura component suppresses errors via `$A.reportError` | Low | R | AuraDefinitionBundle JS contains `$A.reportError` - security exceptions may be silently hidden | Tooling: `AuraDefinitionBundle` source scan - string `$A.reportError` |
+
+**LA Impact/Remediation:**
+- LA-001: `lwc:dom="manual"` enables direct DOM manipulation via innerHTML. Any user-supplied data rendered this way is an XSS vector. Remove `lwc:dom="manual"` and replace with LWC data-binding (`{expression}`) which auto-escapes output. If dynamic HTML is required, sanitize with `DOMParser` and only inject known-safe nodes.
+- LA-002: `document.cookie` and `localStorage` accessed in Lightning context can expose session tokens or sensitive data to other scripts running on the same domain. Remove direct cookie/localStorage access. Use LWC `@wire` and `@salesforce/apex` for data persistence. Session management should be left entirely to the Salesforce platform.
+- LA-003: `$A.reportError` swallows Aura errors silently and prevents them from surfacing in the browser console or Salesforce error logs. Security-related exceptions (permission denied, sharing violations) may be hidden from administrators. Replace with explicit error handling that surfaces failures to the user and logs them via an Apex method.
 
 ---
 
@@ -268,6 +330,13 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | AGA-004 | AI grounding without data masking on PII objects | Medium | R | Agentforce grounding configured on PII-containing objects with no masking rules | Tooling: `GenAiGroundingRule` - check for PII object types without masking |
 | AGA-005 | Agentforce license count vs. restricted access | Info | A | Count of Einstein/Copilot licenses vs. users with explicit Copilot PS - gap indicates potential over-provisioning | SOQL: `UserPackageLicense WHERE PackageLicense.NamespacePrefix IN ('AIAnalytics','Einstein')` |
 
+**AGA Impact/Remediation:**
+- AGA-001: Agentforce Actions without confirmation can autonomously create, update, or delete records, send emails, or make API calls based on AI reasoning. A prompt injection attack or hallucination could trigger destructive operations without any human approval. Enable `IsConfirmationRequired = true` on all Actions that perform write operations. Reserve `IsConfirmationRequired = false` only for read-only informational actions.
+- AGA-002: Unrestricted Copilot access means every standard user can query the AI with prompts that surface records they may not normally see via the UI (AI responses bypass sharing context in some configurations). Assign the Einstein Copilot permission set only to specific users or profiles who have a business need. Review data access scope per user role.
+- AGA-003: Agent topics with access to sensitive objects can return confidential financial, health, or personal data in AI-generated responses visible to any user who prompts the agent. Add row-level filters or data access policies to topic definitions. Limit sensitive object access to agent topics used only by admins or privileged roles.
+- AGA-004: AI grounding on PII objects without masking allows the AI to surface personally identifiable information in natural language responses. This creates GDPR and CCPA exposure. Configure Data Mask rules on PII fields in the grounding configuration. Alternatively, exclude PII objects from grounding scope.
+- AGA-005: Informational. Licenses in excess of explicit PS assignments may indicate over-provisioning. Review and revoke licenses from users who do not need AI access.
+
 ---
 
 #### MS - Metadata Secrets (4 checks)
@@ -279,6 +348,12 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | MS-003 | Remote Site Settings with HTTP endpoints | High | A | Active `RemoteSiteSetting` records have URLs starting with `http://` - callout data transmitted unencrypted | SOQL: `RemoteSiteSetting WHERE IsActive=true AND SiteURL LIKE 'http://%'` |
 | MS-004 | Named Credentials using Basic authentication | Medium | A | Named Credential records use `AuthProtocol='PASSWORD'` - stores username/password in platform credential store | Tooling: `NamedCredential WHERE AuthProtocol='PASSWORD'` |
 
+**MS Impact/Remediation:**
+- MS-001: API tokens, encryption keys, or passwords stored in Custom Metadata records are included in full org exports and package deploys. Any admin with "Customize Application" permission can read these values. Remove all credential values from CMT records. Use Named Credentials (OAuth2) or an external secrets manager. If CMT is used for config, ensure the fields hold non-sensitive references (e.g. named credential names, endpoint labels) not actual secrets.
+- MS-002: Credentials stored in Custom Settings are visible to any user who can run `SELECT` against the setting object. Unlike CMT, Custom Settings do not deploy with packages - but they are readable via SOQL from any Apex context with access. Migrate to Named Credentials or Salesforce Shield Platform Encryption for values that must stay in the platform.
+- MS-003: HTTP Remote Site Settings allow Apex callouts that transmit data in plaintext. Any network observer between Salesforce data centers and the endpoint can read the payload. Replace all HTTP endpoint URLs with HTTPS equivalents. Update Remote Site Setting URLs. Contact the endpoint owner if HTTPS is not available.
+- MS-004: Username/password auth stores static credentials in Salesforce. If the org is breached or the Named Credential is exported, credentials are exposed. Migrate to OAuth 2.0 (client credentials flow for server-to-server). Update the Named Credential auth protocol and remove stored passwords.
+
 ---
 
 #### FUE - File Upload / Export (3 checks)
@@ -289,6 +364,11 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | FUE-002 | Files configured to execute inline in browser | High | A | One or more file extension dispositions set to `INLINE` - files open in browser, enabling XSS via SVG/HTML uploads | SOAP: `FileUploadAndDownloadSecuritySettings` - check `ExecuteInBrowser` disposition flag |
 | FUE-003 | No maximum file upload size configured | Medium | A | `FileUploadAndDownloadSecuritySettings.MaxUploadSizeInBytes` is null or 0 - no size limit, DoS risk | SOAP: `FileUploadAndDownloadSecuritySettings` - check `MaxUploadSizeInBytes` |
 
+**FUE Impact/Remediation:**
+- FUE-001: Salesforce Files allows users to upload executable files (exe, ps1, bat, sh, jar, dll) which can be downloaded and executed on other users' machines. An attacker with any upload access can distribute malware via your org's file storage. In Setup > Security > File Upload and Download Security, set dangerous file extensions to "Don't allow" or "Download only (don't execute in browser)". At minimum, block exe, bat, cmd, vbs, ps1, sh, jar, msi, dll, scr.
+- FUE-002: Files with `INLINE` disposition (SVG, HTML, XML) are rendered by the browser when opened. An attacker who uploads a malicious SVG with embedded JavaScript can execute scripts in the context of the authenticated user's session. Set all file extensions to "Download only" or "Hybrid" disposition in Setup > Security > File Upload and Download Security. Never allow inline execution of SVG, HTML, or XML.
+- FUE-003: Without a file size limit, users or attackers can upload arbitrarily large files, consuming storage and potentially causing timeout errors in downstream processing. Set a maximum upload size in Setup > Security > File Upload and Download Security. 25MB is a reasonable default for most orgs. Adjust based on documented business requirements.
+
 ---
 
 #### CE - Certificate / Encryption (2 checks)
@@ -297,6 +377,10 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 |---|---|---|---|---|---|
 | CE-001 | Expired active certificate | Critical | A | One or more `Certificate` records have `ExpirationDate <= TODAY()` | SOQL: `SELECT DeveloperName,ExpirationDate FROM Certificate WHERE ExpirationDate <= TODAY` |
 | CE-002 | Certificate expiring within 30 days | High | A | One or more `Certificate` records expire within 30 days | SOQL: `SELECT DeveloperName,ExpirationDate FROM Certificate WHERE ExpirationDate > TODAY AND ExpirationDate <= NEXT_N_DAYS:30` |
+
+**CE Impact/Remediation:**
+- CE-001: An expired certificate causes immediate failures in all callouts, SAML SSO logins, and JWT signing that rely on it. If used for inbound authentication (SAML SP), external users cannot log in. Renew the certificate immediately in Setup > Certificate and Key Management. After renewal, update all Connected Apps, Named Credentials, and IdP configurations that reference it.
+- CE-002: Certificate expiry within 30 days will cause the same failures as CE-001 without urgent action. Renew the certificate now before it expires. Set a calendar reminder or automate certificate rotation to prevent future occurrences. Check Setup > Certificate and Key Management for the renewal process.
 
 ---
 
@@ -309,6 +393,12 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | MON-003 | API usage events not monitored | High | A | Event Monitoring not capturing `ApiTotalUsage` or `RestApi` event types - programmatic bulk access is unlogged | Tooling: check `EventMonitoringSettings` for API event types |
 | MON-004 | Event log retention below 30 days | Medium | A | `EventMonitoringSettings.EventLogFileRetentionPeriodInDays < 30` - insufficient incident response window | Tooling: `EventMonitoringSettings WHERE EventLogFileRetentionPeriodInDays < 30` |
 
+**MON Impact/Remediation:**
+- MON-001: Without login event monitoring, failed login attempts, unusual login locations, and credential stuffing attacks are invisible. You cannot detect a breach in progress or reconstruct an incident timeline. Purchase Event Monitoring add-on (if not already licensed) and enable Login event type in Setup > Event Manager. Configure Transaction Security policies to alert on suspicious login patterns.
+- MON-002: Bulk data exports via Reports and Dashboards are a primary exfiltration vector. Without export event logging, an insider can export the entire customer database with no audit trail. Enable Report Export and Dashboard Export event types in Setup > Event Manager. Create a Transaction Security policy to alert on exports exceeding a row threshold.
+- MON-003: Programmatic API access (REST, SOAP, Bulk API) can extract or modify millions of records. Without API usage logging, integration misuse or credential theft driving automated access is invisible. Enable ApiTotalUsage and RestApi event types in Setup > Event Manager. Monitor for usage spikes or off-hours API calls.
+- MON-004: Incident response typically requires 30-90 days of logs to reconstruct attack timelines. Default retention (1 day on Developer Edition) makes post-incident investigation impossible. Increase event log retention to 30 days minimum in Setup > Event Manager. For compliance-sensitive orgs, configure log forwarding to a SIEM to extend retention indefinitely.
+
 ---
 
 #### HCB - Health Check Baseline (3 checks)
@@ -318,6 +408,11 @@ Distribution: UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, 
 | HCB-001 | Health Check score below 75 (failing) | Critical | A | Salesforce native Security Health Check score < 75 | SOAP: Metadata API `SecurityHealthCheck` - parse overall score |
 | HCB-002 | Health Check score between 75 and 90 (needs attention) | High | A | Score >= 75 AND < 90 (fires only when HCB-001 did NOT fire) | SOAP: same `SecurityHealthCheck` call - conditional on score range |
 | HCB-003 | High-risk settings flagged in native Health Check | Medium | A | One or more items have `RiskType='HIGH_RISK'` in the native Health Check regardless of overall score | SOAP: `SecurityHealthCheck` - check individual item risk types |
+
+**HCB Impact/Remediation:**
+- HCB-001: A score below 75 means a significant number of Salesforce's own recommended security settings are not configured. Salesforce publishes industry benchmarks behind each setting - each failing item represents a known attack vector. Go to Setup > Security > Health Check. Address every High Risk and Medium Risk item in order of risk level. The Salesforce Help article linked from each item provides specific fix steps.
+- HCB-002: Score between 75 and 90 indicates some security settings need attention. While not critical, these gaps represent incremental risk that accumulates. Go to Setup > Security > Health Check. Focus on remaining High Risk items first, then Medium Risk. Target a score of 90 or above.
+- HCB-003: One or more individual settings are classified as High Risk in the native Health Check regardless of the overall score. A single high-risk misconfiguration can offset a high overall score. Go to Setup > Security > Health Check and expand the items shown as High Risk. Each item has a "Fix It" button or links to documentation with remediation steps.
 
 ---
 
