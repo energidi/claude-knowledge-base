@@ -11,7 +11,7 @@ Salesforce security scanner app that detects 76+ vulnerabilities across 13 categ
 - **Metadata config:** Custom Metadata Types (deploy with package - not Custom Settings)
 
 ## Key Constraints
-- Production supported: `startScan()` sets `IsProductionScan__c = true` when `IsSandbox = false`. Does NOT block. LWC shows confirmation modal. No server-side production guard in v1.
+- Production supported: `startScan()` checks `AllowProductionScan__c` CMT flag (default false). If false and `IsSandbox = false`, throws `SecScanException` before scan begins. If true, sets `IsProductionScan__c = true`. LWC shows confirmation modal as a second gate.
 - No external callouts: all queries target the org's own Tooling API via same-org loopback
 - Session ID captured synchronously in `@AuraEnabled` - `UserInfo.getSessionId()` returns null in async. WARNING: production orgs with IP locking or HttpOnly will return INVALID_SESSION_ID. Named Credential pattern required before deploying to hardened orgs.
 - KEYSET pagination only (OFFSET capped at 2,000 by Salesforce)
