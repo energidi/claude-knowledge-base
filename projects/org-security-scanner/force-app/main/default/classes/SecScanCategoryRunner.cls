@@ -73,6 +73,7 @@ public abstract without sharing class SecScanCategoryRunner {
      * Uses SYSTEM_MODE - runners produce system-generated data, not user input.
      * allOrNone=true: partial silent inserts are not acceptable in a security scanner.
      */
+    @TestVisible
     protected void saveFindings(Id scanRunId) {
         if (pendingFindings.isEmpty()) {
             return;
