@@ -1,0 +1,19 @@
+.heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+/* medium: <= 1024px - 3 columns */
+@media (max-width: 1024px) {
+    .heatmap-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* small: <= 600px - 2 columns */
+@media (max-width: 600px) {
+    .heatmap-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

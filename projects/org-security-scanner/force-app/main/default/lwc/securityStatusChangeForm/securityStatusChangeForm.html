@@ -1,0 +1,115 @@
+<template>
+    <div class="form-wrapper">
+
+        <!-- Current status badge -->
+        <lwc:if isTrue={currentStatus}>
+            <div class="status-header">
+                <span class="status-label">Current status</span>
+                <span class={currentStatusBadgeClass}>{currentStatus}</span>
+            </div>
+        </lwc:if>
+
+        <!-- Historical view banner -->
+        <lwc:if isTrue={isHistoricalView}>
+            <div class="slds-notify slds-notify_alert slds-alert_warning historical-banner" role="alert">
+                <span class="slds-assistive-text">Warning</span>
+                <lightning-icon icon-name="utility:lock" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                Status changes are disabled in historical view.
+            </div>
+        </lwc:if>
+
+        <!-- Transition options -->
+        <lwc:if isTrue={hasTransitions}>
+            <fieldset class="slds-form-element transition-fieldset">
+                <legend class="slds-form-element__legend slds-form-element__label">
+                    Change status to
+                </legend>
+                <div class="slds-form-element__control">
+                    <template for:each={transitionOptions} for:item="opt">
+                        <span key={opt.value} class="slds-radio">
+                            <input
+                                type="radio"
+                                name="status-transition"
+                                id={opt.value}
+                                value={opt.value}
+                                checked={opt.checked}
+                                disabled={formDisabled}
+                                onchange={handleRadioChange}
+                            />
+                            <label class="slds-radio__label" for={opt.value}>
+                                <span class="slds-radio_faux"></span>
+                                <span class="slds-form-element__label">{opt.label}</span>
+                            </label>
+                        </span>
+                    </template>
+                </div>
+            </fieldset>
+
+            <!-- Note field - shown when a new status is selected -->
+            <lwc:if isTrue={showNoteField}>
+                <div class={noteFieldClass}>
+                    <label class="slds-form-element__label" for="status-note">
+                        <lwc:if isTrue={noteRequired}>
+                            <abbr class="slds-required" title="required">*</abbr>
+                        </lwc:if>
+                        {noteLabel}
+                    </label>
+                    <div class="slds-form-element__control">
+                        <textarea
+                            id="status-note"
+                            class="slds-textarea"
+                            rows="3"
+                            placeholder="Add a note..."
+                            value={_note}
+                            disabled={formDisabled}
+                            onchange={handleNoteChange}
+                        ></textarea>
+                    </div>
+                    <lwc:if isTrue={_noteError}>
+                        <p class="slds-form-error" id="status-note-error" role="alert">{_noteError}</p>
+                    </lwc:if>
+                </div>
+            </lwc:if>
+
+            <!-- Action buttons -->
+            <div class="form-actions">
+                <button
+                    class="slds-button slds-button_brand"
+                    disabled={saveDisabled}
+                    onclick={handleSave}
+                >
+                    <lwc:if isTrue={_isSaving}>
+                        <lightning-spinner alternative-text="Saving" size="x-small" class="btn-spinner"></lightning-spinner>
+                        Saving...
+                    </lwc:if>
+                    <lwc:if isTrue={!_isSaving}>
+                        Save
+                    </lwc:if>
+                </button>
+                <button
+                    class="slds-button slds-button_neutral"
+                    disabled={cancelDisabled}
+                    onclick={handleCancel}
+                >
+                    Cancel
+                </button>
+            </div>
+        </lwc:if>
+
+        <!-- No transitions available -->
+        <lwc:if isTrue={!hasTransitions}>
+            <p class="slds-text-body_small slds-text-color_weak no-transitions">
+                {noTransitionMessage}
+            </p>
+        </lwc:if>
+
+        <!-- Acknowledged by / last updated -->
+        <lwc:if isTrue={showAcknowledgedBy}>
+            <div class="acknowledged-info">
+                <lightning-icon icon-name="utility:user" size="x-small" class="slds-m-right_xx-small"></lightning-icon>
+                <span class="slds-text-body_small slds-text-color_weak">{acknowledgedByText}</span>
+            </div>
+        </lwc:if>
+
+    </div>
+</template>

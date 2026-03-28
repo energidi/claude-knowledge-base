@@ -1,0 +1,14 @@
+<template>
+    <div class="heatmap-grid">
+        <template for:each={categoryRows} for:item="cat">
+            <c-security-category-cell
+                key={cat.code}
+                category-code={cat.code}
+                category-name={cat.name}
+                finding-count={cat.findingCount}
+                has-critical={cat.hasCritical}
+                oncategoryselect={handleCategorySelect}
+            ></c-security-category-cell>
+        </template>
+    </div>
+</template>

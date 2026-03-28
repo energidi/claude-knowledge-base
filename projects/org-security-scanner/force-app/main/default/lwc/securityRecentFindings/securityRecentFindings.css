@@ -1,0 +1,131 @@
+.findings-widget {
+    background: #ffffff;
+    border-radius: 0.25rem;
+    padding: 1rem;
+}
+
+.widget-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #3e3e3c;
+    margin: 0 0 0.75rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* List reset */
+.findings-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Row */
+.finding-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0.375rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.1s ease;
+    border-bottom: 1px solid #f3f3f3;
+}
+
+.finding-row:last-child {
+    border-bottom: none;
+}
+
+.finding-row:hover,
+.finding-row:focus {
+    background: #f3f2f2;
+}
+
+.finding-row:focus-visible {
+    box-shadow: 0 0 0 2px #0176d3;
+}
+
+/* Left column: badges */
+.row-left {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    min-width: 5rem;
+}
+
+/* Severity badge */
+.severity-badge {
+    display: inline-block;
+    padding: 0.125rem 0.4rem;
+    border-radius: 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    background: #706e6b; /* fallback */
+}
+
+.severity-badge[data-severity="Critical"] {
+    background: #c23934;
+}
+
+.severity-badge[data-severity="High"] {
+    background: #dd7a01;
+}
+
+/* Category pill */
+.category-pill {
+    display: inline-block;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #3e3e3c;
+    background: #e8e8e8;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+}
+
+/* Right column: name + affected */
+.row-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.check-name {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #181818;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.affected-component {
+    font-size: 0.75rem;
+    color: #706e6b;
+    word-break: break-word;
+}
+
+/* Empty state */
+.empty-state {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 0.375rem;
+    color: #2e844a;
+}
+
+.empty-text {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #3e3e3c;
+}

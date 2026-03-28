@@ -1,0 +1,215 @@
+<template>
+    <!-- Shadow overlay -->
+    <div class="panel-overlay" onclick={handleCloseClick}></div>
+
+    <!-- Slide-in panel -->
+    <div
+        class="finding-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Finding Detail"
+        onkeydown={handleKeyDown}
+    >
+
+        <!-- ── Panel Header ─────────────────────────────────────────────── -->
+        <header class="panel-header">
+
+            <!-- Row 1: close + navigation + position -->
+            <div class="header-row header-row_nav">
+                <button
+                    class="slds-button slds-button_icon slds-button_icon-border-filled close-btn"
+                    aria-label="Close finding detail"
+                    title="Close"
+                    onclick={handleCloseClick}
+                >
+                    <lightning-icon icon-name="utility:close" size="x-small"></lightning-icon>
+                </button>
+
+                <div class="nav-group">
+                    <button
+                        class="slds-button slds-button_icon slds-button_icon-border nav-btn"
+                        aria-label="Previous finding"
+                        title="Previous finding"
+                        disabled={isPrevDisabled}
+                        onclick={handlePrevClick}
+                    >
+                        <lightning-icon icon-name="utility:chevronleft" size="x-small"></lightning-icon>
+                    </button>
+
+                    <span class="position-label">{positionLabel}</span>
+
+                    <button
+                        class="slds-button slds-button_icon slds-button_icon-border nav-btn"
+                        aria-label="Next finding"
+                        title={nextTitle}
+                        disabled={isNextDisabled}
+                        onclick={handleNextClick}
+                    >
+                        <lightning-icon icon-name="utility:chevronright" size="x-small"></lightning-icon>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Row 2: check name + badges -->
+            <div class="header-row header-row_title">
+                <h2 class="check-name">{checkName}</h2>
+                <div class="badge-row">
+                    <span class={severityBadgeClass}>{severity}</span>
+                    <lwc:if isTrue={findingType}>
+                        <span class="type-pill">{findingType}</span>
+                    </lwc:if>
+                </div>
+            </div>
+
+        </header>
+
+        <!-- ── Tab Strip ───────────────────────────────────────────────── -->
+        <div class="slds-tabs_default">
+            <ul class="slds-tabs_default__nav" role="tablist">
+                <li
+                    class={detailsTabClass}
+                    role="presentation"
+                >
+                    <a
+                        class="slds-tabs_default__link"
+                        role="tab"
+                        tabindex="0"
+                        aria-selected={isDetailsTab}
+                        onclick={handleDetailsTabClick}
+                    >Details</a>
+                </li>
+                <li
+                    class={statusTabClass}
+                    role="presentation"
+                >
+                    <a
+                        class="slds-tabs_default__link"
+                        role="tab"
+                        tabindex="0"
+                        aria-selected={isStatusTab}
+                        onclick={handleStatusTabClick}
+                    >Status</a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- ── Tab Content ─────────────────────────────────────────────── -->
+        <div class="panel-body">
+
+            <!-- Tab 1 - Details -->
+            <lwc:if isTrue={isDetailsTab}>
+                <div class="tab-panel">
+
+                    <!-- Category + Affected Component -->
+                    <div class="meta-row">
+                        <div class="meta-item">
+                            <span class="meta-label">Category</span>
+                            <span class="meta-value">{categoryLabel}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Affected Component</span>
+                            <span class="meta-value">{affectedComponent}</span>
+                        </div>
+                    </div>
+
+                    <!-- Risk / Description -->
+                    <lwc:if isTrue={description}>
+                        <section class="detail-section">
+                            <h3 class="section-title">Risk</h3>
+                            <p class="section-body">{description}</p>
+                        </section>
+                    </lwc:if>
+
+                    <!-- Impact -->
+                    <lwc:if isTrue={impact}>
+                        <section class="detail-section">
+                            <h3 class="section-title">Impact</h3>
+                            <div class="slds-box slds-theme_warning impact-box">
+                                <p class="section-body">{impact}</p>
+                            </div>
+                        </section>
+                    </lwc:if>
+
+                    <!-- How to Fix -->
+                    <lwc:if isTrue={remediation}>
+                        <section class="detail-section">
+                            <h3 class="section-title">How to Fix</h3>
+                            <div class="slds-box slds-theme_shade">
+                                <p class="section-body">{remediation}</p>
+                            </div>
+                        </section>
+                    </lwc:if>
+
+                    <!-- Recommendation alert -->
+                    <lwc:if isTrue={isRecommendation}>
+                        <div class="slds-notify slds-notify_alert slds-alert_warning recommendation-alert" role="alert">
+                            <lightning-icon
+                                icon-name="utility:warning"
+                                size="x-small"
+                                class="slds-m-right_x-small"
+                            ></lightning-icon>
+                            Manual review required - this check cannot be fully automated.
+                        </div>
+                    </lwc:if>
+
+                    <!-- Technical Evidence (Automated only) -->
+                    <lwc:if isTrue={hasEvidence}>
+                        <section class="detail-section">
+                            <button
+                                class="slds-button slds-button_reset evidence-toggle"
+                                onclick={handleEvidenceToggle}
+                                aria-expanded={_evidenceExpanded}
+                            >
+                                <lightning-icon
+                                    icon-name={evidenceToggleIcon}
+                                    size="x-small"
+                                    class="slds-m-right_xx-small"
+                                ></lightning-icon>
+                                <span class="section-title">Technical Evidence</span>
+                                <span class="slds-assistive-text">{evidenceToggleLabel}</span>
+                            </button>
+
+                            <lwc:if isTrue={_evidenceExpanded}>
+                                <div class="evidence-block">
+                                    <pre class="evidence-pre">{rawEvidence}</pre>
+                                </div>
+                            </lwc:if>
+                        </section>
+                    </lwc:if>
+
+                    <!-- Official Documentation link -->
+                    <lwc:if isTrue={hasSalesforceDocUrl}>
+                        <div class="doc-link-row">
+                            <a
+                                href={salesforceDocUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="slds-button slds-button_neutral doc-link-btn"
+                            >
+                                <lightning-icon
+                                    icon-name="utility:new_window"
+                                    size="x-small"
+                                    class="slds-m-right_xx-small"
+                                ></lightning-icon>
+                                Official Documentation
+                            </a>
+                        </div>
+                    </lwc:if>
+
+                </div>
+            </lwc:if>
+
+            <!-- Tab 2 - Status -->
+            <lwc:if isTrue={isStatusTab}>
+                <div class="tab-panel">
+                    <c-security-status-change-form
+                        finding={finding}
+                        is-historical-view={isHistoricalView}
+                        onstatuschange={handleStatusChange}
+                    ></c-security-status-change-form>
+                </div>
+            </lwc:if>
+
+        </div>
+    </div>
+</template>

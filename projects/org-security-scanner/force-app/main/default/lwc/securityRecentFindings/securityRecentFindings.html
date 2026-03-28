@@ -1,0 +1,45 @@
+<template>
+    <div class="findings-widget">
+        <h3 class="widget-title">Recent Critical &amp; High Findings</h3>
+
+        <template lwc:if={hasFindings}>
+            <ul class="findings-list" role="list">
+                <template for:each={findings} for:item="finding">
+                    <li
+                        key={finding.Id}
+                        class="finding-row"
+                        role="button"
+                        tabindex="0"
+                        data-id={finding.Id}
+                        onclick={handleSelect}
+                        onkeydown={handleKeyDown}
+                    >
+                        <div class="row-left">
+                            <span
+                                class="severity-badge"
+                                data-severity={finding.Severity__c}
+                            >{finding.Severity__c}</span>
+                            <span class="category-pill">{finding.Category__c}</span>
+                        </div>
+                        <div class="row-body">
+                            <span class="check-name">{finding.CheckName__c}</span>
+                            <span class="affected-component">{finding.AffectedComponent__c}</span>
+                        </div>
+                    </li>
+                </template>
+            </ul>
+        </template>
+
+        <template lwc:else>
+            <div class="empty-state">
+                <lightning-icon
+                    icon-name="utility:check"
+                    size="small"
+                    variant="success"
+                    alternative-text="No critical or high findings"
+                ></lightning-icon>
+                <span class="empty-text">No Critical or High findings</span>
+            </div>
+        </template>
+    </div>
+</template>

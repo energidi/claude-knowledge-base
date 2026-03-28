@@ -1,0 +1,39 @@
+<template>
+    <div
+        class="tab-strip-outer"
+        role="tablist"
+        aria-label="Scanner navigation"
+        aria-disabled={isScanRunning}
+    >
+        <ul class="slds-tabs_default__nav tab-nav" role="presentation">
+            <template for:each={tabs} for:item="tab">
+                <li
+                    key={tab.id}
+                    class={tab.liClasses}
+                    role="presentation"
+                >
+                    <button
+                        class={tab.btnClasses}
+                        role="tab"
+                        type="button"
+                        aria-selected={tab.ariaSelected}
+                        tabindex={tab.tabIndex}
+                        disabled={tab.isDisabled}
+                        data-tab={tab.id}
+                        onclick={handleTabClick}
+                        onkeydown={handleTabKeydown}
+                    >
+                        {tab.label}
+                    </button>
+                </li>
+            </template>
+        </ul>
+
+        <!-- Scan-running overlay hint -->
+        <template lwc:if={isScanRunning}>
+            <span class="tab-scan-hint slds-text-color_weak">
+                Tabs disabled while scan is running
+            </span>
+        </template>
+    </div>
+</template>

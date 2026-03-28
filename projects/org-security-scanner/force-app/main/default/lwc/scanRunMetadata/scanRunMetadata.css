@@ -1,0 +1,51 @@
+/* Chip row container */
+.chip-row {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem; /* 8px - standard SLDS spacing token s */
+}
+
+/* Individual pill chip */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background-color: var(--slds-c-badge-color-background, #f4f6f9);
+    border: 1px solid var(--slds-c-badge-color-border, #dddbda);
+    font-size: var(--slds-g-font-scale-neg-2, 0.75rem); /* ~12px */
+    line-height: 1.5;
+    white-space: nowrap;
+    color: var(--slds-c-badge-text-color, #3e3e3c);
+}
+
+/* Icon alignment - pulls the icon down slightly to optically center with text */
+.chip-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* Label inside chip */
+.chip-label {
+    font-size: inherit;
+    line-height: inherit;
+}
+
+/* Finding count color states */
+.finding-green {
+    color: #2e844a; /* SLDS success-dark */
+    font-weight: 600;
+}
+
+.finding-amber {
+    color: #a07000; /* SLDS warning-dark */
+    font-weight: 600;
+}
+
+.finding-red {
+    color: #ba0517; /* SLDS error-dark */
+    font-weight: 600;
+}

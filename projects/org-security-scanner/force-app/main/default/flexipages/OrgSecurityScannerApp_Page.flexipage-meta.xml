@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Org Security Scanner main application page. Single-region AppPage containing the securityScanner root LWC component.</description>
+    <flexiPageRegions>
+        <mode>AppLayoutUnawareSinglePane</mode>
+        <name>main</name>
+        <type>Region</type>
+    </flexiPageRegions>
+    <masterLabel>Org Security Scanner App Page</masterLabel>
+    <pageTemplate>AppPage_Default</pageTemplate>
+    <type>AppPage</type>
+    <view>Desktop</view>
+</FlexiPage>

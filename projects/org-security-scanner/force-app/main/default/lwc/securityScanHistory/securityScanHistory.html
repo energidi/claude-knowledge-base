@@ -1,0 +1,87 @@
+<template>
+    <div class="history-container">
+
+        <!-- Header -->
+        <div class="history-header">
+            <h3 class="history-title slds-text-heading_small">Scan History</h3>
+        </div>
+
+        <!-- Empty state -->
+        <lwc:if isTrue={isEmpty}>
+            <div class="history-empty">
+                <lightning-icon
+                    icon-name="utility:clock"
+                    size="small"
+                    class="history-empty__icon"
+                ></lightning-icon>
+                <p class="history-empty__text slds-text-body_regular">
+                    No scan history. Run your first scan to get started.
+                </p>
+            </div>
+        </lwc:if>
+
+        <!-- History list -->
+        <lwc:if isTrue={hasRows}>
+            <ul class="history-list" role="list" aria-label="Scan history">
+                <template for:each={historyRows} for:item="row">
+                    <li
+                        key={row.id}
+                        class={row.rowClass}
+                        role="button"
+                        tabindex="0"
+                        data-id={row.id}
+                        onclick={handleRowClick}
+                        onkeydown={handleRowClick}
+                        aria-current={row.isActive}
+                        aria-label={"View scan from " + row.formattedDate}
+                    >
+                        <!-- Left accent bar rendered via CSS on .history-row--active -->
+
+                        <!-- Row top: status + date + env badge -->
+                        <div class="row-top">
+                            <lightning-badge
+                                label={row.statusLabel}
+                                variant={row.statusVariant}
+                                class="status-badge"
+                            ></lightning-badge>
+                            <span class="row-date slds-text-body_small">{row.formattedDate}</span>
+                            <span class={row.envBadgeClass}>{row.envLabel}</span>
+                        </div>
+
+                        <!-- Row middle: operator + score + grade -->
+                        <div class="row-middle">
+                            <span class="row-operator slds-text-body_small">
+                                <lightning-icon
+                                    icon-name="utility:user"
+                                    size="xx-small"
+                                    class="operator-icon"
+                                    alternative-text="Operator"
+                                ></lightning-icon>
+                                {row.operator}
+                            </span>
+                            <span class="row-score slds-text-body_small">
+                                Score:&nbsp;<strong>{row.scoreDisplay}</strong>
+                            </span>
+                            <span class={row.gradeBadgeClass}>{row.gradeDisplay}</span>
+                        </div>
+
+                        <!-- Row bottom: severity pills -->
+                        <div class="row-severities" aria-label="Finding counts by severity">
+                            <template for:each={row.severityPills} for:item="pill">
+                                <span key={pill.key} class={pill.cssClass}>
+                                    <span class="sev-label">{pill.label}</span>
+                                    <span class="sev-count">{pill.display}</span>
+                                </span>
+                            </template>
+                        </div>
+
+                    </li>
+                </template>
+            </ul>
+
+            <!-- Retention notice -->
+            <p class="retention-notice slds-text-body_small">{retentionNotice}</p>
+        </lwc:if>
+
+    </div>
+</template>

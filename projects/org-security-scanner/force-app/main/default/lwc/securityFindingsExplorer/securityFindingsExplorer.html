@@ -1,0 +1,41 @@
+<template>
+    <div class="findings-explorer">
+
+        <!-- ── Initial load spinner (allFindings empty + isLoadingMore) ──── -->
+        <lwc:if isTrue={showInitialSpinner}>
+            <div class="initial-load-spinner" role="status" aria-label="Loading findings">
+                <lightning-spinner
+                    alternative-text="Loading findings"
+                    size="medium"
+                ></lightning-spinner>
+            </div>
+        </lwc:if>
+
+        <!-- ── Explorer body: filter bar + optional sort label + list ────── -->
+        <lwc:if isTrue={showExplorerBody}>
+
+            <!-- Filter bar (stateless - all state flows in via activeFilters) -->
+            <!-- filterchange bubbles=true composed=true, passes through automatically -->
+            <c-security-filter-bar
+                active-filters={activeFilters}
+            ></c-security-filter-bar>
+
+            <!-- Sort label - shown only when there are filtered results -->
+            <lwc:if isTrue={showSortLabel}>
+                <div class="explorer-sort-label" aria-live="polite">
+                    Sorted by severity - Critical first
+                </div>
+            </lwc:if>
+
+            <!-- Findings list -->
+            <!-- loadmore, findingselect, clearfilters all bubble+compose through -->
+            <c-security-findings-list
+                findings={filteredFindings}
+                has-more={hasMore}
+                is-loading-more={isLoadingMore}
+            ></c-security-findings-list>
+
+        </lwc:if>
+
+    </div>
+</template>

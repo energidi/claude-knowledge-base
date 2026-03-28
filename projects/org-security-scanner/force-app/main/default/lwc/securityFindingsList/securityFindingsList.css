@@ -1,0 +1,293 @@
+/* ── Severity / status color tokens ──────────────────────────────────────── */
+:host {
+    --color-critical : #c23934;
+    --color-high     : #dd7a01;
+    --color-medium   : #f4bc25;
+    --color-low      : #54698d;
+    --color-info     : #b0adab;
+    --color-border   : #e0e5ee;
+    --color-row-hover: #f3f2f2;
+    --type-automated : #0176d3;   /* blue  */
+    --type-recommend : #7f4cc0;   /* purple */
+}
+
+/* ── Container ────────────────────────────────────────────────────────────── */
+.findings-list-container {
+    display        : flex;
+    flex-direction : column;
+    gap            : 0;
+    width          : 100%;
+}
+
+/* ── Sort label ───────────────────────────────────────────────────────────── */
+.sort-label {
+    font-size   : 0.75rem;
+    color       : #706e6b;
+    padding     : 0.25rem 0.75rem 0.5rem;
+    font-style  : italic;
+    user-select : none;
+}
+
+/* ── Findings list (ul reset) ─────────────────────────────────────────────── */
+.findings-ul {
+    list-style  : none;
+    margin      : 0;
+    padding     : 0;
+    border-top  : 1px solid var(--color-border);
+}
+
+/* ── Group header divider ─────────────────────────────────────────────────── */
+.group-header {
+    display         : flex;
+    align-items     : center;
+    gap             : 0.5rem;
+    padding         : 0.35rem 0.75rem;
+    background      : #f3f2f2;
+    border-bottom   : 1px solid var(--color-border);
+}
+
+.group-header__label {
+    font-size      : 0.7rem;
+    font-weight    : 600;
+    text-transform : uppercase;
+    letter-spacing : 0.04em;
+    color          : #3e3e3c;
+    white-space    : nowrap;
+}
+
+.group-header__line {
+    flex        : 1;
+    height      : 1px;
+    background  : var(--color-border);
+}
+
+/* ── Wrapper li (keyed for:each child - visually transparent) ─────────────── */
+.finding-row-wrapper {
+    list-style : none;
+    padding    : 0;
+    margin     : 0;
+}
+
+/* ── Finding row ──────────────────────────────────────────────────────────── */
+.finding-row {
+    display         : flex;
+    align-items     : center;
+    gap             : 0.5rem;
+    padding         : 0.45rem 0.75rem;
+    border-bottom   : 1px solid var(--color-border);
+    border-left     : 3px solid transparent;
+    transition      : background 0.12s ease;
+    min-height      : 2.5rem;
+}
+
+.finding-row:hover {
+    background : var(--color-row-hover);
+}
+
+.finding-row--automated {
+    border-left-color : var(--type-automated);
+}
+
+.finding-row--recommendation {
+    border-left-color : var(--type-recommend);
+}
+
+/* ── Columns ──────────────────────────────────────────────────────────────── */
+.col {
+    flex-shrink : 0;
+}
+
+.col--type {
+    width       : 1.25rem;
+    display     : flex;
+    align-items : center;
+}
+
+.col--severity {
+    width : 6.5rem;
+}
+
+.col--category {
+    width : 3.5rem;
+}
+
+.col--check-name {
+    flex      : 1;
+    min-width : 200px;
+    overflow  : hidden;
+}
+
+.col--affected {
+    flex      : 1;
+    min-width : 200px;
+    overflow  : hidden;
+}
+
+.col--status {
+    width : 8rem;
+}
+
+.col--actions {
+    width       : 2rem;
+    display     : flex;
+    align-items : center;
+    justify-content : center;
+}
+
+/* ── Text utilities ───────────────────────────────────────────────────────── */
+.text-truncate {
+    display       : block;
+    overflow      : hidden;
+    white-space   : nowrap;
+    text-overflow : ellipsis;
+    font-size     : 0.8125rem;
+}
+
+.text-muted {
+    color : #706e6b;
+}
+
+/* ── Category code ────────────────────────────────────────────────────────── */
+.category-code {
+    font-size      : 0.7rem;
+    font-weight    : 600;
+    text-transform : uppercase;
+    color          : #3e3e3c;
+    letter-spacing : 0.03em;
+}
+
+/* ── Type icon ────────────────────────────────────────────────────────────── */
+.type-icon {
+    display : block;
+}
+
+/* ── Severity badge ───────────────────────────────────────────────────────── */
+.severity-badge {
+    display         : inline-flex;
+    align-items     : center;
+    padding         : 0.1rem 0.5rem;
+    border-radius   : 0.75rem;
+    font-size       : 0.7rem;
+    font-weight     : 600;
+    color           : #fff;
+    text-transform  : uppercase;
+    letter-spacing  : 0.03em;
+    white-space     : nowrap;
+}
+
+.severity-badge--critical { background : var(--color-critical); }
+.severity-badge--high     { background : var(--color-high); }
+.severity-badge--medium   { background : var(--color-medium); color: #514d0e; }
+.severity-badge--low      { background : var(--color-low); }
+.severity-badge--info     { background : var(--color-info); color: #3e3e3c; }
+
+/* ── Status badge ─────────────────────────────────────────────────────────── */
+.status-badge {
+    display         : inline-flex;
+    align-items     : center;
+    padding         : 0.1rem 0.5rem;
+    border-radius   : 0.75rem;
+    font-size       : 0.7rem;
+    font-weight     : 600;
+    white-space     : nowrap;
+    border          : 1px solid transparent;
+}
+
+.status-badge--open {
+    background  : #f3f2f2;
+    color       : #3e3e3c;
+    border-color: #dddbda;
+}
+
+.status-badge--acknowledged {
+    background  : #0176d3;
+    color       : #fff;
+}
+
+.status-badge--remediated {
+    background  : #2e844a;
+    color       : #fff;
+}
+
+.status-badge--risk-accepted {
+    background  : #fe9339;
+    color       : #fff;
+}
+
+.status-badge--false-positive {
+    background  : #706e6b;
+    color       : #fff;
+}
+
+/* ── Load more zone ───────────────────────────────────────────────────────── */
+.load-more-zone {
+    display         : flex;
+    justify-content : center;
+    align-items     : center;
+    padding         : 1rem 0.75rem;
+    min-height      : 3rem;
+}
+
+.load-more-btn {
+    font-size : 0.8125rem;
+}
+
+.load-more-spinner {
+    display     : flex;
+    align-items : center;
+    gap         : 0.75rem;
+    position    : relative;
+    min-height  : 2rem;
+}
+
+/* Offset spinner so text sits beside it cleanly */
+.load-more-spinner lightning-spinner {
+    position : relative;
+}
+
+.load-more-spinner__text {
+    font-size : 0.8125rem;
+    color     : #706e6b;
+    padding-left : 2.5rem; /* clear the spinner */
+}
+
+.all-loaded-text {
+    font-size  : 0.8125rem;
+    color      : #706e6b;
+    font-style : italic;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+.empty-state {
+    display         : flex;
+    flex-direction  : column;
+    align-items     : center;
+    justify-content : center;
+    padding         : 3rem 1.5rem;
+    gap             : 0.75rem;
+    text-align      : center;
+}
+
+.empty-state__icon {
+    opacity : 0.4;
+}
+
+.empty-state__message {
+    font-size  : 0.9375rem;
+    color      : #3e3e3c;
+    margin     : 0;
+}
+
+.empty-state__clear-link {
+    font-size      : 0.875rem;
+    color          : #0176d3;
+    cursor         : pointer;
+    background     : none;
+    border         : none;
+    padding        : 0;
+    text-decoration: underline;
+}
+
+.empty-state__clear-link:hover {
+    color : #014486;
+}

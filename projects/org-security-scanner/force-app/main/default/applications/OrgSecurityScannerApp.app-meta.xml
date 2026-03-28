@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata">
+    <defaultLandingTab>OrgSecurityScanner</defaultLandingTab>
+    <description>Org Security Scanner - detect and remediate security vulnerabilities across 13 categories and 76 checks.</description>
+    <formFactors>Large</formFactors>
+    <formFactors>Medium</formFactors>
+    <isNavAutoTempTabsDisabled>false</isNavAutoTempTabsDisabled>
+    <isNavPersonalizationDisabled>false</isNavPersonalizationDisabled>
+    <isNavTabPersistenceDisabled>false</isNavTabPersistenceDisabled>
+    <label>Org Security Scanner</label>
+    <navType>Standard</navType>
+    <tabs>OrgSecurityScanner</tabs>
+    <uiType>Lightning</uiType>
+    <utilityBar>false</utilityBar>
+</CustomApplication>

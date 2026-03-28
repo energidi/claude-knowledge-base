@@ -1,0 +1,30 @@
+<template>
+    <template if:true={scanRun}>
+        <div class="chip-row">
+            <span class="chip">
+                <lightning-icon
+                    icon-name="utility:clock"
+                    size="xx-small"
+                    class="chip-icon"
+                ></lightning-icon>
+                <span class="chip-label">{formattedDate}</span>
+            </span>
+            <span class="chip">
+                <lightning-icon
+                    icon-name="utility:user"
+                    size="xx-small"
+                    class="chip-icon"
+                ></lightning-icon>
+                <span class="chip-label">{operatorName}</span>
+            </span>
+            <span class={findingChipClass}>
+                <lightning-icon
+                    icon-name="utility:shield"
+                    size="xx-small"
+                    class="chip-icon"
+                ></lightning-icon>
+                <span class={findingLabelClass}>{findingLabel}</span>
+            </span>
+        </div>
+    </template>
+</template>

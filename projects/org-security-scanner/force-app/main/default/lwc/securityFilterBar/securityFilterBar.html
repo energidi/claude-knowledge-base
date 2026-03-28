@@ -1,0 +1,129 @@
+<template>
+    <div class="filter-bar slds-card slds-p-around_small">
+
+        <!-- Row 1: Search + Category + Clear -->
+        <div class="slds-grid slds-gutters_small slds-wrap slds-m-bottom_x-small filter-row">
+
+            <!-- Search -->
+            <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12 slds-large-size_4-of-12">
+                <lightning-input
+                    type="search"
+                    label="Search findings"
+                    placeholder="Search by check name or component"
+                    value={activeFilters.searchTerm}
+                    onchange={handleSearchChange}
+                    class="search-input">
+                </lightning-input>
+            </div>
+
+            <!-- Category -->
+            <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12 slds-large-size_4-of-12">
+                <lightning-combobox
+                    label="Category"
+                    value={activeFilters.category}
+                    placeholder="All Categories"
+                    options={categoryOptions}
+                    onchange={handleCategoryChange}>
+                </lightning-combobox>
+            </div>
+
+            <!-- Clear Filters -->
+            <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12 slds-large-size_4-of-12 slds-align-bottom">
+                <lwc:if isTrue={hasActiveFilters}>
+                    <button
+                        class="slds-button slds-button_neutral clear-btn"
+                        type="button"
+                        onclick={handleClearFilters}>
+                        Clear Filters
+                    </button>
+                </lwc:if>
+            </div>
+        </div>
+
+        <!-- Row 2: Severity + Finding Type + Status -->
+        <div class="slds-grid slds-gutters_small slds-wrap slds-m-bottom_x-small filter-row">
+
+            <!-- Severity toggles -->
+            <div class="slds-col slds-size_1-of-1 slds-medium-size_5-of-12 slds-large-size_5-of-12">
+                <span class="slds-form-element__label filter-group-label">Severity</span>
+                <div class="slds-button-group toggle-group" role="group" aria-label="Severity filter">
+                    <template for:each={severityOptions} for:item="sev">
+                        <button
+                            key={sev.value}
+                            type="button"
+                            class={sev.cssClass}
+                            data-value={sev.value}
+                            aria-label={sev.ariaLabel}
+                            aria-pressed={sev.variant}
+                            onclick={handleSeverityClick}>
+                            {sev.label}
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Finding Type toggles -->
+            <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12 slds-large-size_4-of-12">
+                <span class="slds-form-element__label filter-group-label">Finding Type</span>
+                <div class="slds-button-group toggle-group" role="group" aria-label="Finding type filter">
+                    <button
+                        type="button"
+                        class={findingTypeAutomatedClass}
+                        data-value="Automated"
+                        aria-pressed={findingTypeAutomatedVariant}
+                        onclick={handleFindingTypeClick}>
+                        Automated
+                    </button>
+                    <button
+                        type="button"
+                        class={findingTypeRecommendationClass}
+                        data-value="Recommendation"
+                        aria-pressed={findingTypeRecommendationVariant}
+                        onclick={handleFindingTypeClick}>
+                        Recommendation
+                    </button>
+                </div>
+            </div>
+
+            <!-- Status checkboxes -->
+            <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12 slds-large-size_3-of-12">
+                <span class="slds-form-element__label filter-group-label">Status</span>
+                <div class="status-checkboxes">
+                    <template for:each={statusCheckboxes} for:item="status">
+                        <label key={status.value} class="status-checkbox-label">
+                            <input
+                                type="checkbox"
+                                data-value={status.value}
+                                checked={status.checked}
+                                onchange={handleStatusChange}
+                                class="slds-checkbox_faux" />
+                            <span class="slds-m-left_xx-small">{status.label}</span>
+                        </label>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Active filter pills -->
+        <lwc:if isTrue={hasActiveFilters}>
+            <div class="slds-m-top_x-small pills-row" aria-label="Active filters">
+                <template for:each={activePills} for:item="pill">
+                    <span key={pill.key} class="slds-badge pill-badge">
+                        <span class="pill-label">{pill.label}</span>
+                        <button
+                            type="button"
+                            class="pill-remove-btn"
+                            data-filter-key={pill.filterKey}
+                            data-filter-value={pill.filterValue}
+                            aria-label="Remove filter"
+                            onclick={handlePillRemove}>
+                            &#x2715;
+                        </button>
+                    </span>
+                </template>
+            </div>
+        </lwc:if>
+
+    </div>
+</template>

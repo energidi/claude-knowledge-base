@@ -1,0 +1,74 @@
+<template>
+    <div class={panelClass}>
+
+        <!-- Collapse / Expand toggle button -->
+        <button
+            class="toggle-btn"
+            onclick={handleToggle}
+            aria-label={toggleAriaLabel}
+            title={toggleAriaLabel}
+            type="button"
+        >
+            <span class={toggleIconClass} aria-hidden="true"></span>
+        </button>
+
+        <!-- Collapsed state: icon strip -->
+        <lwc:if isTrue={isCollapsed}>
+            <div class="collapsed-strip">
+                <span
+                    class="collapsed-shield-icon"
+                    title="Left panel - click arrow to expand"
+                    aria-hidden="true"
+                ></span>
+            </div>
+        </lwc:if>
+
+        <!-- Expanded content -->
+        <lwc:if isTrue={showContent}>
+            <div class="panel-content">
+
+                <!-- Historical view banner -->
+                <lwc:if isTrue={isHistoricalView}>
+                    <div class="historical-banner" role="status">
+                        <span class="historical-banner__icon" aria-hidden="true">&#9432;</span>
+                        <span class="historical-banner__text">Viewing Historical Data</span>
+                        <button
+                            class="historical-banner__btn"
+                            onclick={handleReturnToCurrent}
+                            type="button"
+                        >
+                            Return to Current Scan
+                        </button>
+                    </div>
+                </lwc:if>
+
+                <!-- Severity breakdown (child component) -->
+                <c-security-severity-breakdown
+                    scan-run={scanRun}
+                    score-counts={scoreCounts}
+                    onseverityfilterselect={handleSeverityFilterSelect}
+                ></c-security-severity-breakdown>
+
+                <!-- Trend vs Previous section -->
+                <div class="section-header section-header--trend">Trend vs Previous Scan</div>
+                <div class="trend-placeholder">
+                    <span class="trend-placeholder__icon" aria-hidden="true">&#8635;</span>
+                    <span class="trend-placeholder__text">No previous scan to compare</span>
+                </div>
+
+                <!-- Category Coverage -->
+                <lwc:if isTrue={hasScanRun}>
+                    <div class="section-header section-header--coverage">Category Coverage</div>
+                    <div class="coverage-wrap">
+                        <div class="coverage-label">{categoriesScannedLabel}</div>
+                        <div class="coverage-bar-track" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" aria-label="Category coverage">
+                            <div class="coverage-bar-fill" style="width: 100%;"></div>
+                        </div>
+                    </div>
+                </lwc:if>
+
+            </div>
+        </lwc:if>
+
+    </div>
+</template>

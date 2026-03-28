@@ -1,0 +1,124 @@
+/* ============================================================
+   Header bar - 72px fixed height, flex row, space-between
+   ============================================================ */
+
+.header-bar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 72px;
+    min-height: 72px;
+    max-height: 72px;
+    padding: 0 1rem;
+    background-color: var(--slds-c-card-color-background, #ffffff);
+    border-bottom: 1px solid var(--slds-g-color-neutral-base-80, #dddbda);
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* ============================================================
+   Left section
+   ============================================================ */
+
+.header-left {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.625rem;
+    flex: 0 0 auto;
+}
+
+.header-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.header-shield-icon {
+    --sds-c-icon-color-foreground-default: var(--slds-g-color-brand-base-50, #0176d3);
+}
+
+.header-title-block {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.header-app-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--slds-g-color-neutral-base-10, #181818);
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.header-subtitle {
+    font-size: 0.75rem;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+/* ============================================================
+   Center section
+   ============================================================ */
+
+.header-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    padding: 0 1rem;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* ============================================================
+   Right section
+   ============================================================ */
+
+.header-right {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+}
+
+/* Export button wrapper - fixed width so spinner swap doesn't shift layout */
+.header-export-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.export-spinner {
+    position: relative;
+}
+
+/* Run button wrapper */
+.header-run-wrap {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* Running state: spinner + label side by side */
+.run-running-state {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+    height: 2rem;
+}
+
+.run-running-label {
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}

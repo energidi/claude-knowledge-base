@@ -1,0 +1,81 @@
+<template>
+    <div class="header-bar slds-page-header">
+        <!-- Left: Shield icon + title block -->
+        <div class="header-left">
+            <div class="header-icon-wrap">
+                <lightning-icon
+                    icon-name="utility:shield"
+                    size="medium"
+                    class="header-shield-icon"
+                ></lightning-icon>
+            </div>
+            <div class="header-title-block">
+                <span class="header-app-name">Org Security Scanner</span>
+                <span class="header-subtitle slds-text-color_weak">
+                    Salesforce Org Security Analysis
+                </span>
+            </div>
+        </div>
+
+        <!-- Center: Scan run metadata chips -->
+        <div class="header-center">
+            <c-scan-run-metadata scan-run={scanRun}></c-scan-run-metadata>
+        </div>
+
+        <!-- Right: Export + Score ring + Run button -->
+        <div class="header-right">
+
+            <!-- Export CSV button -->
+            <div class="header-export-wrap">
+                <template lwc:if={isExportLoading}>
+                    <lightning-spinner
+                        size="small"
+                        alternative-text="Exporting..."
+                        class="export-spinner"
+                    ></lightning-spinner>
+                </template>
+                <template lwc:else>
+                    <lightning-button-icon
+                        icon-name="utility:download"
+                        variant="border-filled"
+                        aria-label="Export findings to CSV"
+                        title="Export findings to CSV"
+                        disabled={isExportDisabled}
+                        onclick={handleExportClick}
+                    ></lightning-button-icon>
+                </template>
+            </div>
+
+            <!-- Score ring -->
+            <c-security-score-ring
+                score={currentScore}
+                grade={currentGrade}
+                score-counts={scoreCounts}
+                org-settings={orgSettings}
+            ></c-security-score-ring>
+
+            <!-- Run button -->
+            <div class="header-run-wrap">
+                <template lwc:if={isScanRunning}>
+                    <div class="run-running-state">
+                        <lightning-spinner
+                            size="small"
+                            alternative-text="Scan running"
+                        ></lightning-spinner>
+                        <span class="run-running-label slds-text-color_weak">
+                            Scan Running...
+                        </span>
+                    </div>
+                </template>
+                <template lwc:else>
+                    <lightning-button
+                        label={runButtonLabel}
+                        variant="brand"
+                        disabled={isRunDisabled}
+                        onclick={handleRunClick}
+                    ></lightning-button>
+                </template>
+            </div>
+        </div>
+    </div>
+</template>

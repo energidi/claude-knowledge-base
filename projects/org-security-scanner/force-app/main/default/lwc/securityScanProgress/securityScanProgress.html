@@ -1,0 +1,87 @@
+<template>
+    <div class="progress-container">
+
+        <!-- Header bar: title + count + last-checked -->
+        <div class="progress-header">
+            <h3 class="slds-text-heading_small progress-title">Scan Progress</h3>
+            <span class="progress-count slds-text-body_small">
+                {completedCount} / {totalCount} categories
+            </span>
+        </div>
+        <lwc:if isTrue={hasLastChecked}>
+            <p class="last-checked slds-text-body_small">{lastCheckedLabel}</p>
+        </lwc:if>
+
+        <!-- Category checklist -->
+        <ul
+            class="category-list"
+            aria-live="polite"
+            aria-label="Scan category progress"
+        >
+            <template for:each={categoryRows} for:item="row">
+                <li key={row.key} class={row.rowClass}>
+
+                    <!-- Completed: green check -->
+                    <lwc:if isTrue={row.isCompleted}>
+                        <span class="row-icon row-icon--completed" aria-hidden="true">
+                            <lightning-icon
+                                icon-name="utility:check"
+                                size="x-small"
+                                alternative-text="Completed"
+                            ></lightning-icon>
+                        </span>
+                        <span class="row-label">{row.label}</span>
+                    </lwc:if>
+
+                    <!-- Failed: red error icon -->
+                    <lwc:if isTrue={row.isFailed}>
+                        <span class="row-icon row-icon--failed" aria-hidden="true">
+                            <lightning-icon
+                                icon-name="utility:error"
+                                size="x-small"
+                                alternative-text="Failed"
+                            ></lightning-icon>
+                        </span>
+                        <span class="row-label">{row.label}</span>
+                        <span class="row-badge row-badge--failed">(failed)</span>
+                    </lwc:if>
+
+                    <!-- In-progress: spinner -->
+                    <lwc:if isTrue={row.isInProgress}>
+                        <span class="row-icon row-icon--inprogress" aria-hidden="true">
+                            <lightning-spinner
+                                size="x-small"
+                                alternative-text="Scanning"
+                                variant="brand"
+                            ></lightning-spinner>
+                        </span>
+                        <span class="row-label">{row.label}</span>
+                        <span class="row-badge row-badge--inprogress">(scanning...)</span>
+                    </lwc:if>
+
+                    <!-- Pending: grey circle -->
+                    <lwc:if isTrue={row.isPending}>
+                        <span class="row-icon row-icon--pending" aria-hidden="true">
+                            <span class="pending-dot"></span>
+                        </span>
+                        <span class="row-label row-label--pending">{row.label}</span>
+                    </lwc:if>
+
+                </li>
+            </template>
+        </ul>
+
+        <!-- Cancel -->
+        <div class="cancel-area">
+            <button
+                type="button"
+                class="cancel-link"
+                onclick={handleCancelClick}
+            >Cancel Scan</button>
+            <p class="cancel-hint slds-text-body_small">
+                The scan will stop at the next category boundary.
+            </p>
+        </div>
+
+    </div>
+</template>

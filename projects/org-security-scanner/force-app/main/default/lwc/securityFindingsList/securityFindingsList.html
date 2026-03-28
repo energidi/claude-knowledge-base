@@ -1,0 +1,164 @@
+<template>
+    <div class="findings-list-container">
+
+        <!-- ── Zero-results state ───────────────────────────────────────── -->
+        <lwc:if isTrue={!hasFindings}>
+            <div class="empty-state" role="status">
+                <lightning-icon
+                    icon-name="utility:filterList"
+                    size="medium"
+                    class="empty-state__icon"
+                ></lightning-icon>
+                <p class="empty-state__message">No findings match your current filters.</p>
+                <!-- svelte-ignore: LWC does not support onclick on <a> natively; button used for a11y -->
+                <button
+                    class="slds-button slds-button_reset empty-state__clear-link"
+                    onclick={handleClearFilters}
+                    type="button"
+                >
+                    Clear Filters
+                </button>
+            </div>
+        </lwc:if>
+
+        <!-- ── Findings list ────────────────────────────────────────────── -->
+        <lwc:if isTrue={hasFindings}>
+
+            <!-- Sort label -->
+            <div class="sort-label" aria-live="polite">
+                Sorted by severity - Critical first
+            </div>
+
+            <!-- Rows -->
+            <ul class="findings-ul" role="list">
+                <template for:each={findingsWithHeadersAndStyles} for:item="item">
+                    <!-- Wrapper fragment keyed per item - required by LWC for:each -->
+                    <li key={item.Id} class="finding-row-wrapper" role="presentation">
+
+                        <!-- Group header divider (rendered when this item starts a new severity group) -->
+                        <lwc:if isTrue={item.showGroupHeader}>
+                            <div class="group-header" role="presentation" aria-hidden="true">
+                                <span class="group-header__label">{item.groupLabel}</span>
+                                <span class="group-header__line"></span>
+                            </div>
+                        </lwc:if>
+
+                        <!-- Finding row -->
+                        <div class={item.rowClass} role="listitem" data-finding-id={item.Id}>
+
+                        <!-- Type indicator icon -->
+                        <div class="col col--type" title={item.typeTitle}>
+                            <lightning-icon
+                                icon-name={item.typeIcon}
+                                size="x-small"
+                                variant={item.typeIconVariant}
+                                class="type-icon"
+                            ></lightning-icon>
+                        </div>
+
+                        <!-- Severity badge -->
+                        <div class="col col--severity">
+                            <span class={item.severityBadgeClass}>{item.severityLabel}</span>
+                        </div>
+
+                        <!-- Category code -->
+                        <div class="col col--category">
+                            <span class="category-code">{item.Category__c}</span>
+                        </div>
+
+                        <!-- Check name -->
+                        <div class="col col--check-name" title={item.checkNameTitle}>
+                            <span class="text-truncate">{item.CheckName__c}</span>
+                        </div>
+
+                        <!-- Affected component -->
+                        <div class="col col--affected" title={item.affectedTitle}>
+                            <span class="text-truncate text-muted">{item.AffectedComponent__c}</span>
+                        </div>
+
+                        <!-- Status badge -->
+                        <div class="col col--status">
+                            <span class={item.statusBadgeClass}>{item.Status__c}</span>
+                        </div>
+
+                        <!-- Row action menu -->
+                        <div class="col col--actions">
+                            <lightning-button-menu
+                                alternative-text="Actions"
+                                aria-label={item.actionAriaLabel}
+                                icon-size="x-small"
+                                menu-alignment="right"
+                                data-finding-id={item.Id}
+                                onselect={handleMenuSelect}
+                            >
+                                <lightning-menu-item
+                                    value="view"
+                                    label="View Details"
+                                    icon-name="utility:preview"
+                                ></lightning-menu-item>
+                                <lightning-menu-item
+                                    value="acknowledge"
+                                    label="Acknowledge"
+                                    icon-name="utility:check"
+                                ></lightning-menu-item>
+                                <lightning-menu-item
+                                    value="remediate"
+                                    label="Mark Remediated"
+                                    icon-name="utility:success"
+                                ></lightning-menu-item>
+                                <lightning-menu-item
+                                    value="false-positive"
+                                    label="Mark False Positive"
+                                    icon-name="utility:close"
+                                ></lightning-menu-item>
+                                <lightning-menu-item
+                                    value="accept-risk"
+                                    label="Accept Risk"
+                                    icon-name="utility:warning"
+                                ></lightning-menu-item>
+                            </lightning-button-menu>
+                        </div>
+
+                        </div> <!-- end finding-row -->
+                    </li> <!-- end finding-row-wrapper -->
+                </template>
+            </ul>
+
+            <!-- ── Load More / spinner / all-loaded ─────────────────────── -->
+            <div class="load-more-zone">
+
+                <!-- Loading spinner state -->
+                <lwc:if isTrue={isLoadingMore}>
+                    <div class="load-more-spinner" role="status">
+                        <lightning-spinner
+                            alternative-text="Loading more findings"
+                            size="small"
+                        ></lightning-spinner>
+                        <span class="load-more-spinner__text">Loading more findings...</span>
+                    </div>
+                </lwc:if>
+
+                <!-- Load More button state -->
+                <lwc:if isTrue={!isLoadingMore}>
+                    <lwc:if isTrue={hasMore}>
+                        <button
+                            class="slds-button slds-button_neutral load-more-btn"
+                            type="button"
+                            onclick={handleLoadMore}
+                        >
+                            {loadMoreLabel}
+                        </button>
+                    </lwc:if>
+
+                    <!-- All loaded state -->
+                    <lwc:if isTrue={!hasMore}>
+                        <span class="all-loaded-text">{allLoadedLabel}</span>
+                    </lwc:if>
+                </lwc:if>
+
+            </div>
+
+        </lwc:if>
+
+    </div>
+</template>

@@ -1,0 +1,110 @@
+/* ── Wrapper ─────────────────────────────────────────────────────────────── */
+.ring-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+/* ── Trigger button (invisible frame around the SVG) ────────────────────── */
+.ring-trigger {
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    border-radius: 50%;
+    line-height: 0; /* prevent extra bottom space */
+}
+
+.ring-trigger:focus-visible {
+    outline: 2px solid var(--lwc-colorBorderFocus, #0176d3);
+    outline-offset: 3px;
+}
+
+/* ── SVG sizing ─────────────────────────────────────────────────────────── */
+.score-svg {
+    width: 108px;
+    height: 108px;
+    display: block;
+}
+
+/* ── Arc animation ──────────────────────────────────────────────────────── */
+.score-arc {
+    transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease;
+}
+
+/* ── Score and grade labels ─────────────────────────────────────────────── */
+.score-text {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: var(--lwc-fontFamily, 'Salesforce Sans', Arial, sans-serif);
+    /* fill is set inline via scoreStyle getter to match arc color */
+}
+
+.grade-text {
+    font-size: 13px;
+    font-weight: 600;
+    fill: var(--lwc-colorTextWeak, #706e6b);
+    font-family: var(--lwc-fontFamily, 'Salesforce Sans', Arial, sans-serif);
+}
+
+/* ── Popover positioning ────────────────────────────────────────────────── */
+.score-popover {
+    position: absolute;
+    left: 50%;
+    /* sits above the ring; 108px ring height + 12px gap */
+    bottom: calc(108px + 12px);
+    transform: translateX(-50%);
+    min-width: 260px;
+    max-width: 320px;
+    z-index: 9000;
+}
+
+/* Nubbin override: centre it under the ring */
+.score-popover.slds-nubbin_bottom::after,
+.score-popover.slds-nubbin_bottom::before {
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* ── Breakdown list ─────────────────────────────────────────────────────── */
+.breakdown-list {
+    margin: 0;
+    padding: 0;
+}
+
+.breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 3px 0;
+    gap: var(--lwc-spacingSmall, 0.5rem);
+}
+
+.breakdown-label {
+    font-size: var(--lwc-fontSize2, 0.75rem);
+    color: var(--lwc-colorTextWeak, #706e6b);
+    white-space: nowrap;
+}
+
+.breakdown-value {
+    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-weight: 600;
+    color: var(--lwc-colorTextDefault, #181818);
+    text-align: right;
+}
+
+/* Header rows (Starting score / Final) */
+.breakdown-row:first-child .breakdown-label,
+.breakdown-row:first-child .breakdown-value,
+.breakdown-row:last-child  .breakdown-label,
+.breakdown-row:last-child  .breakdown-value {
+    font-size: var(--lwc-fontSize3, 0.8125rem);
+    color: var(--lwc-colorTextDefault, #181818);
+}
+
+.breakdown-divider {
+    border: none;
+    border-top: 1px solid var(--lwc-colorBorder, #dddbda);
+    margin: var(--lwc-spacingXSmall, 0.25rem) 0;
+}

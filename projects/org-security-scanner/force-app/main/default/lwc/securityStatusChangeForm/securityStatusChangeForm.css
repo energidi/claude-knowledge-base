@@ -1,0 +1,126 @@
+/* ── Outer wrapper ───────────────────────────────────────────────────────── */
+.form-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lwc-spacingMedium, 1rem);
+    padding: var(--lwc-spacingMedium, 1rem) 0;
+}
+
+/* ── Current status header ───────────────────────────────────────────────── */
+.status-header {
+    display: flex;
+    align-items: center;
+    gap: var(--lwc-spacingSmall, 0.5rem);
+}
+
+.status-label {
+    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-weight: 600;
+    color: var(--lwc-colorTextLabel, #3e3e3c);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+/* ── Status badge ────────────────────────────────────────────────────────── */
+.status-badge {
+    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-weight: 600;
+    border-radius: 4px;
+    padding: 2px 8px;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+}
+
+.badge-open {
+    background-color: #e8f4fd;
+    color: #0070d2;
+    border-color: #a8cff0;
+}
+
+.badge-acknowledged {
+    background-color: #fdf6e3;
+    color: #a07000;
+    border-color: #f4e4a4;
+}
+
+.badge-remediated {
+    background-color: #e9f7ef;
+    color: #2e7d32;
+    border-color: #a8d5b0;
+}
+
+.badge-risk-accepted {
+    background-color: #fdf3e8;
+    color: #b05e00;
+    border-color: #f0c888;
+}
+
+.badge-false-positive {
+    background-color: #f3f3f3;
+    color: #514f4d;
+    border-color: #c9c7c5;
+}
+
+/* ── Historical banner ───────────────────────────────────────────────────── */
+.historical-banner {
+    font-size: var(--lwc-fontSize2, 0.75rem);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+/* ── Transition radio fieldset ───────────────────────────────────────────── */
+.transition-fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+.transition-fieldset legend {
+    margin-bottom: var(--lwc-spacingXSmall, 0.25rem);
+}
+
+/* ── Note textarea ───────────────────────────────────────────────────────── */
+.slds-textarea {
+    resize: vertical;
+    min-height: 72px;
+}
+
+.slds-form-error {
+    font-size: var(--lwc-fontSize2, 0.75rem);
+    color: var(--lwc-colorTextError, #c23934);
+    margin-top: var(--lwc-spacingXXSmall, 0.125rem);
+}
+
+/* ── Action buttons ──────────────────────────────────────────────────────── */
+.form-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--lwc-spacingSmall, 0.5rem);
+}
+
+/* Spinner inside the Save button */
+.btn-spinner {
+    --lwc-spinnerSize: 0.875rem;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: var(--lwc-spacingXXSmall, 0.25rem);
+}
+
+/* ── No transitions message ──────────────────────────────────────────────── */
+.no-transitions {
+    font-style: italic;
+}
+
+/* ── Acknowledged info footer ────────────────────────────────────────────── */
+.acknowledged-info {
+    display: flex;
+    align-items: center;
+    padding-top: var(--lwc-spacingSmall, 0.5rem);
+    border-top: 1px solid var(--lwc-colorBorder, #dddbda);
+}
+
+.acknowledged-info span {
+    line-height: 1.4;
+}

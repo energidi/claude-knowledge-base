@@ -1,0 +1,77 @@
+<template>
+    <div class="dashboard-root">
+
+        <!-- Empty state -->
+        <template lwc:if={hasScanRun}>
+
+            <!-- Heatmap - full width -->
+            <section class="heatmap-section">
+                <c-security-category-heatmap
+                    scan-run={scanRun}
+                    all-findings={allFindings}
+                ></c-security-category-heatmap>
+            </section>
+
+            <!-- 2-column row -->
+            <div class="dashboard-grid">
+
+                <!-- Left: Scan Stats -->
+                <section class="stats-section slds-card">
+                    <div class="slds-card__header">
+                        <h2 class="slds-card__header-title section-title">Scan Summary</h2>
+                    </div>
+                    <div class="slds-card__body slds-card__body_inner">
+                        <div class="stats-row">
+                            <div class="stat-tile">
+                                <span class="stat-value">{scanStats.checksRun}</span>
+                                <span class="stat-label">Checks Run</span>
+                            </div>
+                            <div class="stat-tile">
+                                <span class="stat-value">{scanStats.totalFindings}</span>
+                                <span class="stat-label">Total Findings</span>
+                            </div>
+                            <div class="stat-tile">
+                                <span class="stat-value">{scanStats.duration}</span>
+                                <span class="stat-label">Scan Duration</span>
+                            </div>
+                        </div>
+                        <dl class="meta-list">
+                            <div class="meta-row">
+                                <dt class="meta-label">Operator</dt>
+                                <dd class="meta-value">{scanStats.operator}</dd>
+                            </div>
+                            <div class="meta-row">
+                                <dt class="meta-label">Started</dt>
+                                <dd class="meta-value">{scanStats.startedAt}</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </section>
+
+                <!-- Right: Recent Critical/High Findings -->
+                <section class="recent-section slds-card">
+                    <div class="slds-card__body">
+                        <c-security-recent-findings
+                            findings={recentCriticalHigh}
+                        ></c-security-recent-findings>
+                    </div>
+                </section>
+
+            </div>
+
+        </template>
+
+        <!-- No scan data -->
+        <template lwc:else>
+            <div class="empty-state">
+                <lightning-icon
+                    icon-name="utility:metrics"
+                    size="large"
+                    alternative-text="No scan data"
+                ></lightning-icon>
+                <p class="empty-text">No scan data available.</p>
+            </div>
+        </template>
+
+    </div>
+</template>

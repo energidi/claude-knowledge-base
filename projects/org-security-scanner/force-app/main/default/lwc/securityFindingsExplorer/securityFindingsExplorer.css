@@ -1,0 +1,34 @@
+/* ── Host ──────────────────────────────────────────────────────────────────── */
+:host {
+    display : block;
+    width   : 100%;
+}
+
+/* ── Outer wrapper ─────────────────────────────────────────────────────────── */
+.findings-explorer {
+    display        : flex;
+    flex-direction : column;
+    gap            : 0;
+    width          : 100%;
+    min-height     : 6rem;
+    position       : relative;
+}
+
+/* ── Initial load spinner ──────────────────────────────────────────────────── */
+.initial-load-spinner {
+    display         : flex;
+    justify-content : center;
+    align-items     : center;
+    min-height      : 10rem;
+    width           : 100%;
+    position        : relative;
+}
+
+/* ── Sort label ────────────────────────────────────────────────────────────── */
+.explorer-sort-label {
+    font-size   : 0.75rem;
+    color       : #706e6b;
+    padding     : 0.35rem 0.75rem 0.15rem;
+    font-style  : italic;
+    user-select : none;
+}

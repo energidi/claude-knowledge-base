@@ -1,0 +1,16 @@
+<template>
+    <!-- eslint-disable-next-line jsx-a11y/no-static-element-interactions -->
+    <div
+        class={cellClass}
+        role="button"
+        tabindex="0"
+        title={categoryName}
+        aria-label={ariaLabel}
+        onclick={handleClick}
+        onkeydown={handleKeyDown}
+    >
+        <span class="code">{categoryCode}</span>
+        <span class="badge">{findingCount}</span>
+        <span class="status">{statusLabel}</span>
+    </div>
+</template>

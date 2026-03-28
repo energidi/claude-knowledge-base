@@ -1,0 +1,106 @@
+<template>
+    <!-- eslint-disable-next-line @lwc/lwc/no-template-children -->
+    <div
+        class="ring-wrapper"
+        onkeydown={handleKeyDown}
+    >
+        <!-- Score ring trigger -->
+        <button
+            class="ring-trigger"
+            type="button"
+            aria-haspopup="true"
+            aria-expanded={isPopoverOpen}
+            aria-label={ariaLabel}
+            onclick={handleTogglePopover}
+        >
+            <svg
+                viewBox="0 0 108 108"
+                role="img"
+                aria-label={ariaLabel}
+                xmlns="http://www.w3.org/2000/svg"
+                class="score-svg"
+            >
+                <title>Security score {safeScore}, Grade {safeGrade}</title>
+
+                <!-- Background track -->
+                <circle
+                    cx="54"
+                    cy="54"
+                    r="44"
+                    fill="none"
+                    stroke="#e0e5ee"
+                    stroke-width="8"
+                />
+
+                <!-- Foreground arc - starts at 12 o'clock, rotated -90 deg -->
+                <circle
+                    class="score-arc"
+                    cx="54"
+                    cy="54"
+                    r="44"
+                    fill="none"
+                    stroke-width="8"
+                    stroke-linecap="round"
+                    transform="rotate(-90 54 54)"
+                    style={arcStyle}
+                />
+
+                <!-- Score number -->
+                <text
+                    x="54"
+                    y="50"
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    class="score-text"
+                    style={scoreStyle}
+                >{safeScore}</text>
+
+                <!-- Grade letter -->
+                <text
+                    x="54"
+                    y="68"
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    class="grade-text"
+                >{safeGrade}</text>
+            </svg>
+        </button>
+
+        <!-- Popover breakdown -->
+        <div class={popoverClass} role="dialog" aria-label="Score breakdown">
+            <div class="slds-popover__header">
+                <button
+                    class="slds-button slds-button_icon slds-button_icon-small slds-float_right slds-popover__close"
+                    type="button"
+                    title="Close"
+                    onclick={handlePopoverClose}
+                >
+                    <lightning-icon
+                        icon-name="utility:close"
+                        size="x-small"
+                        alternative-text="Close"
+                    ></lightning-icon>
+                </button>
+                <h2 class="slds-text-heading_small">Score Breakdown</h2>
+            </div>
+            <div class="slds-popover__body">
+                <dl class="breakdown-list">
+                    <template for:each={popoverRows} for:item="row">
+                        <template if:true={row.isDivider}>
+                            <hr key={row.key} class="breakdown-divider" />
+                        </template>
+                        <template if:false={row.isDivider}>
+                            <div
+                                key={row.key}
+                                class="breakdown-row"
+                            >
+                                <dt class="breakdown-label">{row.label}</dt>
+                                <dd class="breakdown-value">{row.value}</dd>
+                            </div>
+                        </template>
+                    </template>
+                </dl>
+            </div>
+        </div>
+    </div>
+</template>

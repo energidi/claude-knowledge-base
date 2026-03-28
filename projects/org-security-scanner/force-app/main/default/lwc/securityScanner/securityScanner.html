@@ -1,0 +1,170 @@
+<template>
+
+    <!-- ── Fatal error fallback ──────────────────────────────────────────────── -->
+    <lwc:if isTrue={_fatalError}>
+        <div class="fatal-error-banner" role="alert">
+            <lightning-icon
+                icon-name="utility:error"
+                size="small"
+                class="fatal-error-banner__icon"
+            ></lightning-icon>
+            <span class="fatal-error-banner__text">
+                A critical error occurred: {_fatalError}. Reload the page to recover.
+            </span>
+        </div>
+    </lwc:if>
+
+    <!-- ── Production org warning banner ────────────────────────────────────── -->
+    <lwc:if isTrue={isProductionOrg}>
+        <div class="production-banner" role="status" aria-live="polite">
+            <lightning-icon
+                icon-name="utility:warning"
+                size="x-small"
+                class="production-banner__icon"
+            ></lightning-icon>
+            <span class="production-banner__text">
+                PRODUCTION ORG - All scans are read-only. No data is modified.
+            </span>
+        </div>
+    </lwc:if>
+
+    <!-- ── Historical view banner ────────────────────────────────────────────── -->
+    <lwc:if isTrue={_isHistoricalView}>
+        <div class="historical-top-banner" role="status" aria-live="polite">
+            <lightning-icon
+                icon-name="utility:clock"
+                size="x-small"
+                class="historical-top-banner__icon"
+            ></lightning-icon>
+            <span class="historical-top-banner__text">
+                Viewing Historical Scan Data - changes made here will not affect the current scan.
+            </span>
+            <button
+                class="historical-top-banner__btn"
+                type="button"
+                onclick={handleReturnToCurrentScan}
+            >
+                Return to Current Scan
+            </button>
+        </div>
+    </lwc:if>
+
+    <!-- ── Main app container ────────────────────────────────────────────────── -->
+    <div class="app-container">
+
+        <!-- Header bar -->
+        <c-security-scanner-header
+            scan-run={currentScanRun}
+            org-info={orgInfo}
+            is-scan-running={_isScanRunning}
+            is-export-loading={_isExportLoading}
+            cooldown-seconds-remaining={_cooldownSeconds}
+            score-counts={_scoreCounts}
+            org-settings={orgSettings}
+            onrunscan={handleRunScan}
+            onexportcsv={handleExportCsv}
+        ></c-security-scanner-header>
+
+        <!-- Tab strip -->
+        <c-security-scanner-tabs
+            active-tab={_activeTab}
+            finding-count={findingCount}
+            is-scan-running={_isScanRunning}
+            has-scan={hasScan}
+            ontabswitch={handleTabSwitch}
+        ></c-security-scanner-tabs>
+
+        <!-- Content area: left panel + right panel -->
+        <div class="content-area">
+
+            <!-- Left panel -->
+            <c-security-left-panel
+                scan-run={currentScanRun}
+                score-counts={_scoreCounts}
+                is-historical-view={_isHistoricalView}
+                is-collapsed={_isLeftPanelCollapsed}
+                onpaneltoggle={handlePanelToggle}
+                onseverityfilterselect={handleSeverityFilterSelect}
+                onreturntocurrentscan={handleReturnToCurrentScan}
+            ></c-security-left-panel>
+
+            <!-- Right panel -->
+            <div class="right-panel">
+
+                <!-- Scan progress (while running) -->
+                <lwc:if isTrue={showProgressView}>
+                    <c-security-scan-progress
+                        scan-run={currentScanRun}
+                        completed-categories={_completedCategories}
+                        failed-categories={_failedCategories}
+                        oncancelscan={handleCancelScan}
+                    ></c-security-scan-progress>
+                </lwc:if>
+
+                <!-- Dashboard tab -->
+                <lwc:if isTrue={showDashboard}>
+                    <c-security-dashboard
+                        scan-run={currentScanRun}
+                        all-findings={_allFindings}
+                        is-historical-view={_isHistoricalView}
+                        oncategoryselect={handleCategorySelect}
+                        onfindingselect={handleFindingSelect}
+                    ></c-security-dashboard>
+                </lwc:if>
+
+                <!-- Findings explorer tab -->
+                <lwc:if isTrue={showFindings}>
+                    <c-security-findings-explorer
+                        scan-run-id={_currentScanId}
+                        all-findings={_allFindings}
+                        has-more={_hasMore}
+                        is-loading-more={_isLoadingMore}
+                        is-historical-view={_isHistoricalView}
+                        active-filters={_activeFilters}
+                        onfilterchange={handleFilterChange}
+                        onloadmore={handleLoadMore}
+                        onfindingselect={handleFindingSelect}
+                        onclearfilters={handleClearFilters}
+                        onbulkstatuschange={handleBulkStatusChange}
+                    ></c-security-findings-explorer>
+                </lwc:if>
+
+                <!-- History tab -->
+                <lwc:if isTrue={showHistory}>
+                    <c-security-scan-history
+                        scan-runs={scanRuns}
+                        current-scan-id={_currentScanId}
+                        max-scan-runs={maxScanRuns}
+                        onviewhistoricalscan={handleViewHistoricalScan}
+                    ></c-security-scan-history>
+                </lwc:if>
+
+            </div>
+            <!-- /right-panel -->
+
+        </div>
+        <!-- /content-area -->
+
+        <!-- Detail panel: always in DOM, visibility toggled via CSS transform -->
+        <div class={detailPanelClass}>
+            <lwc:if isTrue={_isDetailOpen}>
+                <c-security-finding-detail
+                    finding={selectedFinding}
+                    finding-index={_selectedFindingIndex}
+                    total-findings={findingCount}
+                    is-last-loaded-finding={isLastLoadedFinding}
+                    is-historical-view={_isHistoricalView}
+                    active-tab={_activeDetailTab}
+                    onclosedetail={handleCloseDetail}
+                    onpreviousfinding={handlePreviousFinding}
+                    onnextfinding={handleNextFinding}
+                    onstatuschange={handleStatusChange}
+                    ontabswitch={handleDetailTabSwitch}
+                ></c-security-finding-detail>
+            </lwc:if>
+        </div>
+
+    </div>
+    <!-- /app-container -->
+
+</template>
