@@ -22,6 +22,15 @@ public class SecScanApiResponse {
         return r;
     }
 
+    // Partial success: success=true with a warning message (e.g. bulk update with some failures)
+    public static SecScanApiResponse partial(Object data, String warningMessage) {
+        SecScanApiResponse r = new SecScanApiResponse();
+        r.success = true;
+        r.data = data;
+        r.errorMessage = warningMessage;
+        return r;
+    }
+
     // DTO: paginated findings page
     public class FindingsPageDTO {
         @AuraEnabled public List<SecurityFinding__c> findings { get; set; }

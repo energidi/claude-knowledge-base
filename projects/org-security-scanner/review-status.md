@@ -1,6 +1,6 @@
 # Org Security Scanner - Development Status
 
-## Current Phase: Phase 5 - Controllers (IN PROGRESS)
+## Current Phase: Phase 6 - Tests (IN PROGRESS)
 
 Plan file: `C:\Users\GidiAbramovich\.claude\plans\scalable-strolling-kahan.md`
 GitHub: `https://github.com/energidi/claude-knowledge-base/tree/main/projects/org-security-scanner`
@@ -17,8 +17,8 @@ Latest commit: `c7de1fe` - Phase 3 complete (Apex Orchestration)
 | Phase 2 - Apex Foundation | COMPLETE | 9 classes: SecScanException, SecScanSessionExpiredException, SecScanApiResponse (5 DTOs), SecScanConstants, SecScanEvidenceUtil, SecScanFindingDTO, SecScanToolingService, SecScanMetadataService, SecScanCategoryRunner |
 | Phase 3 - Apex Orchestration | COMPLETE | 7 classes: SecScanOrchestrator, SecScanRunnerChain, SecScanRunnerContinuation, SecScanRetentionBatch, SecScanOrphanCleanupSchedulable, SecScanPostInstallHandler, SecScanPostUninstallHandler |
 | Phase 4 - 13 Category Runners | COMPLETE | All 13 runners written (76 checks total) |
-| Phase 5 - Controllers | IN PROGRESS | SecScanController, SecScanFindingsController |
-| Phase 6 - Tests | Pending | SecScanTestDataFactory + all test classes |
+| Phase 5 - Controllers | COMPLETE | SecScanController, SecScanFindingsController, SecScanTestDataFactory |
+| Phase 6 - Tests | IN PROGRESS | ~20 test classes |
 | Phase 7 - Permission Set + Tab | Pending | |
 | Phase 8-11 - LWC (18 components) | Pending | |
 | Phase 12 - App Shell | Pending | |
@@ -43,11 +43,41 @@ Latest commit: `c7de1fe` - Phase 3 complete (Apex Orchestration)
 
 ---
 
-## Phase 5 Checklist
+## Phase 5 Checklist (COMPLETE)
 
-- [ ] `SecScanController.cls` (startScan, getOrgInfo, getScanRuns, getOrgSecuritySettings, getScanRunStatus, cancelScan, exportFindingsCsv)
-- [ ] `SecScanFindingsController.cls` (getCurrentScanFindings, getScoreCounts, getFindingDetail, updateFindingStatus, bulkUpdateFindingStatus)
-- [ ] `SecScanTestDataFactory.cls` (shared test utility - deployed with controllers, used in Phase 6)
+- [x] `SecScanController.cls` (startScan, getOrgInfo, getScanRuns, getOrgSecuritySettings, getScanRunStatus, cancelScan, exportFindingsCsv)
+- [x] `SecScanFindingsController.cls` (getCurrentScanFindings, getScoreCounts, getFindingDetail, updateFindingStatus, bulkUpdateFindingStatus)
+- [x] `SecScanTestDataFactory.cls` (shared test utility - deployed with controllers, used in Phase 6)
+
+## Phase 6 Checklist
+
+- [ ] `SecScanApiResponseTest.cls`
+- [ ] `SecScanEvidenceUtilTest.cls`
+- [ ] `SecScanCategoryRunnerTest.cls`
+- [ ] `SecScanRunnerChainTest.cls`
+- [ ] `SecScanRunnerContinuationTest.cls`
+- [ ] `SecScanOrchestratorTest.cls`
+- [ ] `SecScanRetentionBatchTest.cls`
+- [ ] `SecScanOrphanCleanupSchedulableTest.cls`
+- [ ] `SecScanPostInstallHandlerTest.cls`
+- [ ] `SecScanPostUninstallHandlerTest.cls`
+- [ ] `SecScanControllerTest.cls`
+- [ ] `SecScanFindingsControllerTest.cls`
+- [ ] `SecScanToolingServiceTest.cls`
+- [ ] `SecScanMetadataServiceTest.cls`
+- [ ] `SecScanRunnerUserAccessTest.cls`
+- [ ] `SecScanRunnerGuestUserTest.cls`
+- [ ] `SecScanRunnerSharingAccessTest.cls`
+- [ ] `SecScanRunnerSessionAuthTest.cls`
+- [ ] `SecScanRunnerConnectedAppsTest.cls`
+- [ ] `SecScanRunnerApexAutomationTest.cls`
+- [ ] `SecScanRunnerLwcAuraTest.cls`
+- [ ] `SecScanRunnerAgentforceTest.cls`
+- [ ] `SecScanRunnerMetadataSecretsTest.cls`
+- [ ] `SecScanRunnerFileUploadTest.cls`
+- [ ] `SecScanRunnerCertEncryptionTest.cls`
+- [ ] `SecScanRunnerMonitoringTest.cls`
+- [ ] `SecScanRunnerHealthCheckTest.cls`
 
 ---
 
