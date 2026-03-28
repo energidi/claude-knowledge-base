@@ -1,10 +1,10 @@
 # Org Security Scanner - Development Status
 
-## Current Phase: Phase 2 - Apex Foundation (IN PROGRESS)
+## Current Phase: Phase 4 - Category Runners (IN PROGRESS)
 
 Plan file: `C:\Users\GidiAbramovich\.claude\plans\scalable-strolling-kahan.md`
 GitHub: `https://github.com/energidi/claude-knowledge-base/tree/main/projects/org-security-scanner`
-Latest commit: `2e93d93` - Phase 1 complete (data model, 76 CMT records)
+Latest commit: `38ed7ea` - Phase 2 complete (Apex Foundation)
 
 ---
 
@@ -14,9 +14,9 @@ Latest commit: `2e93d93` - Phase 1 complete (data model, 76 CMT records)
 |---|---|---|
 | Plan finalization | COMPLETE | 76 checks, full Impact/Remediation, all architecture decisions locked |
 | Phase 1 - Data Model | COMPLETE | SecurityScanRun__c, SecurityFinding__c, SecurityCheckDef__mdt, OrgSecurityScanner_Setting__mdt, 76 records |
-| Phase 2 - Apex Foundation | IN PROGRESS | See checklist below |
-| Phase 3 - Apex Orchestration | Pending | |
-| Phase 4 - 13 Category Runners | Pending | |
+| Phase 2 - Apex Foundation | COMPLETE | 9 classes: SecScanException, SecScanSessionExpiredException, SecScanApiResponse (5 DTOs), SecScanConstants, SecScanEvidenceUtil, SecScanFindingDTO, SecScanToolingService, SecScanMetadataService, SecScanCategoryRunner |
+| Phase 3 - Apex Orchestration | COMPLETE | 7 classes: SecScanOrchestrator, SecScanRunnerChain, SecScanRunnerContinuation, SecScanRetentionBatch, SecScanOrphanCleanupSchedulable, SecScanPostInstallHandler, SecScanPostUninstallHandler |
+| Phase 4 - 13 Category Runners | IN PROGRESS | See checklist below |
 | Phase 5 - Controllers | Pending | |
 | Phase 6 - Tests | Pending | |
 | Phase 7 - Permission Set + Tab | Pending | |
@@ -25,43 +25,40 @@ Latest commit: `2e93d93` - Phase 1 complete (data model, 76 CMT records)
 
 ---
 
-## Phase 2 Checklist
+## Phase 4 Checklist
 
-- [ ] `SecScanException.cls` + meta
-- [ ] `SecScanSessionExpiredException.cls` + meta
-- [ ] `SecScanApiResponse.cls` (+ 5 typed inner DTOs) + meta
-- [ ] `SecScanEvidenceUtil.cls` + meta
-- [ ] `SecScanFindingDTO.cls` + meta
-- [ ] `SecScanToolingService.cls` + meta
-- [ ] `SecScanMetadataService.cls` + meta
-- [ ] `SecScanCategoryRunner.cls` (abstract) + meta
-- [ ] `SecScanConstants.cls` + meta
-
----
-
-## Phase 1 Checklist (COMPLETE)
-
-- [x] `SecurityScanRun__c` object + 19 fields + OWD Private
-- [x] `SecurityFinding__c` object + 19 fields + OWD Private + field history on Status__c, AcknowledgedBy__c, AcknowledgedDate__c
-- [x] `SecurityCheckDef__mdt` type + 11 fields + 76 records (UA=7, GU=12, SRA=7, SA=10, CAI=8, AA=8, LA=3, AGA=5, MS=4, FUE=3, CE=2, MON=4, HCB=3)
-- [x] `OrgSecurityScanner_Setting__mdt` type + 14 fields + Default record
+- [ ] `SecScanRunnerUserAccess.cls` (UA - 7 checks)
+- [ ] `SecScanRunnerGuestUser.cls` (GU - 12 checks)
+- [ ] `SecScanRunnerSharingAccess.cls` (SRA - 7 checks)
+- [ ] `SecScanRunnerSessionAuth.cls` (SA - 10 checks)
+- [ ] `SecScanRunnerConnectedApps.cls` (CAI - 8 checks)
+- [ ] `SecScanRunnerApexAutomation.cls` (AA - 8 checks, heap guard + continuation)
+- [ ] `SecScanRunnerLwcAura.cls` (LA - 3 checks, heap guard + continuation)
+- [ ] `SecScanRunnerAgentforce.cls` (AGA - 5 checks)
+- [ ] `SecScanRunnerMetadataSecrets.cls` (MS - 4 checks)
+- [ ] `SecScanRunnerFileUpload.cls` (FUE - 3 checks, SOAP Metadata API)
+- [ ] `SecScanRunnerCertEncryption.cls` (CE - 2 checks)
+- [ ] `SecScanRunnerMonitoring.cls` (MON - 4 checks)
+- [ ] `SecScanRunnerHealthCheck.cls` (HCB - 3 checks, SOAP Metadata API)
 
 ---
 
-## Project Structure
+## Phase 2 + 3 Checklist (COMPLETE)
 
-```
-force-app/main/default/
-  objects/
-    SecurityScanRun__c/    (19 fields)
-    SecurityFinding__c/    (19 fields, history on 3 fields)
-    SecurityCheckDef__mdt/ (11 fields)
-    OrgSecurityScanner_Setting__mdt/ (14 fields)
-  customMetadata/
-    OrgSecurityScanner_Setting.Default.md-meta.xml
-    SecurityCheckDef.UA_001.md-meta.xml  (x76)
-  classes/                 <- Phase 2 target
-```
+Phase 2 - Apex Foundation (9 classes):
+- [x] SecScanException, SecScanSessionExpiredException
+- [x] SecScanApiResponse (FindingsPageDTO, ScanStatusDTO, OrgSecuritySettingsDTO, OrgInfoDTO, ScoreCountsDTO)
+- [x] SecScanConstants, SecScanEvidenceUtil, SecScanFindingDTO
+- [x] SecScanToolingService, SecScanMetadataService, SecScanCategoryRunner (abstract, without sharing)
+
+Phase 3 - Apex Orchestration (7 classes):
+- [x] SecScanOrchestrator (finalizeScan: score/grade/counts, Cancelled guard, retention trigger)
+- [x] SecScanRunnerChain (@TestVisible chainEnabled, session expiry path, CompletedCategories append)
+- [x] SecScanRunnerContinuation (IResumable interface, heap-split for AA/LA)
+- [x] SecScanRetentionBatch (scope=1, explicit child delete, two-step QueryLocator)
+- [x] SecScanOrphanCleanupSchedulable
+- [x] SecScanPostInstallHandler (abort-then-reschedule on upgrade, silent on failure)
+- [x] SecScanPostUninstallHandler
 
 ---
 
@@ -83,17 +80,4 @@ force-app/main/default/
 - `buildFinding()` is the ONLY way to create findings - all runners must use it
 - `SecScanRunnerChain`: @TestVisible chainEnabled=false replaces Test.isRunningTest() anti-pattern
 - `finalizeScan()` must check Status__c before writing Completed - must not overwrite Cancelled
-
----
-
-## Deployment Phase Order
-
-1. Data model (objects + CMT types + records) - COMPLETE
-2. Apex Foundation <- CURRENT
-3. Apex Orchestration (must deploy BEFORE runners - compile-time dep)
-4. 13 category runners (AA/LA call SecScanRunnerContinuation - Phase 3 must exist)
-5. Controllers (SecScanController, SecScanFindingsController)
-6. Tests + SecScanTestDataFactory
-7. Permission Set + Custom Tab
-8-11. LWC (18 components - leaf to root order)
-12. Lightning App + Flexipage
+- `SecScanRunnerContinuation.IResumable` interface - AA and LA implement this for heap-safe pagination
