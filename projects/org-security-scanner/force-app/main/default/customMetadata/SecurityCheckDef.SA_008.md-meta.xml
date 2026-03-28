@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>SA-008 - HttpOnly cookie attribute not enforced</label>
+    <protected>false</protected>
+    <values>
+        <field>CheckId__c</field>
+        <value xsi:type="xsd:string">SA-008</value>
+    </values>
+    <values>
+        <field>CheckName__c</field>
+        <value xsi:type="xsd:string">HttpOnly cookie attribute not enforced</value>
+    </values>
+    <values>
+        <field>Category__c</field>
+        <value xsi:type="xsd:string">Session &amp; Auth</value>
+    </values>
+    <values>
+        <field>CategoryCode__c</field>
+        <value xsi:type="xsd:string">SA</value>
+    </values>
+    <values>
+        <field>Severity__c</field>
+        <value xsi:type="xsd:string">Medium</value>
+    </values>
+    <values>
+        <field>FindingType__c</field>
+        <value xsi:type="xsd:string">Automated</value>
+    </values>
+    <values>
+        <field>Description__c</field>
+        <value xsi:type="xsd:string">The HttpOnly attribute is not required on session cookies. JavaScript running on the page can read the session cookie value.</value>
+    </values>
+    <values>
+        <field>Impact__c</field>
+        <value xsi:type="xsd:string">XSS vulnerabilities in any page running in the Salesforce domain can steal session cookies via JavaScript, enabling session hijacking without any network interception.</value>
+    </values>
+    <values>
+        <field>Remediation__c</field>
+        <value xsi:type="xsd:string">Enable Require HttpOnly attribute in Setup &gt; Session Settings.</value>
+    </values>
+    <values>
+        <field>SalesforceDocUrl__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>IsActive__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+</CustomMetadata>

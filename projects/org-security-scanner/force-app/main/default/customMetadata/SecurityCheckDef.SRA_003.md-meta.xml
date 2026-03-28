@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>SRA-003 - Sensitive object OWD set to Public Read/Write</label>
+    <protected>false</protected>
+    <values>
+        <field>CheckId__c</field>
+        <value xsi:type="xsd:string">SRA-003</value>
+    </values>
+    <values>
+        <field>CheckName__c</field>
+        <value xsi:type="xsd:string">Sensitive object OWD set to Public Read/Write</value>
+    </values>
+    <values>
+        <field>Category__c</field>
+        <value xsi:type="xsd:string">Sharing &amp; Record Access</value>
+    </values>
+    <values>
+        <field>CategoryCode__c</field>
+        <value xsi:type="xsd:string">SRA</value>
+    </values>
+    <values>
+        <field>Severity__c</field>
+        <value xsi:type="xsd:string">High</value>
+    </values>
+    <values>
+        <field>FindingType__c</field>
+        <value xsi:type="xsd:string">Automated</value>
+    </values>
+    <values>
+        <field>Description__c</field>
+        <value xsi:type="xsd:string">The org-wide default for Opportunity, Lead, or Case is set to Public Read/Write. Sales pipeline, lead data, and support cases are visible and editable by all users.</value>
+    </values>
+    <values>
+        <field>Impact__c</field>
+        <value xsi:type="xsd:string">Sales pipeline and customer service data is fully public internally. Competitors, recently offboarded contractors, or compromised accounts have unrestricted access to all sensitive data.</value>
+    </values>
+    <values>
+        <field>Remediation__c</field>
+        <value xsi:type="xsd:string">Change OWD to Private for Opportunity, Lead, and Case in Setup &gt; Sharing Settings. Add role-based or territory-based sharing rules to restore legitimate cross-team access.</value>
+    </values>
+    <values>
+        <field>SalesforceDocUrl__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>IsActive__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+</CustomMetadata>

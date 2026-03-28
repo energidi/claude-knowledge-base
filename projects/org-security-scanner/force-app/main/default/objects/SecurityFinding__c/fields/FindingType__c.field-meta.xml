@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>FindingType__c</fullName>
+    <description>Automated = directly detected violation. Recommendation = admin must manually review to confirm.</description>
+    <inlineHelpText>Automated: a policy violation was directly detected by querying org metadata. Recommendation: the check cannot be fully automated and requires manual admin review to confirm.</inlineHelpText>
+    <label>Finding Type</label>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>Automated</fullName>
+                <default>false</default>
+                <label>Automated</label>
+            </value>
+            <value>
+                <fullName>Recommendation</fullName>
+                <default>false</default>
+                <label>Recommendation</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

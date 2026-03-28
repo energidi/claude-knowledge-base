@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>GU-006 - Experience site allows guests to see other members</label>
+    <protected>false</protected>
+    <values>
+        <field>CheckId__c</field>
+        <value xsi:type="xsd:string">GU-006</value>
+    </values>
+    <values>
+        <field>CheckName__c</field>
+        <value xsi:type="xsd:string">Experience site allows guests to see other members</value>
+    </values>
+    <values>
+        <field>Category__c</field>
+        <value xsi:type="xsd:string">Guest User / Experience Cloud</value>
+    </values>
+    <values>
+        <field>CategoryCode__c</field>
+        <value xsi:type="xsd:string">GU</value>
+    </values>
+    <values>
+        <field>Severity__c</field>
+        <value xsi:type="xsd:string">High</value>
+    </values>
+    <values>
+        <field>FindingType__c</field>
+        <value xsi:type="xsd:string">Automated</value>
+    </values>
+    <values>
+        <field>Description__c</field>
+        <value xsi:type="xsd:string">A live Experience Cloud network has AllowMembersToSeeEachOther=true. This allows guest users to enumerate other community members, their profiles, and potentially contact details.</value>
+    </values>
+    <values>
+        <field>Impact__c</field>
+        <value xsi:type="xsd:string">Community members can enumerate other members profiles and contact details. This enables targeted phishing, social engineering, and violates user privacy expectations.</value>
+    </values>
+    <values>
+        <field>Remediation__c</field>
+        <value xsi:type="xsd:string">Disable Allow guest users to see other members on each Experience network in Setup &gt; Digital Experiences &gt; [Site] &gt; Administration &gt; Members.</value>
+    </values>
+    <values>
+        <field>SalesforceDocUrl__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>IsActive__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+</CustomMetadata>

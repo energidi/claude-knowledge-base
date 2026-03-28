@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>SA-010 - No login IP restriction on System Administrator profile</label>
+    <protected>false</protected>
+    <values>
+        <field>CheckId__c</field>
+        <value xsi:type="xsd:string">SA-010</value>
+    </values>
+    <values>
+        <field>CheckName__c</field>
+        <value xsi:type="xsd:string">No login IP restriction on System Administrator profile</value>
+    </values>
+    <values>
+        <field>Category__c</field>
+        <value xsi:type="xsd:string">Session &amp; Auth</value>
+    </values>
+    <values>
+        <field>CategoryCode__c</field>
+        <value xsi:type="xsd:string">SA</value>
+    </values>
+    <values>
+        <field>Severity__c</field>
+        <value xsi:type="xsd:string">Low</value>
+    </values>
+    <values>
+        <field>FindingType__c</field>
+        <value xsi:type="xsd:string">Recommendation</value>
+    </values>
+    <values>
+        <field>Description__c</field>
+        <value xsi:type="xsd:string">The System Administrator profile has no LoginIpRange records configured. Admin accounts can be accessed from any network globally, including untrusted networks.</value>
+    </values>
+    <values>
+        <field>Impact__c</field>
+        <value xsi:type="xsd:string">Admin accounts accessible from any IP are vulnerable to credential-based attacks from global threat actors. There is no network-level control preventing access from untrusted locations.</value>
+    </values>
+    <values>
+        <field>Remediation__c</field>
+        <value xsi:type="xsd:string">Configure Login IP Ranges on the System Administrator profile in Setup &gt; Profiles &gt; System Administrator &gt; Login IP Ranges. Restrict to known office network ranges and VPN egress IPs.</value>
+    </values>
+    <values>
+        <field>SalesforceDocUrl__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>IsActive__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+</CustomMetadata>

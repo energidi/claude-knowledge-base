@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>UA-001 - Custom profile with Modify All Data</label>
+    <protected>false</protected>
+    <values>
+        <field>CheckId__c</field>
+        <value xsi:type="xsd:string">UA-001</value>
+    </values>
+    <values>
+        <field>CheckName__c</field>
+        <value xsi:type="xsd:string">Custom profile with Modify All Data</value>
+    </values>
+    <values>
+        <field>Category__c</field>
+        <value xsi:type="xsd:string">User &amp; Access</value>
+    </values>
+    <values>
+        <field>CategoryCode__c</field>
+        <value xsi:type="xsd:string">UA</value>
+    </values>
+    <values>
+        <field>Severity__c</field>
+        <value xsi:type="xsd:string">Critical</value>
+    </values>
+    <values>
+        <field>FindingType__c</field>
+        <value xsi:type="xsd:string">Automated</value>
+    </values>
+    <values>
+        <field>Description__c</field>
+        <value xsi:type="xsd:string">A non-System-Administrator profile has PermissionsModifyAllData=true. Any user assigned this profile gains full read/write/delete access on all records in the org, bypassing all sharing rules and object permissions.</value>
+    </values>
+    <values>
+        <field>Impact__c</field>
+        <value xsi:type="xsd:string">Any user gains full read/write on all org data. A compromised account with this profile can extract, modify, or delete every record in the org with no restriction.</value>
+    </values>
+    <values>
+        <field>Remediation__c</field>
+        <value xsi:type="xsd:string">Remove PermissionsModifyAllData from the profile. Use scoped object permissions (CRUD per object) to grant only the access the profile needs. Only the System Administrator profile should carry this permission.</value>
+    </values>
+    <values>
+        <field>SalesforceDocUrl__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>IsActive__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+</CustomMetadata>

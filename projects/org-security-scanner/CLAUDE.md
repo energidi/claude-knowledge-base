@@ -41,6 +41,11 @@ UA, GU, SRA, SA, CAI, AA, LA, AGA, MS, FUE, CE, MON, HCB
 12. Lightning App `OrgSecurityScannerApp` + Flexipage
 13. Package: `sf package version create` -> `sf package version promote`
 
+## Development Rules
+- After completing each phase or significant step, update `review-status.md` in the project root with the current status before proceeding to the next phase.
+- When approaching 95% of the context window limit: save all in-progress work, update `review-status.md` with the exact resume point and what was completed/pending, and stop.
+
 ## Files
 - `technical-plan.md` (GitHub) - Full technical implementation plan (single source of truth)
+- `review-status.md` (project root) - Live development status, updated after each phase
 - `Org Security Scanner - Technical Plan.docx` - Word export of the plan

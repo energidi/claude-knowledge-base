@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>AcknowledgedBy__c</fullName>
+    <description>Which admin last changed the status away from Open. Stored explicitly for fast SOQL filtering - do not derive from audit history.</description>
+    <inlineHelpText>The admin who last changed the status away from Open. Stored explicitly for fast SOQL filtering - do not derive from audit history.</inlineHelpText>
+    <label>Acknowledged By</label>
+    <referenceTo>User</referenceTo>
+    <relationshipLabel>Security Findings (Acknowledged By)</relationshipLabel>
+    <relationshipName>SecurityFindingsAcknowledgedBy</relationshipName>
+    <required>false</required>
+    <trackHistory>true</trackHistory>
+    <type>Lookup</type>
+</CustomField>

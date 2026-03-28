@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>CheckId__c</fullName>
+    <description>Stable code like UA-001. Not an ExternalId - same CheckId appears across many runs and multiple times per run (one per affected component). Findings are always inserted, never upserted.</description>
+    <inlineHelpText>Stable identifier for the security check that produced this finding (e.g. UA-001). The same check ID appears across multiple scan runs. Not unique per record - use the record ID to key findings.</inlineHelpText>
+    <label>Check Id</label>
+    <length>50</length>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

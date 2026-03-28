@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Impact__c</fullName>
+    <description>Business and security consequences if this vulnerability is exploited or left unaddressed. Displayed as the Impact section in the finding detail panel.</description>
+    <inlineHelpText>Business and security consequences if this vulnerability is exploited or left unaddressed. Displayed in an amber warning box in the finding detail panel to distinguish consequence from technical description.</inlineHelpText>
+    <label>Impact</label>
+    <length>32768</length>
+    <trackHistory>false</trackHistory>
+    <type>LongTextArea</type>
+    <visibleLines>5</visibleLines>
+</CustomField>

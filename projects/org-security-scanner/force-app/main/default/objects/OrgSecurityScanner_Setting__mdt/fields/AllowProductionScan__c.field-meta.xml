@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>AllowProductionScan__c</fullName>
+    <description>Server-side gate for production org scans. startScan() throws SecScanException if IsSandbox=false AND this flag is false. Secure default = deny. Admin must explicitly opt in before any production scan.</description>
+    <inlineHelpText>Server-side gate. Must be checked (true) before startScan() will proceed in a production org. Default: unchecked (false). Edit this record to enable production scanning.</inlineHelpText>
+    <defaultValue>false</defaultValue>
+    <label>Allow Production Scan</label>
+    <type>Checkbox</type>
+</CustomField>

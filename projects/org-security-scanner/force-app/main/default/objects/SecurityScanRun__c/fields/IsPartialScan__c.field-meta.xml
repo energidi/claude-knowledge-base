@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>IsPartialScan__c</fullName>
+    <description>True when the scan was run by a user without a System Administrator profile. Some Tooling API results may be incomplete.</description>
+    <inlineHelpText>Checked when the scan was run by a user without a System Administrator profile. Some Tooling API queries may return incomplete results. Re-run as a System Administrator for full coverage.</inlineHelpText>
+    <defaultValue>false</defaultValue>
+    <label>Is Partial Scan</label>
+    <trackHistory>false</trackHistory>
+    <type>Checkbox</type>
+</CustomField>

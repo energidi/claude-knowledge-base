@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>TotalChecksRun__c</fullName>
+    <description>Total number of individual security checks executed in this scan. Should be 76 on a full successful scan.</description>
+    <inlineHelpText>Total number of individual security checks executed in this scan. Should be 76 on a full successful scan across all 13 categories.</inlineHelpText>
+    <label>Total Checks Run</label>
+    <precision>3</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <trackHistory>false</trackHistory>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

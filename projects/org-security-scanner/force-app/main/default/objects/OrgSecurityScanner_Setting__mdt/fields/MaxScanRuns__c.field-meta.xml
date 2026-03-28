@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>MaxScanRuns__c</fullName>
+    <description>Retention policy: how many completed scan runs to keep. When exceeded, the oldest run and all its findings are automatically deleted. Default: 5 (appropriate for developer sandboxes with 200MB storage limits).</description>
+    <inlineHelpText>Maximum number of completed scan runs to retain. When exceeded, the oldest run and all its findings are automatically deleted. Default: 5 (sandbox). Increase for production compliance requirements.</inlineHelpText>
+    <defaultValue>5</defaultValue>
+    <label>Max Scan Runs</label>
+    <precision>3</precision>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

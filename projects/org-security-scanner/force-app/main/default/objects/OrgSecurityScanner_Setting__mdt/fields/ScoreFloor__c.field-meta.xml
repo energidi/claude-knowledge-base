@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>ScoreFloor__c</fullName>
+    <description>Minimum possible security score regardless of finding count. Prevents the score from reaching 0 which would be misleading for orgs with very large finding counts.</description>
+    <inlineHelpText>Minimum possible security score regardless of finding count. Default: 5.</inlineHelpText>
+    <defaultValue>5</defaultValue>
+    <label>Score Floor</label>
+    <precision>3</precision>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

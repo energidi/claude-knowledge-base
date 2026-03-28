@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Status__c</fullName>
+    <description>Admin workflow state. Remediated and False Positive are excluded from score calculation.</description>
+    <inlineHelpText>Open: unreviewed. Acknowledged: reviewed, action pending. Remediated: fix has been applied. Risk Accepted: admin has consciously accepted this risk. False Positive: confirmed not a real issue. Remediated and False Positive are excluded from the security score.</inlineHelpText>
+    <label>Status</label>
+    <required>false</required>
+    <trackHistory>true</trackHistory>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>Open</fullName>
+                <default>true</default>
+                <label>Open</label>
+            </value>
+            <value>
+                <fullName>Acknowledged</fullName>
+                <default>false</default>
+                <label>Acknowledged</label>
+            </value>
+            <value>
+                <fullName>Remediated</fullName>
+                <default>false</default>
+                <label>Remediated</label>
+            </value>
+            <value>
+                <fullName>Risk Accepted</fullName>
+                <default>false</default>
+                <label>Risk Accepted</label>
+            </value>
+            <value>
+                <fullName>False Positive</fullName>
+                <default>false</default>
+                <label>False Positive</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

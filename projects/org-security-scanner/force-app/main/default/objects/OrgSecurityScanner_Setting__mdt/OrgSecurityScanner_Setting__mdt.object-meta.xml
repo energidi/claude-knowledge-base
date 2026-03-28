@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Configuration settings for the Org Security Scanner. Edit the Default record in Setup > Custom Metadata Types to tune score sensitivity or change the scan run retention limit. Changes take effect on the next scan - no code deploy required.</description>
+    <label>Org Security Scanner Setting</label>
+    <pluralLabel>Org Security Scanner Settings</pluralLabel>
+</CustomObject>

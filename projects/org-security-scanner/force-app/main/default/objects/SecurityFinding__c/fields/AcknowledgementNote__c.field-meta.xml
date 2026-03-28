@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>AcknowledgementNote__c</fullName>
+    <description>Admin comment on acknowledgement or risk acceptance. Required when setting status to Risk Accepted or False Positive.</description>
+    <inlineHelpText>Admin comment explaining the rationale. Required when setting status to Risk Accepted or False Positive.</inlineHelpText>
+    <label>Acknowledgement Note</label>
+    <length>1000</length>
+    <trackHistory>false</trackHistory>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

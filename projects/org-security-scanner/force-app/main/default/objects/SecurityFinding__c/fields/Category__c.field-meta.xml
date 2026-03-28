@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Category__c</fullName>
+    <description>Groups findings for heatmap and filter bar. 13 values matching the 13 scanner categories.</description>
+    <label>Category</label>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>User &amp; Access</fullName>
+                <default>false</default>
+                <label>User &amp; Access</label>
+            </value>
+            <value>
+                <fullName>Guest User / Experience Cloud</fullName>
+                <default>false</default>
+                <label>Guest User / Experience Cloud</label>
+            </value>
+            <value>
+                <fullName>Sharing &amp; Record Access</fullName>
+                <default>false</default>
+                <label>Sharing &amp; Record Access</label>
+            </value>
+            <value>
+                <fullName>Session &amp; Auth</fullName>
+                <default>false</default>
+                <label>Session &amp; Auth</label>
+            </value>
+            <value>
+                <fullName>Connected Apps &amp; Integrations</fullName>
+                <default>false</default>
+                <label>Connected Apps &amp; Integrations</label>
+            </value>
+            <value>
+                <fullName>Apex &amp; Automation</fullName>
+                <default>false</default>
+                <label>Apex &amp; Automation</label>
+            </value>
+            <value>
+                <fullName>LWC &amp; Aura</fullName>
+                <default>false</default>
+                <label>LWC &amp; Aura</label>
+            </value>
+            <value>
+                <fullName>Agentforce &amp; GenAI</fullName>
+                <default>false</default>
+                <label>Agentforce &amp; GenAI</label>
+            </value>
+            <value>
+                <fullName>Metadata &amp; Secrets</fullName>
+                <default>false</default>
+                <label>Metadata &amp; Secrets</label>
+            </value>
+            <value>
+                <fullName>File Upload &amp; Execution</fullName>
+                <default>false</default>
+                <label>File Upload &amp; Execution</label>
+            </value>
+            <value>
+                <fullName>Certificates &amp; Encryption</fullName>
+                <default>false</default>
+                <label>Certificates &amp; Encryption</label>
+            </value>
+            <value>
+                <fullName>Monitoring</fullName>
+                <default>false</default>
+                <label>Monitoring</label>
+            </value>
+            <value>
+                <fullName>Health Check Baseline</fullName>
+                <default>false</default>
+                <label>Health Check Baseline</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

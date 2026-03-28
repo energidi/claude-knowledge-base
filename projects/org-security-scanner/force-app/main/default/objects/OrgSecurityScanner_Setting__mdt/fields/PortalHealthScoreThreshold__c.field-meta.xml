@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>PortalHealthScoreThreshold__c</fullName>
+    <description>Minimum acceptable Salesforce Security Health Check score. SRA-007 fires a finding when the native score is below this value. Configurable without a code deploy.</description>
+    <inlineHelpText>Minimum acceptable Salesforce Security Health Check score for Experience Cloud portals. SRA-007 fires when the native score is below this value. Default: 70.</inlineHelpText>
+    <defaultValue>70</defaultValue>
+    <label>SRA-007 Score Threshold</label>
+    <precision>3</precision>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

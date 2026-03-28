@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Impact__c</fullName>
+    <description>Business and security consequences if exploited or left unaddressed. Maps to SecurityFinding__c.Impact__c.</description>
+    <label>Impact</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>5</visibleLines>
+</CustomField>

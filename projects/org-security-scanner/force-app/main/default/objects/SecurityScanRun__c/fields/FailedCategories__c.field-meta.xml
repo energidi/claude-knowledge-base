@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>FailedCategories__c</fullName>
+    <description>Comma-delimited category codes that threw exceptions during scanning (e.g. AA,GU). UI shows warning banner if non-empty. Category codes must never contain commas - comma is the delimiter.</description>
+    <inlineHelpText>Comma-separated category codes (e.g. AA, GU) for categories that threw an exception during scanning. Findings for these categories may be missing from this run.</inlineHelpText>
+    <label>Failed Categories</label>
+    <length>1000</length>
+    <trackHistory>false</trackHistory>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

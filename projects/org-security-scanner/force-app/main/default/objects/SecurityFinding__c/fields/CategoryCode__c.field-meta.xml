@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>CategoryCode__c</fullName>
+    <description>Short code (UA, GU, SRA...) for programmatic grouping. Valid values: UA, GU, SRA, SA, CAI, AA, LA, AGA, MS, FUE, CE, MON, HCB.</description>
+    <inlineHelpText>Short programmatic code for the finding category. Valid values: UA, GU, SRA, SA, CAI, AA, LA, AGA, MS, FUE, CE, MON, HCB.</inlineHelpText>
+    <label>Category Code</label>
+    <length>5</length>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

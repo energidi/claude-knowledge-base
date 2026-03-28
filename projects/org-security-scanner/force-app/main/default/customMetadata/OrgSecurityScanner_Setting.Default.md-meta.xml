@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>Default</label>
+    <protected>false</protected>
+    <values>
+        <field>MaxScanRuns__c</field>
+        <value xsi:type="xsd:double">5</value>
+    </values>
+    <values>
+        <field>AllowProductionScan__c</field>
+        <value xsi:type="xsd:boolean">false</value>
+    </values>
+    <values>
+        <field>PortalHealthScoreThreshold__c</field>
+        <value xsi:type="xsd:double">70</value>
+    </values>
+    <values>
+        <field>ScoreFloor__c</field>
+        <value xsi:type="xsd:double">5</value>
+    </values>
+    <values>
+        <field>ScoreDeductCritical__c</field>
+        <value xsi:type="xsd:double">10</value>
+    </values>
+    <values>
+        <field>ScoreDeductHigh__c</field>
+        <value xsi:type="xsd:double">4</value>
+    </values>
+    <values>
+        <field>ScoreDeductMedium__c</field>
+        <value xsi:type="xsd:double">2</value>
+    </values>
+    <values>
+        <field>ScoreDeductLow__c</field>
+        <value xsi:type="xsd:double">0.5</value>
+    </values>
+    <values>
+        <field>ScoreDeductInfo__c</field>
+        <value xsi:type="xsd:double">0.1</value>
+    </values>
+    <values>
+        <field>ScoreCriticalCap__c</field>
+        <value xsi:type="xsd:double">40</value>
+    </values>
+    <values>
+        <field>ScoreHighCap__c</field>
+        <value xsi:type="xsd:double">20</value>
+    </values>
+    <values>
+        <field>ScoreMediumCap__c</field>
+        <value xsi:type="xsd:double">20</value>
+    </values>
+    <values>
+        <field>ScoreLowCap__c</field>
+        <value xsi:type="xsd:double">10</value>
+    </values>
+    <values>
+        <field>ScoreInfoCap__c</field>
+        <value xsi:type="xsd:double">5</value>
+    </values>
+</CustomMetadata>

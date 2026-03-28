@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>CompletedCategories__c</fullName>
+    <description>Comma-delimited category codes that completed successfully (e.g. UA,GU,SRA). Each runner appends its code on success. Polled by UI to render the 13-item scan progress checklist.</description>
+    <label>Completed Categories</label>
+    <length>1000</length>
+    <trackHistory>false</trackHistory>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

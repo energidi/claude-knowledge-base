@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Records one complete execution of the Org Security Scanner. Created each time an admin clicks Run Security Check. Parent to all SecurityFinding__c records for that scan run. Automatically deleted when beyond the configured retention limit.</description>
+    <deploymentStatus>Deployed</deploymentStatus>
+    <enableActivities>false</enableActivities>
+    <enableBulkApi>true</enableBulkApi>
+    <enableFeeds>false</enableFeeds>
+    <enableHistory>false</enableHistory>
+    <enableLicensing>false</enableLicensing>
+    <enableReports>true</enableReports>
+    <enableSearch>true</enableSearch>
+    <enableSharing>true</enableSharing>
+    <enableStreamingApi>true</enableStreamingApi>
+    <label>Security Scan Run</label>
+    <nameField>
+        <displayFormat>SCAN-{0000}</displayFormat>
+        <label>Scan Name</label>
+        <trackHistory>false</trackHistory>
+        <type>AutoNumber</type>
+    </nameField>
+    <pluralLabel>Security Scan Runs</pluralLabel>
+    <sharingModel>Private</sharingModel>
+</CustomObject>

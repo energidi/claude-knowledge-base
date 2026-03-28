@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>One record per detected security issue, child of SecurityScanRun__c. Stores the check that fired, the affected component, business impact, step-by-step remediation, and the admin acknowledgement workflow state. Automatically deleted when the parent scan run is deleted.</description>
+    <deploymentStatus>Deployed</deploymentStatus>
+    <enableActivities>false</enableActivities>
+    <enableBulkApi>true</enableBulkApi>
+    <enableFeeds>false</enableFeeds>
+    <enableHistory>true</enableHistory>
+    <enableLicensing>false</enableLicensing>
+    <enableReports>true</enableReports>
+    <enableSearch>true</enableSearch>
+    <enableSharing>true</enableSharing>
+    <enableStreamingApi>true</enableStreamingApi>
+    <label>Security Finding</label>
+    <nameField>
+        <label>Security Finding Name</label>
+        <trackHistory>false</trackHistory>
+        <type>AutoNumber</type>
+        <displayFormat>FIND-{00000}</displayFormat>
+    </nameField>
+    <pluralLabel>Security Findings</pluralLabel>
+    <sharingModel>ControlledByParent</sharingModel>
+</CustomObject>

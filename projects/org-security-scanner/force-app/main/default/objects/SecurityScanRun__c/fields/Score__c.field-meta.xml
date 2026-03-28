@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Score__c</fullName>
+    <description>Security score 0-100 computed by finalizeScan(). Stored as source of truth for history and export. Prevents retroactive score shifts when CMT deduction weights are later edited.</description>
+    <label>Security Score</label>
+    <precision>5</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <trackHistory>false</trackHistory>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

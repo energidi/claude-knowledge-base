@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Static registry of all security check definitions. One record per check, deployed with the package. Queried at scan runtime to populate findings and to display checks with zero findings explicitly in the UI. Set IsActive__c to false to disable a check without a code deploy.</description>
+    <label>Security Check Definition</label>
+    <pluralLabel>Security Check Definitions</pluralLabel>
+</CustomObject>

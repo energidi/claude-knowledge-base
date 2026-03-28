@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>AcknowledgedDate__c</fullName>
+    <description>Timestamp of the last status change away from Open. Stored explicitly for fast SOQL filtering.</description>
+    <label>Acknowledged Date</label>
+    <required>false</required>
+    <trackHistory>true</trackHistory>
+    <type>DateTime</type>
+</CustomField>

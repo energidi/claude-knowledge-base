@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>CheckName__c</fullName>
+    <description>Human-readable name shown in the UI and stored in SecurityFinding__c.CheckName__c.</description>
+    <label>Check Name</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

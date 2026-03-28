@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>ScanRun__c</fullName>
+    <description>Links to parent SecurityScanRun__c. Master-Detail cascades delete of all findings when run is deleted.</description>
+    <label>Scan Run</label>
+    <referenceTo>SecurityScanRun__c</referenceTo>
+    <relationshipLabel>Security Findings</relationshipLabel>
+    <relationshipName>SecurityFindings</relationshipName>
+    <relationshipOrder>0</relationshipOrder>
+    <reparentableMasterDetail>false</reparentableMasterDetail>
+    <trackHistory>false</trackHistory>
+    <type>MasterDetail</type>
+    <writeRequiresMasterRead>false</writeRequiresMasterRead>
+</CustomField>

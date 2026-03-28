@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>ScoreDeductInfo__c</fullName>
+    <description>Score points deducted for each Informational finding before the cap is applied. Default: 0.1.</description>
+    <inlineHelpText>Score points deducted for each Informational finding before the cap is applied. Default: 0.1.</inlineHelpText>
+    <defaultValue>0.1</defaultValue>
+    <label>Info Deduction</label>
+    <precision>5</precision>
+    <scale>2</scale>
+    <type>Number</type>
+</CustomField>

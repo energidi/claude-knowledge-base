@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>ScoreDeductLow__c</fullName>
+    <description>Score points deducted for each Low finding before the cap is applied. Default: 0.5.</description>
+    <inlineHelpText>Score points deducted for each Low finding before the cap is applied. Default: 0.5.</inlineHelpText>
+    <defaultValue>0.5</defaultValue>
+    <label>Low Deduction</label>
+    <precision>5</precision>
+    <scale>2</scale>
+    <type>Number</type>
+</CustomField>

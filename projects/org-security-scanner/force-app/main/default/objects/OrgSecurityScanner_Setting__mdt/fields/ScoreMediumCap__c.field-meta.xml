@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>ScoreMediumCap__c</fullName>
+    <description>Maximum total score deduction from Medium findings combined. Default: 20.</description>
+    <inlineHelpText>Maximum total score deduction from Medium findings combined. Default: 20.</inlineHelpText>
+    <defaultValue>20</defaultValue>
+    <label>Medium Cap</label>
+    <precision>5</precision>
+    <scale>2</scale>
+    <type>Number</type>
+</CustomField>

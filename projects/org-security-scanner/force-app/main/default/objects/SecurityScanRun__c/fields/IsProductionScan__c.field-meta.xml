@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>IsProductionScan__c</fullName>
+    <description>True when the scan ran against a production org (Organization.IsSandbox = false). UI shows a red PRODUCTION badge on this run in history and the dashboard.</description>
+    <defaultValue>false</defaultValue>
+    <label>Is Production Scan</label>
+    <trackHistory>false</trackHistory>
+    <type>Checkbox</type>
+</CustomField>
