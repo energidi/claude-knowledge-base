@@ -19,8 +19,8 @@ Latest commit: `c7de1fe` - Phase 3 complete (Apex Orchestration)
 | Phase 4 - 13 Category Runners | COMPLETE | All 13 runners written (76 checks total) |
 | Phase 5 - Controllers | COMPLETE | SecScanController, SecScanFindingsController, SecScanTestDataFactory |
 | Phase 6 - Tests | COMPLETE | 25 test classes (all phases covered) |
-| Phase 7 - Permission Set + Tab | IN PROGRESS | |
-| Phase 8-11 - LWC (18 components) | Pending | |
+| Phase 7 - Permission Set + Tab | COMPLETE | OrgSecurityScanner_Admin PS + OrgSecurityScanner tab |
+| Phase 8-11 - LWC (18 components) | IN PROGRESS | |
 | Phase 12 - App Shell | Pending | |
 
 ---
@@ -77,10 +77,41 @@ Latest commit: `c7de1fe` - Phase 3 complete (Apex Orchestration)
 - [x] `SecScanRunnerMonitoringTest.cls`
 - [x] `SecScanRunnerHealthCheckTest.cls`
 
-## Phase 7 Checklist
+## Phase 7 Checklist (COMPLETE)
 
-- [ ] `OrgSecurityScanner_Admin` Permission Set metadata
-- [ ] `OrgSecurityScanner` Custom Tab metadata
+- [x] `OrgSecurityScanner_Admin` Permission Set metadata
+- [x] `OrgSecurityScanner` Custom Tab metadata
+
+## Phase 8-11 Checklist (LWC - IN PROGRESS)
+
+### Service Module
+- [ ] `secScanConstants` (JS-only service module)
+
+### Phase 8 - LWC Leaves (no child LWC dependencies)
+- [ ] `securityScoreRing`
+- [ ] `scanRunMetadata`
+- [ ] `securityCategoryCell`
+- [ ] `securitySeverityBreakdown`
+- [ ] `securityStatusChangeForm`
+- [ ] `securityScanProgress`
+
+### Phase 9 - LWC Mid
+- [ ] `securityCategoryHeatmap`
+- [ ] `securityRecentFindings`
+- [ ] `securityFindingsList`
+- [ ] `securityFindingDetail`
+- [ ] `securityLeftPanel`
+- [ ] `securityFilterBar`
+
+### Phase 10 - LWC Top
+- [ ] `securityDashboard`
+- [ ] `securityFindingsExplorer`
+- [ ] `securityScanHistory`
+- [ ] `securityScannerHeader`
+
+### Phase 11 - LWC Root
+- [ ] `securityScanner`
+- [ ] `securityScannerTabs`
 
 ---
 

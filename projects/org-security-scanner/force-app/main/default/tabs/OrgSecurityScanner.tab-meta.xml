@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomTab xmlns="http://soap.sforce.com/2006/04/metadata">
+    <customObject>false</customObject>
+    <description>Org Security Scanner - run and review security checks across 13 categories and 76 checks</description>
+    <flexiPage>OrgSecurityScannerApp_Page</flexiPage>
+    <label>Org Security Scanner</label>
+    <motif>Custom48: Shield</motif>
+</CustomTab>
