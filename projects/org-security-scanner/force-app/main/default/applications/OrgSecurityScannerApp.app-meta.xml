@@ -10,5 +10,4 @@
     <navType>Standard</navType>
     <tabs>OrgSecurityScanner</tabs>
     <uiType>Lightning</uiType>
-    <utilityBar>false</utilityBar>
 </CustomApplication>

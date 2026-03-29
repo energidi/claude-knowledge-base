@@ -7,7 +7,7 @@
                 <identifier>c_securityScanner</identifier>
             </componentInstance>
         </itemInstances>
-        <name>main</name>
+        <name>region1</name>
         <type>Region</type>
     </flexiPageRegions>
     <masterLabel>Org Security Scanner App Page</masterLabel>

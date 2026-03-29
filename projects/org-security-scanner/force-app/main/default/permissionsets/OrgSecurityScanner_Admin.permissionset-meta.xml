@@ -155,11 +155,6 @@
     <!-- Field permissions: SecurityFinding__c -->
     <fieldPermissions>
         <editable>true</editable>
-        <field>SecurityFinding__c.ScanRun__c</field>
-        <readable>true</readable>
-    </fieldPermissions>
-    <fieldPermissions>
-        <editable>true</editable>
         <field>SecurityFinding__c.CheckId__c</field>
         <readable>true</readable>
     </fieldPermissions>
