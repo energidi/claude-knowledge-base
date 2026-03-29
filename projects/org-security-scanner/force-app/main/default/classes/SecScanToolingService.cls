@@ -118,9 +118,9 @@ public class SecScanToolingService {
             );
         }
         if (res.getStatusCode() < 200 || res.getStatusCode() >= 300) {
-            throw new SecScanException(
-                'Tooling API HTTP ' + res.getStatusCode() + ': ' + res.getBody()
-            );
+            String body = res.getBody();
+            String safeBody = (body != null && body.length() > 200) ? body.substring(0, 200) + '... (truncated)' : body;
+            throw new SecScanException('Tooling API HTTP ' + res.getStatusCode() + ': ' + safeBody);
         }
     }
 }

@@ -5,13 +5,6 @@
         <name>main</name>
         <type>Region</type>
     </flexiPageRegions>
-    <componentInstances>
-        <componentInstanceProperties>
-            <name>flexipageRegion</name>
-            <value>main</value>
-        </componentInstanceProperties>
-        <componentName>c:securityScanner</componentName>
-    </componentInstances>
     <masterLabel>Org Security Scanner App Page</masterLabel>
     <pageTemplate>AppPage_Default</pageTemplate>
     <type>AppPage</type>

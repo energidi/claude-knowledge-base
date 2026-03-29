@@ -18,7 +18,7 @@
 
 .history-title {
     margin: 0;
-    font-size: var(--lwc-fontSize4, 0.875rem);
+    font-size: 0.875rem;
     font-weight: 700;
     color: var(--lwc-colorTextDefault, #181818);
 }
@@ -42,7 +42,7 @@
 .history-empty__text {
     margin: 0;
     color: var(--lwc-colorTextWeak, #706e6b);
-    font-size: var(--lwc-fontSize3, 0.8125rem);
+    font-size: 0.8125rem;
     max-width: 240px;
     line-height: 1.5;
 }
@@ -111,7 +111,7 @@
 .row-date {
     flex: 1 1 auto;
     color: var(--lwc-colorTextDefault, #3e3e3c);
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -153,7 +153,7 @@
     align-items: center;
     gap: 0.25rem;
     color: var(--lwc-colorTextWeak, #706e6b);
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     flex: 1 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -167,7 +167,7 @@
 
 .row-score {
     color: var(--lwc-colorTextDefault, #3e3e3c);
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     white-space: nowrap;
     flex-shrink: 0;
 }
@@ -266,7 +266,7 @@
 .retention-notice {
     margin: 0;
     padding: 0.5rem 1rem;
-    font-size: var(--lwc-fontSize1, 0.6875rem);
+    font-size: 0.6875rem;
     color: var(--lwc-colorTextWeak, #706e6b);
     border-top: 1px solid var(--lwc-colorBorder, #dddbda);
     flex-shrink: 0;

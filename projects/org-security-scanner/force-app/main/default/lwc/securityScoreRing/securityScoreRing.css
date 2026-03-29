@@ -82,13 +82,13 @@
 }
 
 .breakdown-label {
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     color: var(--lwc-colorTextWeak, #706e6b);
     white-space: nowrap;
 }
 
 .breakdown-value {
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--lwc-colorTextDefault, #181818);
     text-align: right;
@@ -99,7 +99,7 @@
 .breakdown-row:first-child .breakdown-value,
 .breakdown-row:last-child  .breakdown-label,
 .breakdown-row:last-child  .breakdown-value {
-    font-size: var(--lwc-fontSize3, 0.8125rem);
+    font-size: 0.8125rem;
     color: var(--lwc-colorTextDefault, #181818);
 }
 

@@ -64,7 +64,7 @@
 }
 
 .position-label {
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     color: var(--lwc-colorTextWeak, #706e6b);
     white-space: nowrap;
     min-width: 7rem;
@@ -73,7 +73,7 @@
 
 /* Check name */
 .check-name {
-    font-size: var(--lwc-fontSize5, 1rem);
+    font-size: 1rem;
     font-weight: 700;
     color: var(--lwc-colorTextDefault, #181818);
     margin: 0;
@@ -92,7 +92,7 @@
 /* Severity badge */
 .severity-badge {
     display: inline-block;
-    font-size: var(--lwc-fontSize1, 0.6875rem);
+    font-size: 0.6875rem;
     font-weight: 700;
     border-radius: 4px;
     padding: 2px 8px;
@@ -134,7 +134,7 @@
 /* Finding type pill */
 .type-pill {
     display: inline-block;
-    font-size: var(--lwc-fontSize1, 0.6875rem);
+    font-size: 0.6875rem;
     font-weight: 600;
     border-radius: 12px;
     padding: 2px 10px;
@@ -161,7 +161,7 @@
 
 .slds-tabs_default__link {
     cursor: pointer;
-    font-size: var(--lwc-fontSize3, 0.8125rem);
+    font-size: 0.8125rem;
 }
 
 /* ── Panel body (scrollable) ────────────────────────────────────────────── */
@@ -193,7 +193,7 @@
 }
 
 .meta-label {
-    font-size: var(--lwc-fontSize1, 0.6875rem);
+    font-size: 0.6875rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -201,7 +201,7 @@
 }
 
 .meta-value {
-    font-size: var(--lwc-fontSize3, 0.8125rem);
+    font-size: 0.8125rem;
     color: var(--lwc-colorTextDefault, #181818);
 }
 
@@ -213,7 +213,7 @@
 }
 
 .section-title {
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -222,7 +222,7 @@
 }
 
 .section-body {
-    font-size: var(--lwc-fontSize3, 0.8125rem);
+    font-size: 0.8125rem;
     color: var(--lwc-colorTextDefault, #181818);
     line-height: 1.6;
     margin: 0;
@@ -237,7 +237,7 @@
 
 /* ── Recommendation alert ───────────────────────────────────────────────── */
 .recommendation-alert {
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     border-radius: 4px;
     display: flex;
     align-items: center;

@@ -56,7 +56,7 @@ public without sharing class SecScanRunnerLwcAura extends SecScanCategoryRunner
 
             // Fetch all resources for this LWC bundle
             List<Map<String, Object>> resources = SecScanToolingService.query(
-                'SELECT Id, Source, Format FROM LightningComponentResource WHERE LightningComponentBundleId = \'' + bundleId + '\'',
+                'SELECT Id, Source, Format FROM LightningComponentResource WHERE LightningComponentBundleId = \'' + String.escapeSingleQuotes(bundleId) + '\'',
                 sessionId
             );
 

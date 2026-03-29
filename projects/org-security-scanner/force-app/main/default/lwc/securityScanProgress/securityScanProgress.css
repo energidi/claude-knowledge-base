@@ -20,7 +20,7 @@
 .progress-title {
     margin: 0;
     color: var(--lwc-colorTextDefault, #181818);
-    font-size: var(--lwc-fontSize4, 0.875rem);
+    font-size: 0.875rem;
     font-weight: 700;
 }
 
@@ -33,7 +33,7 @@
 .last-checked {
     margin: 0;
     color: var(--lwc-colorTextWeak, #706e6b);
-    font-size: var(--lwc-fontSize1, 0.6875rem);
+    font-size: 0.6875rem;
 }
 
 /* ── Category list ───────────────────────────────────────────────────────── */
@@ -117,7 +117,7 @@
 /* ── Row label ───────────────────────────────────────────────────────────── */
 .row-label {
     flex: 1;
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     color: var(--lwc-colorTextDefault, #181818);
     line-height: 1.4;
     white-space: nowrap;
@@ -131,7 +131,7 @@
 
 /* ── Inline badges ───────────────────────────────────────────────────────── */
 .row-badge {
-    font-size: var(--lwc-fontSize1, 0.6875rem);
+    font-size: 0.6875rem;
     font-weight: 500;
     white-space: nowrap;
     flex-shrink: 0;
@@ -161,7 +161,7 @@
     padding: 0;
     margin: 0;
     cursor: pointer;
-    font-size: var(--lwc-fontSize2, 0.75rem);
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--lwc-colorTextLink, #0176d3);
     text-align: left;
@@ -182,5 +182,5 @@
 .cancel-hint {
     margin: 0;
     color: var(--lwc-colorTextWeak, #706e6b);
-    font-size: var(--lwc-fontSize1, 0.6875rem);
+    font-size: 0.6875rem;
 }

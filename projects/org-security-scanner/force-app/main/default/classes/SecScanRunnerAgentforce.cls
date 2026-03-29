@@ -96,11 +96,11 @@ public without sharing class SecScanRunnerAgentforce extends SecScanCategoryRunn
             Set<String> sensitiveObjects = new Set<String>{ 'Account', 'Contact', 'Opportunity', 'Case', 'Financial' };
             for (Map<String, Object> plugin : plugins) {
                 String name = (String) plugin.get('DeveloperName');
-                String desc = (String) plugin.get('Description');
-                if (String.isBlank(desc)) continue;
+                String pluginDesc = (String) plugin.get('Description');
+                if (String.isBlank(pluginDesc)) continue;
 
                 for (String obj : sensitiveObjects) {
-                    if (desc.containsIgnoreCase(obj)) {
+                    if (pluginDesc.containsIgnoreCase(obj)) {
                         addFinding(buildFinding(scanRunId,
                             'AGA-003', 'Agent Topic accesses sensitive standard objects',
                             CAT, CAT_CODE, 'High', 'Recommendation',
