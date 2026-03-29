@@ -12,7 +12,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1rem 0.5rem;
-    border-bottom: 1px solid var(--lwc-colorBorder, #dddbda);
+    border-bottom: 1px solid #dddbda;
     flex-shrink: 0;
 }
 
@@ -20,7 +20,7 @@
     margin: 0;
     font-size: 0.875rem;
     font-weight: 700;
-    color: var(--lwc-colorTextDefault, #181818);
+    color: #181818;
 }
 
 /* ── Empty state ─────────────────────────────────────────────────────────────── */
@@ -41,7 +41,7 @@
 
 .history-empty__text {
     margin: 0;
-    color: var(--lwc-colorTextWeak, #706e6b);
+    color: #706e6b;
     font-size: 0.8125rem;
     max-width: 240px;
     line-height: 1.5;
@@ -66,7 +66,7 @@
     cursor: pointer;
     transition: background-color 0.12s ease, border-left-color 0.12s ease;
     outline: none;
-    border-bottom: 1px solid var(--lwc-colorBorder, #dddbda);
+    border-bottom: 1px solid #dddbda;
 }
 
 .history-row:last-child {
@@ -74,22 +74,22 @@
 }
 
 .history-row:hover {
-    background-color: var(--lwc-colorBackgroundRowHover, #f3f2f2);
+    background-color: #f3f2f2;
 }
 
 .history-row:focus-visible {
-    outline: 2px solid var(--lwc-colorBorderFocus, #0176d3);
+    outline: 2px solid #0176d3;
     outline-offset: -2px;
 }
 
 .history-row:active {
-    background-color: var(--lwc-colorBackgroundRowActive, #e5e5e5);
+    background-color: #e5e5e5;
 }
 
 /* Currently-viewed row: blue left accent */
 .history-row--active {
-    border-left-color: var(--lwc-colorBrandDark, #0176d3);
-    background-color: var(--lwc-colorBackgroundHighlight, #e8f4fe);
+    border-left-color: #0176d3;
+    background-color: #e8f4fe;
 }
 
 .history-row--active:hover {
@@ -110,7 +110,7 @@
 
 .row-date {
     flex: 1 1 auto;
-    color: var(--lwc-colorTextDefault, #3e3e3c);
+    color: #3e3e3c;
     font-size: 0.75rem;
     white-space: nowrap;
     overflow: hidden;
@@ -136,8 +136,8 @@
 }
 
 .env-badge--sandbox {
-    background-color: var(--lwc-colorBorderInput, #c9c7c5);
-    color: var(--lwc-colorTextDefault, #3e3e3c);
+    background-color: #c9c7c5;
+    color: #3e3e3c;
 }
 
 /* ── Row middle: operator + score + grade ────────────────────────────────────── */
@@ -152,7 +152,7 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    color: var(--lwc-colorTextWeak, #706e6b);
+    color: #706e6b;
     font-size: 0.75rem;
     flex: 1 1 auto;
     overflow: hidden;
@@ -166,7 +166,7 @@
 }
 
 .row-score {
-    color: var(--lwc-colorTextDefault, #3e3e3c);
+    color: #3e3e3c;
     font-size: 0.75rem;
     white-space: nowrap;
     flex-shrink: 0;
@@ -196,8 +196,8 @@
 .grade-badge--d { background-color: #fe9339; color: #3e3e3c; }
 .grade-badge--f { background-color: #c23934; color: #ffffff; }
 .grade-badge--none {
-    background-color: var(--lwc-colorBackgroundAlt, #f3f3f3);
-    color: var(--lwc-colorTextWeak, #706e6b);
+    background-color: #f3f3f3;
+    color: #706e6b;
 }
 
 /* ── Row bottom: severity pills ──────────────────────────────────────────────── */
@@ -257,9 +257,9 @@
 }
 
 .sev-badge--info {
-    background-color: var(--lwc-colorBackgroundAlt, #f3f3f3);
-    color: var(--lwc-colorTextWeak, #706e6b);
-    border: 1px solid var(--lwc-colorBorder, #dddbda);
+    background-color: #f3f3f3;
+    color: #706e6b;
+    border: 1px solid #dddbda;
 }
 
 /* ── Retention notice ─────────────────────────────────────────────────────────── */
@@ -267,9 +267,9 @@
     margin: 0;
     padding: 0.5rem 1rem;
     font-size: 0.6875rem;
-    color: var(--lwc-colorTextWeak, #706e6b);
-    border-top: 1px solid var(--lwc-colorBorder, #dddbda);
+    color: #706e6b;
+    border-top: 1px solid #dddbda;
     flex-shrink: 0;
     text-align: center;
-    background-color: var(--lwc-colorBackgroundAlt, #f3f3f3);
+    background-color: #f3f3f3;
 }

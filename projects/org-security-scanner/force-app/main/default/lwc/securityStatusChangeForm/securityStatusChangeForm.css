@@ -2,21 +2,21 @@
 .form-wrapper {
     display: flex;
     flex-direction: column;
-    gap: var(--lwc-spacingMedium, 1rem);
-    padding: var(--lwc-spacingMedium, 1rem) 0;
+    gap: 1rem;
+    padding: 1rem 0;
 }
 
 /* ── Current status header ───────────────────────────────────────────────── */
 .status-header {
     display: flex;
     align-items: center;
-    gap: var(--lwc-spacingSmall, 0.5rem);
+    gap: 0.5rem;
 }
 
 .status-label {
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--lwc-colorTextLabel, #3e3e3c);
+    color: #3e3e3c;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     white-space: nowrap;
@@ -78,7 +78,7 @@
 }
 
 .transition-fieldset legend {
-    margin-bottom: var(--lwc-spacingXSmall, 0.25rem);
+    margin-bottom: 0.25rem;
 }
 
 /* ── Note textarea ───────────────────────────────────────────────────────── */
@@ -89,15 +89,15 @@
 
 .slds-form-error {
     font-size: 0.75rem;
-    color: var(--lwc-colorTextError, #c23934);
-    margin-top: var(--lwc-spacingXXSmall, 0.125rem);
+    color: #c23934;
+    margin-top: 0.125rem;
 }
 
 /* ── Action buttons ──────────────────────────────────────────────────────── */
 .form-actions {
     display: flex;
     align-items: center;
-    gap: var(--lwc-spacingSmall, 0.5rem);
+    gap: 0.5rem;
 }
 
 /* Spinner inside the Save button */
@@ -105,7 +105,7 @@
     --lwc-spinnerSize: 0.875rem;
     display: inline-block;
     vertical-align: middle;
-    margin-right: var(--lwc-spacingXXSmall, 0.25rem);
+    margin-right: 0.25rem;
 }
 
 /* ── No transitions message ──────────────────────────────────────────────── */
@@ -117,8 +117,8 @@
 .acknowledged-info {
     display: flex;
     align-items: center;
-    padding-top: var(--lwc-spacingSmall, 0.5rem);
-    border-top: 1px solid var(--lwc-colorBorder, #dddbda);
+    padding-top: 0.5rem;
+    border-top: 1px solid #dddbda;
 }
 
 .acknowledged-info span {

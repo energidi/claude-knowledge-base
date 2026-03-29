@@ -6,6 +6,5 @@
         <type>Region</type>
     </flexiPageRegions>
     <masterLabel>Org Security Scanner App Page</masterLabel>
-    <pageTemplate>AppPage_Default</pageTemplate>
     <type>AppPage</type>
 </FlexiPage>

@@ -2,11 +2,11 @@
 .progress-container {
     display: flex;
     flex-direction: column;
-    gap: var(--lwc-spacingSmall, 0.5rem);
-    padding: var(--lwc-spacingMedium, 1rem);
-    background-color: var(--lwc-colorBackgroundAlt, #f3f3f3);
-    border-radius: var(--lwc-borderRadiusMedium, 0.25rem);
-    border: 1px solid var(--lwc-colorBorder, #dddbda);
+    gap: 0.5rem;
+    padding: 1rem;
+    background-color: #f3f3f3;
+    border-radius: 0.25rem;
+    border: 1px solid #dddbda;
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
@@ -14,32 +14,32 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: var(--lwc-spacingSmall, 0.5rem);
+    gap: 0.5rem;
 }
 
 .progress-title {
     margin: 0;
-    color: var(--lwc-colorTextDefault, #181818);
+    color: #181818;
     font-size: 0.875rem;
     font-weight: 700;
 }
 
 .progress-count {
-    color: var(--lwc-colorTextWeak, #706e6b);
+    color: #706e6b;
     white-space: nowrap;
 }
 
 /* ── Last-checked timestamp ─────────────────────────────────────────────── */
 .last-checked {
     margin: 0;
-    color: var(--lwc-colorTextWeak, #706e6b);
+    color: #706e6b;
     font-size: 0.6875rem;
 }
 
 /* ── Category list ───────────────────────────────────────────────────────── */
 .category-list {
     list-style: none;
-    margin: var(--lwc-spacingXSmall, 0.25rem) 0 0;
+    margin: 0.25rem 0 0;
     padding: 0;
     display: flex;
     flex-direction: column;
@@ -50,9 +50,9 @@
 .category-row {
     display: flex;
     align-items: center;
-    gap: var(--lwc-spacingXSmall, 0.25rem);
-    padding: 4px var(--lwc-spacingXSmall, 0.25rem);
-    border-radius: var(--lwc-borderRadiusSmall, 0.125rem);
+    gap: 0.25rem;
+    padding: 4px 0.25rem;
+    border-radius: 0.125rem;
     min-height: 28px;
     transition: background-color 0.15s ease;
 }
@@ -62,11 +62,11 @@
 }
 
 .category-row--failed {
-    background-color: var(--lwc-colorBackgroundDestructiveActive, #fce8e7);
+    background-color: #fce8e7;
 }
 
 .category-row--inprogress {
-    background-color: var(--lwc-colorBackgroundHighlight, #e8f4fe);
+    background-color: #e8f4fe;
 }
 
 .category-row--pending {
@@ -111,14 +111,14 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background-color: var(--lwc-colorTextPlaceholder, #c9c7c5);
+    background-color: #c9c7c5;
 }
 
 /* ── Row label ───────────────────────────────────────────────────────────── */
 .row-label {
     flex: 1;
     font-size: 0.75rem;
-    color: var(--lwc-colorTextDefault, #181818);
+    color: #181818;
     line-height: 1.4;
     white-space: nowrap;
     overflow: hidden;
@@ -126,7 +126,7 @@
 }
 
 .row-label--pending {
-    color: var(--lwc-colorTextWeak, #706e6b);
+    color: #706e6b;
 }
 
 /* ── Inline badges ───────────────────────────────────────────────────────── */
@@ -138,18 +138,18 @@
 }
 
 .row-badge--failed {
-    color: var(--lwc-colorTextError, #c23934);
+    color: #c23934;
 }
 
 .row-badge--inprogress {
-    color: var(--lwc-colorTextLink, #0176d3);
+    color: #0176d3;
 }
 
 /* ── Cancel area ─────────────────────────────────────────────────────────── */
 .cancel-area {
-    margin-top: var(--lwc-spacingSmall, 0.5rem);
-    padding-top: var(--lwc-spacingSmall, 0.5rem);
-    border-top: 1px solid var(--lwc-colorBorder, #dddbda);
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #dddbda;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -163,24 +163,24 @@
     cursor: pointer;
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--lwc-colorTextLink, #0176d3);
+    color: #0176d3;
     text-align: left;
     line-height: 1.4;
 }
 
 .cancel-link:hover {
-    color: var(--lwc-colorTextLinkHover, #014486);
+    color: #014486;
     text-decoration: underline;
 }
 
 .cancel-link:focus-visible {
-    outline: 2px solid var(--lwc-colorBorderFocus, #0176d3);
+    outline: 2px solid #0176d3;
     outline-offset: 2px;
     border-radius: 2px;
 }
 
 .cancel-hint {
     margin: 0;
-    color: var(--lwc-colorTextWeak, #706e6b);
+    color: #706e6b;
     font-size: 0.6875rem;
 }
