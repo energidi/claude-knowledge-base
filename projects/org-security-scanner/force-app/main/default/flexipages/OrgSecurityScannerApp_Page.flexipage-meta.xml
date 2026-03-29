@@ -2,6 +2,13 @@
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
     <description>Org Security Scanner main application page. Single-region AppPage containing the securityScanner root LWC component.</description>
     <flexiPageRegions>
+        <componentInstances>
+            <componentInstanceProperties>
+                <name>class</name>
+                <value>slds-full-height</value>
+            </componentInstanceProperties>
+            <componentName>c:securityScanner</componentName>
+        </componentInstances>
         <mode>AppLayoutUnawareSinglePane</mode>
         <name>main</name>
         <type>Region</type>
