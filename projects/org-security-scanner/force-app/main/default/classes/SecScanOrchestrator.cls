@@ -28,10 +28,9 @@ public without sharing class SecScanOrchestrator implements Queueable, Database.
 
     public void execute(QueueableContext ctx) {
         // Transition run to Running
-        update new SecurityScanRun__c(
-            Id          = scanRunId,
-            Status__c   = 'Running',
-            StartedAt__c = Datetime.now()
+        Database.update(
+            new SecurityScanRun__c(Id = scanRunId, Status__c = 'Running', StartedAt__c = Datetime.now()),
+            AccessLevel.SYSTEM_MODE
         );
 
         // Kick off the runner chain at index 0
@@ -74,7 +73,7 @@ public without sharing class SecScanOrchestrator implements Queueable, Database.
         ];
 
         // Build update record
-        SecurityScanRun__c update = new SecurityScanRun__c(
+        SecurityScanRun__c runUpdate = new SecurityScanRun__c(
             Id                = scanRunId,
             CompletedAt__c    = Datetime.now(),
             TotalChecksRun__c = totalChecksRun,
@@ -90,10 +89,10 @@ public without sharing class SecScanOrchestrator implements Queueable, Database.
 
         // Only set Completed if not already Cancelled
         if (run.Status__c != 'Cancelled') {
-            update.Status__c = 'Completed';
+            runUpdate.Status__c = 'Completed';
         }
 
-        Database.update(update, AccessLevel.SYSTEM_MODE);
+        Database.update(runUpdate, AccessLevel.SYSTEM_MODE);
 
         // Trigger retention cleanup
         Integer maxRuns = (settings != null && settings.MaxScanRuns__c != null)

@@ -15,8 +15,8 @@ public with sharing class SecScanController {
             Organization org = [
                 SELECT Id, IsSandbox, Name
                 FROM Organization
-                LIMIT 1
                 WITH USER_MODE
+                LIMIT 1
             ];
 
             if (org.IsSandbox == false) {
@@ -44,8 +44,6 @@ public with sharing class SecScanController {
                 SELECT COUNT()
                 FROM SecurityScanRun__c
                 WHERE Status__c IN ('Pending', 'Running')
-                FOR UPDATE
-                WITH SYSTEM_MODE
             ];
             if (runningCount > 1) {
                 Database.delete(newRun, AccessLevel.SYSTEM_MODE);
@@ -76,8 +74,8 @@ public with sharing class SecScanController {
             List<Organization> orgs = [
                 SELECT Id, IsSandbox, Name
                 FROM Organization
-                LIMIT 1
                 WITH USER_MODE
+                LIMIT 1
             ];
 
             SecScanApiResponse.OrgInfoDTO dto = new SecScanApiResponse.OrgInfoDTO();
@@ -117,9 +115,12 @@ public with sharing class SecScanController {
                        FailedCategories__c, CompletedCategories__c, OrgId__c,
                        StartedBy__r.Name
                 FROM SecurityScanRun__c
-                ORDER BY CreatedDate DESC
-                LIMIT 50
+
                 WITH USER_MODE
+
+                ORDER BY CreatedDate DESC
+
+                LIMIT 50
             ];
             return SecScanApiResponse.ok(runs);
         } catch (Exception e) {
@@ -239,8 +240,8 @@ public with sharing class SecScanController {
                        AcknowledgedBy__r.Name, AcknowledgedDate__c, SalesforceDocUrl__c
                 FROM SecurityFinding__c
                 WHERE ScanRun__c = :scanRunId
-                ORDER BY SeverityRank__c ASC, Id ASC
                 WITH USER_MODE
+                ORDER BY SeverityRank__c ASC, Id ASC
             ];
 
             String csv = buildCsv(findings, truncateText);

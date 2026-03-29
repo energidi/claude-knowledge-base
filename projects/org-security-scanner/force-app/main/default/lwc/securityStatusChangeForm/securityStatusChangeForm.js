@@ -20,6 +20,8 @@ export default class SecurityStatusChangeForm extends LightningElement {
     _prevStatus = null;
 
     @api
+    get isNotSaving() { return !this._isSaving; }
+
     get finding() {
         return this._finding;
     }
@@ -83,6 +85,7 @@ export default class SecurityStatusChangeForm extends LightningElement {
     get hasTransitions() {
         return this.transitionOptions.length > 0;
     }
+    get hasNoTransitions() { return !this.hasTransitions; }
 
     // ─── Derived: note field ──────────────────────────────────────────────
 

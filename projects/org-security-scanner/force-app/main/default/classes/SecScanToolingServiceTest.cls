@@ -69,7 +69,7 @@ private class SecScanToolingServiceTest {
         );
         Test.stopTest();
 
-        System.assertNotNull(records);
+        System.assertNotEquals(null, records);
         System.assertEquals(1, records.size());
         System.assertEquals('001', records[0].get('Id'));
     }
@@ -99,7 +99,7 @@ private class SecScanToolingServiceTest {
         );
         Test.stopTest();
 
-        System.assertNotNull(result);
+        System.assertNotEquals(null, result);
         System.assertEquals(2, result.get('totalSize'));
     }
 

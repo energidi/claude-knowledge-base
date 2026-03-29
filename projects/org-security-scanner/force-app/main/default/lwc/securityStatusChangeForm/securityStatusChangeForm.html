@@ -2,24 +2,24 @@
     <div class="form-wrapper">
 
         <!-- Current status badge -->
-        <lwc:if isTrue={currentStatus}>
+        <template lwc:if={currentStatus}>
             <div class="status-header">
                 <span class="status-label">Current status</span>
                 <span class={currentStatusBadgeClass}>{currentStatus}</span>
             </div>
-        </lwc:if>
+        </template>
 
         <!-- Historical view banner -->
-        <lwc:if isTrue={isHistoricalView}>
+        <template lwc:if={isHistoricalView}>
             <div class="slds-notify slds-notify_alert slds-alert_warning historical-banner" role="alert">
                 <span class="slds-assistive-text">Warning</span>
                 <lightning-icon icon-name="utility:lock" size="x-small" class="slds-m-right_x-small"></lightning-icon>
                 Status changes are disabled in historical view.
             </div>
-        </lwc:if>
+        </template>
 
         <!-- Transition options -->
-        <lwc:if isTrue={hasTransitions}>
+        <template lwc:if={hasTransitions}>
             <fieldset class="slds-form-element transition-fieldset">
                 <legend class="slds-form-element__legend slds-form-element__label">
                     Change status to
@@ -46,12 +46,12 @@
             </fieldset>
 
             <!-- Note field - shown when a new status is selected -->
-            <lwc:if isTrue={showNoteField}>
+            <template lwc:if={showNoteField}>
                 <div class={noteFieldClass}>
                     <label class="slds-form-element__label" for="status-note">
-                        <lwc:if isTrue={noteRequired}>
+                        <template lwc:if={noteRequired}>
                             <abbr class="slds-required" title="required">*</abbr>
-                        </lwc:if>
+                        </template>
                         {noteLabel}
                     </label>
                     <div class="slds-form-element__control">
@@ -65,11 +65,11 @@
                             onchange={handleNoteChange}
                         ></textarea>
                     </div>
-                    <lwc:if isTrue={_noteError}>
+                    <template lwc:if={_noteError}>
                         <p class="slds-form-error" id="status-note-error" role="alert">{_noteError}</p>
-                    </lwc:if>
+                    </template>
                 </div>
-            </lwc:if>
+            </template>
 
             <!-- Action buttons -->
             <div class="form-actions">
@@ -78,13 +78,13 @@
                     disabled={saveDisabled}
                     onclick={handleSave}
                 >
-                    <lwc:if isTrue={_isSaving}>
+                    <template lwc:if={_isSaving}>
                         <lightning-spinner alternative-text="Saving" size="x-small" class="btn-spinner"></lightning-spinner>
                         Saving...
-                    </lwc:if>
-                    <lwc:if isTrue={!_isSaving}>
+                    </template>
+                    <template lwc:if={isNotSaving}>
                         Save
-                    </lwc:if>
+                    </template>
                 </button>
                 <button
                     class="slds-button slds-button_neutral"
@@ -94,22 +94,22 @@
                     Cancel
                 </button>
             </div>
-        </lwc:if>
+        </template>
 
         <!-- No transitions available -->
-        <lwc:if isTrue={!hasTransitions}>
+        <template lwc:if={hasNoTransitions}>
             <p class="slds-text-body_small slds-text-color_weak no-transitions">
                 {noTransitionMessage}
             </p>
-        </lwc:if>
+        </template>
 
         <!-- Acknowledged by / last updated -->
-        <lwc:if isTrue={showAcknowledgedBy}>
+        <template lwc:if={showAcknowledgedBy}>
             <div class="acknowledged-info">
                 <lightning-icon icon-name="utility:user" size="x-small" class="slds-m-right_xx-small"></lightning-icon>
                 <span class="slds-text-body_small slds-text-color_weak">{acknowledgedByText}</span>
             </div>
-        </lwc:if>
+        </template>
 
     </div>
 </template>

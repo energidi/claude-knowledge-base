@@ -12,11 +12,11 @@ private class SecScanControllerTest {
         Test.stopTest();
 
         System.assertEquals(true, r.success);
-        System.assertNotNull(r.data);
+        System.assertNotEquals(null, r.data);
         // OrgInfoDTO fields are accessible on the response data object
         SecScanApiResponse.OrgInfoDTO dto = (SecScanApiResponse.OrgInfoDTO) r.data;
-        System.assertNotNull(dto.orgId);
-        System.assertNotNull(dto.orgName);
+        System.assertNotEquals(null, dto.orgId);
+        System.assertNotEquals(null, dto.orgName);
     }
 
     // ------------------------------------------------------------------
@@ -31,9 +31,9 @@ private class SecScanControllerTest {
 
         System.assertEquals(true, r.success);
         SecScanApiResponse.OrgSecuritySettingsDTO dto = (SecScanApiResponse.OrgSecuritySettingsDTO) r.data;
-        System.assertNotNull(dto.maxScanRuns);
-        System.assertNotNull(dto.scoreFloor);
-        System.assertNotNull(dto.scoreDeductCritical);
+        System.assertNotEquals(null, dto.maxScanRuns);
+        System.assertNotEquals(null, dto.scoreFloor);
+        System.assertNotEquals(null, dto.scoreDeductCritical);
         System.assert(dto.maxScanRuns > 0, 'maxScanRuns must be positive');
         System.assert(dto.scoreFloor >= 0, 'scoreFloor must be non-negative');
     }
@@ -50,7 +50,7 @@ private class SecScanControllerTest {
 
         System.assertEquals(true, r.success);
         List<SecurityScanRun__c> runs = (List<SecurityScanRun__c>) r.data;
-        System.assertNotNull(runs);
+        System.assertNotEquals(null, runs);
     }
 
     @IsTest
@@ -169,7 +169,7 @@ private class SecScanControllerTest {
 
         System.assertEquals(true, r.success);
         // Returns ContentDocumentId
-        System.assertNotNull(r.data);
+        System.assertNotEquals(null, r.data);
         String docId = (String) r.data;
         System.assert(docId.startsWith('069') || docId.length() == 18);
     }

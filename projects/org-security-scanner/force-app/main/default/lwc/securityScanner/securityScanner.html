@@ -1,7 +1,7 @@
 <template>
 
     <!-- ── Fatal error fallback ──────────────────────────────────────────────── -->
-    <lwc:if isTrue={_fatalError}>
+    <template lwc:if={_fatalError}>
         <div class="fatal-error-banner" role="alert">
             <lightning-icon
                 icon-name="utility:error"
@@ -12,10 +12,10 @@
                 A critical error occurred: {_fatalError}. Reload the page to recover.
             </span>
         </div>
-    </lwc:if>
+    </template>
 
     <!-- ── Production org warning banner ────────────────────────────────────── -->
-    <lwc:if isTrue={isProductionOrg}>
+    <template lwc:if={isProductionOrg}>
         <div class="production-banner" role="status" aria-live="polite">
             <lightning-icon
                 icon-name="utility:warning"
@@ -26,10 +26,10 @@
                 PRODUCTION ORG - All scans are read-only. No data is modified.
             </span>
         </div>
-    </lwc:if>
+    </template>
 
     <!-- ── Historical view banner ────────────────────────────────────────────── -->
-    <lwc:if isTrue={_isHistoricalView}>
+    <template lwc:if={_isHistoricalView}>
         <div class="historical-top-banner" role="status" aria-live="polite">
             <lightning-icon
                 icon-name="utility:clock"
@@ -47,7 +47,7 @@
                 Return to Current Scan
             </button>
         </div>
-    </lwc:if>
+    </template>
 
     <!-- ── Main app container ────────────────────────────────────────────────── -->
     <div class="app-container">
@@ -92,17 +92,17 @@
             <div class="right-panel">
 
                 <!-- Scan progress (while running) -->
-                <lwc:if isTrue={showProgressView}>
+                <template lwc:if={showProgressView}>
                     <c-security-scan-progress
                         scan-run={currentScanRun}
                         completed-categories={_completedCategories}
                         failed-categories={_failedCategories}
                         oncancelscan={handleCancelScan}
                     ></c-security-scan-progress>
-                </lwc:if>
+                </template>
 
                 <!-- Dashboard tab -->
-                <lwc:if isTrue={showDashboard}>
+                <template lwc:if={showDashboard}>
                     <c-security-dashboard
                         scan-run={currentScanRun}
                         all-findings={_allFindings}
@@ -110,10 +110,10 @@
                         oncategoryselect={handleCategorySelect}
                         onfindingselect={handleFindingSelect}
                     ></c-security-dashboard>
-                </lwc:if>
+                </template>
 
                 <!-- Findings explorer tab -->
-                <lwc:if isTrue={showFindings}>
+                <template lwc:if={showFindings}>
                     <c-security-findings-explorer
                         scan-run-id={_currentScanId}
                         all-findings={_allFindings}
@@ -127,17 +127,17 @@
                         onclearfilters={handleClearFilters}
                         onbulkstatuschange={handleBulkStatusChange}
                     ></c-security-findings-explorer>
-                </lwc:if>
+                </template>
 
                 <!-- History tab -->
-                <lwc:if isTrue={showHistory}>
+                <template lwc:if={showHistory}>
                     <c-security-scan-history
                         scan-runs={scanRuns}
                         current-scan-id={_currentScanId}
                         max-scan-runs={maxScanRuns}
                         onviewhistoricalscan={handleViewHistoricalScan}
                     ></c-security-scan-history>
-                </lwc:if>
+                </template>
 
             </div>
             <!-- /right-panel -->
@@ -147,7 +147,7 @@
 
         <!-- Detail panel: always in DOM, visibility toggled via CSS transform -->
         <div class={detailPanelClass}>
-            <lwc:if isTrue={_isDetailOpen}>
+            <template lwc:if={_isDetailOpen}>
                 <c-security-finding-detail
                     finding={selectedFinding}
                     finding-index={_selectedFindingIndex}
@@ -161,7 +161,7 @@
                     onstatuschange={handleStatusChange}
                     ontabswitch={handleDetailTabSwitch}
                 ></c-security-finding-detail>
-            </lwc:if>
+            </template>
         </div>
 
     </div>

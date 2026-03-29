@@ -65,8 +65,8 @@ private class SecScanMetadataServiceTest {
         Dom.Document doc = SecScanMetadataService.getSecurityHealthCheck('testSessionId');
         Test.stopTest();
 
-        System.assertNotNull(doc, 'Must return a parsed Dom.Document');
-        System.assertNotNull(doc.getRootElement(), 'Document must have a root element');
+        System.assertNotEquals(null, doc, 'Must return a parsed Dom.Document');
+        System.assertNotEquals(null, doc.getRootElement(), 'Document must have a root element');
     }
 
     @IsTest
@@ -128,6 +128,6 @@ private class SecScanMetadataServiceTest {
         );
         Test.stopTest();
 
-        System.assertNotNull(doc);
+        System.assertNotEquals(null, doc);
     }
 }

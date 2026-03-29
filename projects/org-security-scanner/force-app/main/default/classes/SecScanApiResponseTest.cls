@@ -6,22 +6,22 @@ private class SecScanApiResponseTest {
         SecScanApiResponse r = SecScanApiResponse.ok('hello');
         System.assertEquals(true, r.success);
         System.assertEquals('hello', r.data);
-        System.assertNull(r.errorMessage);
+        System.assertEquals(null, r.errorMessage);
     }
 
     @IsTest
     static void testOkResponseWithNull() {
         SecScanApiResponse r = SecScanApiResponse.ok(null);
         System.assertEquals(true, r.success);
-        System.assertNull(r.data);
-        System.assertNull(r.errorMessage);
+        System.assertEquals(null, r.data);
+        System.assertEquals(null, r.errorMessage);
     }
 
     @IsTest
     static void testErrorResponse() {
         SecScanApiResponse r = SecScanApiResponse.error('something went wrong');
         System.assertEquals(false, r.success);
-        System.assertNull(r.data);
+        System.assertEquals(null, r.data);
         System.assertEquals('something went wrong', r.errorMessage);
     }
 
@@ -123,7 +123,7 @@ private class SecScanApiResponseTest {
 
         SecScanApiResponse r = SecScanApiResponse.ok(orgDto);
         System.assertEquals(true, r.success);
-        System.assertNotNull(r.data);
-        System.assertNull(r.errorMessage);
+        System.assertNotEquals(null, r.data);
+        System.assertEquals(null, r.errorMessage);
     }
 }

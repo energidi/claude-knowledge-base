@@ -49,8 +49,8 @@ private class SecScanFindingsControllerTest {
         SecScanApiResponse.FindingsPageDTO p1 = (SecScanApiResponse.FindingsPageDTO) r1.data;
         System.assertEquals(10, p1.findings.size());
         System.assertEquals(true, p1.hasMore);
-        System.assertNotNull(p1.lastSeenId);
-        System.assertNotNull(p1.lastRank);
+        System.assertNotEquals(null, p1.lastSeenId);
+        System.assertNotEquals(null, p1.lastRank);
 
         // Page 2 - remaining 5
         SecScanApiResponse r2 = SecScanFindingsController.getCurrentScanFindings(
@@ -112,7 +112,7 @@ private class SecScanFindingsControllerTest {
         SecScanApiResponse.FindingsPageDTO dto = (SecScanApiResponse.FindingsPageDTO) r.data;
         System.assertEquals(0, dto.findings.size());
         System.assertEquals(false, dto.hasMore);
-        System.assertNull(dto.lastSeenId);
+        System.assertEquals(null, dto.lastSeenId);
     }
 
     // ------------------------------------------------------------------
@@ -250,7 +250,7 @@ private class SecScanFindingsControllerTest {
         ];
         System.assertEquals('Acknowledged', updated.Status__c);
         System.assertEquals(UserInfo.getUserId(), updated.AcknowledgedBy__c);
-        System.assertNotNull(updated.AcknowledgedDate__c);
+        System.assertNotEquals(null, updated.AcknowledgedDate__c);
         System.assertEquals('Reviewed by admin', updated.AcknowledgementNote__c);
     }
 
@@ -302,7 +302,7 @@ private class SecScanFindingsControllerTest {
         System.assertEquals(true, r.success);
         SecurityFinding__c updated = [SELECT Status__c, AcknowledgedBy__c FROM SecurityFinding__c WHERE Id = :f.Id];
         System.assertEquals('Open', updated.Status__c);
-        System.assertNull(updated.AcknowledgedBy__c, 'AcknowledgedBy must be cleared when reverting to Open');
+        System.assertEquals(null, updated.AcknowledgedBy__c, 'AcknowledgedBy must be cleared when reverting to Open');
     }
 
     @IsTest
@@ -322,8 +322,8 @@ private class SecScanFindingsControllerTest {
         Test.stopTest();
 
         System.assertEquals(true, r.success);
-        SecurityFinding__c final_ = [SELECT Status__c FROM SecurityFinding__c WHERE Id = :f.Id];
-        System.assertEquals('Open', final_.Status__c);
+        SecurityFinding__c updatedFinding = [SELECT Status__c FROM SecurityFinding__c WHERE Id = :f.Id];
+        System.assertEquals('Open', updatedFinding.Status__c);
     }
 
     // ------------------------------------------------------------------
@@ -397,7 +397,7 @@ private class SecScanFindingsControllerTest {
         System.assertEquals(true, r.success);
         Integer successCount = (Integer) r.data;
         System.assertEquals(1, successCount);
-        System.assertNotNull(r.errorMessage);
+        System.assertNotEquals(null, r.errorMessage);
         System.assert(r.errorMessage.contains('1 of 2'));
     }
 

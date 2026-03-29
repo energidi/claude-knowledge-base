@@ -122,10 +122,7 @@ public class SecScanMetadataService {
     }
 
     private static String getSoapEndpoint() {
-        String domainUrl = URL.getOrgDomainUrl() != null
-            ? URL.getOrgDomainUrl().toExternalForm()
-            : URL.getSalesforceBaseUrl().toExternalForm();
-        return domainUrl + '/services/Soap/m/' + API_VERSION;
+        return URL.getOrgDomainUrl().toExternalForm() + '/services/Soap/m/' + API_VERSION;
     }
 
     // Helper: get text content of a named child element (namespace-aware)

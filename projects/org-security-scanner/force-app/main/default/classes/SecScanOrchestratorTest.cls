@@ -21,9 +21,9 @@ private class SecScanOrchestratorTest {
             FROM SecurityScanRun__c WHERE Id = :run.Id
         ];
         System.assertEquals('Completed', updated.Status__c);
-        System.assertNotNull(updated.CompletedAt__c);
-        System.assertNotNull(updated.Score__c);
-        System.assertNotNull(updated.Grade__c);
+        System.assertNotEquals(null, updated.CompletedAt__c);
+        System.assertNotEquals(null, updated.Score__c);
+        System.assertNotEquals(null, updated.Grade__c);
         System.assertEquals(1, (Integer)updated.CriticalCount__c);
         System.assertEquals(1, (Integer)updated.HighCount__c);
         System.assertEquals(1, (Integer)updated.MediumCount__c);
@@ -129,7 +129,7 @@ private class SecScanOrchestratorTest {
 
     @IsTest
     static void testComputeScoreAllZero() {
-        System.assertEquals(100, SecScanOrchestrator.computeScore(0, 0, 0, 0, 0, null), 'Zero findings = score 100');
+        System.assertEquals(100, SecScanOrchestrator.computeScore(new Map<String,Integer>(), null), 'Zero findings = score 100');
     }
 
     @IsTest

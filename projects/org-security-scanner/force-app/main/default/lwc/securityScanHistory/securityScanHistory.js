@@ -97,7 +97,8 @@ export default class SecurityScanHistory extends LightningElement {
                 statusLabel    : run.Status__c || 'Unknown',
                 severityPills,
                 envBadgeClass,
-                envLabel
+                envLabel,
+                ariaLabel      : `View scan from ${formattedDate}`
             };
         });
     }

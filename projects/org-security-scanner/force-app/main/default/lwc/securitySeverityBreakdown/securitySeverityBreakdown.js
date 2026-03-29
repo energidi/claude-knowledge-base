@@ -30,7 +30,8 @@ export default class SecuritySeverityBreakdown extends LightningElement {
                 count,
                 progressValue,
                 dotStyle:      `background-color: ${cfg.color};`,
-                progressStyle: `--sds-c-progress-bar-color-background-fill: ${cfg.color};`
+                progressStyle: `--sds-c-progress-bar-color-background-fill: ${cfg.color};`,
+                ariaLabel:     `Filter by ${cfg.label}`
             };
         });
     }

@@ -3,7 +3,6 @@
     <defaultLandingTab>OrgSecurityScanner</defaultLandingTab>
     <description>Org Security Scanner - detect and remediate security vulnerabilities across 13 categories and 76 checks.</description>
     <formFactors>Large</formFactors>
-    <formFactors>Medium</formFactors>
     <isNavAutoTempTabsDisabled>false</isNavAutoTempTabsDisabled>
     <isNavPersonalizationDisabled>false</isNavPersonalizationDisabled>
     <isNavTabPersistenceDisabled>false</isNavTabPersistenceDisabled>

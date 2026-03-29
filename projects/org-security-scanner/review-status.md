@@ -1,10 +1,10 @@
 # Org Security Scanner - Development Status
 
-## Current Phase: ALL PHASES COMPLETE
+## Current Phase: PHASE 13 COMPLETE - Bug Fixes Applied (Ready to Deploy)
 
 Plan file: `C:\Users\GidiAbramovich\.claude\plans\scalable-strolling-kahan.md`
 GitHub: `https://github.com/energidi/claude-knowledge-base/tree/main/projects/org-security-scanner`
-Latest commit: Phase 12 complete (Lightning App + Flexipage)
+Latest commit: Phase 13 - 19 bugs fixed (see Bug Fix section below)
 
 ---
 
@@ -22,6 +22,35 @@ Latest commit: Phase 12 complete (Lightning App + Flexipage)
 | Phase 7 - Permission Set + Tab | COMPLETE | OrgSecurityScanner_Admin PS + OrgSecurityScanner tab |
 | Phase 8-11 - LWC (18 components) | COMPLETE | All 18 LWC components written including root securityScanner |
 | Phase 12 - App Shell | COMPLETE | OrgSecurityScannerApp Lightning App + OrgSecurityScannerApp_Page Flexipage |
+| Phase 13 - Bug Fixes | COMPLETE | 19 confirmed bugs fixed - ready for deployment to devgaug25 |
+
+---
+
+## Phase 13 Bug Fixes (COMPLETE)
+
+19 bugs confirmed and fixed across 13 files. Full details in plan file Phase 13 section.
+
+| # | File | Fix |
+|---|---|---|
+| 1 | SecScanController.cls | Removed illegal `FOR UPDATE` from COUNT() aggregate SOQL |
+| 2 | SecScanToolingService.cls | Fixed dead ternary in `query()` pagination (lines 38-40) |
+| 3 | SecScanToolingService.cls | Fixed dead ternary in `getBaseUrl()` (lines 100-102) |
+| 4 | SecScanMetadataService.cls | Fixed dead ternary in `getSoapEndpoint()` (lines 125-127) |
+| 5 | SecScanOrchestrator.cls | Bare `update` -> `Database.update(..., SYSTEM_MODE)` |
+| 6 | SecScanRunnerChain.cls | `appendCompletedCategory()` bare `update` -> `Database.update` |
+| 7 | SecScanRunnerChain.cls | `logError()` bare `update` -> `Database.update` |
+| 8 | SecScanRunnerChain.cls | `markRemainingFailed()` N+1 loop -> 1 SELECT + 1 `Database.update` |
+| 9 | SecScanRunnerContinuation.cls | `appendCompletedCategory()` bare `update` -> `Database.update` |
+| 10 | SecScanRunnerContinuation.cls | `logSessionError()` dead `msg` construction removed |
+| 11 | SecScanRunnerContinuation.cls | `logError()` bare `update` -> `Database.update` |
+| 12 | SecScanRunnerContinuation.cls | `markRemainingFailed()` N+1 loop -> 1 SELECT + 1 `Database.update` |
+| 13 | SecScanFindingsControllerTest.cls | `final_` identifier renamed to `updatedFinding` |
+| 14 | SecScanOrchestratorTest.cls | `computeScore(0,0,0,0,0,null)` -> `computeScore(new Map<String,Integer>(), null)` |
+| 15-16 | securityFindingsList.html + .js | `{!isLoadingMore}` and `{!hasMore}` -> `{isNotLoadingMore}` / `{hasNoMore}` + getters |
+| 17 | securityStatusChangeForm.html + .js | `{!hasTransitions}` -> `{hasNoTransitions}` + getter |
+| 18 | OrgSecurityScannerApp_Page.flexipage-meta.xml | `componentInstances` moved to FlexiPage root level with `componentInstanceProperties` |
+
+**Next step:** Deploy to devgaug25: `sf project deploy start --source-dir force-app --target-org devgaug25`
 
 ---
 

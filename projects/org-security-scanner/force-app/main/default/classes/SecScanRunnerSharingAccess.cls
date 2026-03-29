@@ -172,7 +172,7 @@ public without sharing class SecScanRunnerSharingAccess extends SecScanCategoryR
         // This is a recommendation check - mark as such
         List<SObject> portals;
         try {
-            portals = [SELECT Id, Name FROM Portal WITH SYSTEM_MODE LIMIT 10];
+            portals = Database.query('SELECT Id, Name FROM Portal WITH SYSTEM_MODE LIMIT 10');
         } catch (Exception e) {
             return; // Portal object not available
         }

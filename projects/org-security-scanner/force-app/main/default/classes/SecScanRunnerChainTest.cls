@@ -72,7 +72,7 @@ private class SecScanRunnerChainTest {
 
         SecurityScanRun__c updated = [SELECT CompletedCategories__c, Status__c FROM SecurityScanRun__c WHERE Id = :run.Id];
         // Chain with chainEnabled=false calls finalizeScan directly after last runner
-        System.assertNotNull(updated.CompletedCategories__c);
+        System.assertNotEquals(null, updated.CompletedCategories__c);
         System.assert(updated.CompletedCategories__c.contains('UA'),
             'UA category code must be appended to CompletedCategories__c on success');
     }
@@ -102,7 +102,7 @@ private class SecScanRunnerChainTest {
         // and ErrorDetails is populated
         // The UA runner will succeed, GU will likely fail (no Tooling API in test)
         // We just verify structure is correct
-        System.assertNotNull(updated.CompletedCategories__c);
+        System.assertNotEquals(null, updated.CompletedCategories__c);
     }
 
     // ------------------------------------------------------------------
@@ -150,7 +150,7 @@ private class SecScanRunnerChainTest {
 
         // Verify chain ran without throwing (exception was caught)
         SecurityScanRun__c updated = [SELECT Status__c FROM SecurityScanRun__c WHERE Id = :run.Id];
-        System.assertNotNull(updated.Status__c);
+        System.assertNotEquals(null, updated.Status__c);
     }
 
     // ------------------------------------------------------------------
@@ -171,7 +171,7 @@ private class SecScanRunnerChainTest {
 
         SecurityScanRun__c updated = [SELECT Status__c FROM SecurityScanRun__c WHERE Id = :run.Id];
         // With chainEnabled=false, after the last runner finalizeScan() is called directly
-        System.assertNotNull(updated.Status__c);
+        System.assertNotEquals(null, updated.Status__c);
         // Status is Completed (or Cancelled if it was already Cancelled)
         System.assert(
             updated.Status__c == 'Completed' || updated.Status__c == 'Failed' || updated.Status__c == 'Cancelled',

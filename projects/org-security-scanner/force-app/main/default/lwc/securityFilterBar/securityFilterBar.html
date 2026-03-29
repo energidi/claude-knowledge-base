@@ -29,14 +29,14 @@
 
             <!-- Clear Filters -->
             <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12 slds-large-size_4-of-12 slds-align-bottom">
-                <lwc:if isTrue={hasActiveFilters}>
+                <template lwc:if={hasActiveFilters}>
                     <button
                         class="slds-button slds-button_neutral clear-btn"
                         type="button"
                         onclick={handleClearFilters}>
                         Clear Filters
                     </button>
-                </lwc:if>
+                </template>
             </div>
         </div>
 
@@ -106,7 +106,7 @@
         </div>
 
         <!-- Active filter pills -->
-        <lwc:if isTrue={hasActiveFilters}>
+        <template lwc:if={hasActiveFilters}>
             <div class="slds-m-top_x-small pills-row" aria-label="Active filters">
                 <template for:each={activePills} for:item="pill">
                     <span key={pill.key} class="slds-badge pill-badge">
@@ -123,7 +123,7 @@
                     </span>
                 </template>
             </div>
-        </lwc:if>
+        </template>
 
     </div>
 </template>

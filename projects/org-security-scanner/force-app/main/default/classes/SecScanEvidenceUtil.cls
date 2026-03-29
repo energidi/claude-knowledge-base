@@ -65,9 +65,9 @@ public class SecScanEvidenceUtil {
 
         Integer windowHalf = SecScanConstants.EVIDENCE_CONTEXT_WINDOW;
         Integer start = Math.max(0, matchOffset - windowHalf);
-        Integer end   = Math.min(input.length(), matchOffset + windowHalf);
+        Integer endIdx = Math.min(input.length(), matchOffset + windowHalf);
 
-        String extracted = input.substring(start, end);
+        String extracted = input.substring(start, endIdx);
 
         // Hard cap
         if (extracted.length() > SecScanConstants.EVIDENCE_MAX_LENGTH) {

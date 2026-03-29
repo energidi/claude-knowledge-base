@@ -13,7 +13,7 @@
         </button>
 
         <!-- Collapsed state: icon strip -->
-        <lwc:if isTrue={isCollapsed}>
+        <template lwc:if={isCollapsed}>
             <div class="collapsed-strip">
                 <span
                     class="collapsed-shield-icon"
@@ -21,14 +21,14 @@
                     aria-hidden="true"
                 ></span>
             </div>
-        </lwc:if>
+        </template>
 
         <!-- Expanded content -->
-        <lwc:if isTrue={showContent}>
+        <template lwc:if={showContent}>
             <div class="panel-content">
 
                 <!-- Historical view banner -->
-                <lwc:if isTrue={isHistoricalView}>
+                <template lwc:if={isHistoricalView}>
                     <div class="historical-banner" role="status">
                         <span class="historical-banner__icon" aria-hidden="true">&#9432;</span>
                         <span class="historical-banner__text">Viewing Historical Data</span>
@@ -40,7 +40,7 @@
                             Return to Current Scan
                         </button>
                     </div>
-                </lwc:if>
+                </template>
 
                 <!-- Severity breakdown (child component) -->
                 <c-security-severity-breakdown
@@ -57,7 +57,7 @@
                 </div>
 
                 <!-- Category Coverage -->
-                <lwc:if isTrue={hasScanRun}>
+                <template lwc:if={hasScanRun}>
                     <div class="section-header section-header--coverage">Category Coverage</div>
                     <div class="coverage-wrap">
                         <div class="coverage-label">{categoriesScannedLabel}</div>
@@ -65,10 +65,10 @@
                             <div class="coverage-bar-fill" style="width: 100%;"></div>
                         </div>
                     </div>
-                </lwc:if>
+                </template>
 
             </div>
-        </lwc:if>
+        </template>
 
     </div>
 </template>

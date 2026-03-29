@@ -92,7 +92,7 @@ private class SecScanRunnerUserAccessTest {
             System.assertEquals('UA', f.CategoryCode__c);
             System.assert(!String.isBlank(f.Description__c));
             System.assert(!String.isBlank(f.Remediation__c));
-            System.assertNotNull(f.SeverityRank__c);
+            System.assertNotEquals(null, f.SeverityRank__c);
         }
     }
 }

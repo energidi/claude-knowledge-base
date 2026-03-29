@@ -2,7 +2,7 @@
     <div class="findings-list-container">
 
         <!-- ── Zero-results state ───────────────────────────────────────── -->
-        <lwc:if isTrue={!hasFindings}>
+        <template lwc:if={hasNoFindings}>
             <div class="empty-state" role="status">
                 <lightning-icon
                     icon-name="utility:filterList"
@@ -19,10 +19,10 @@
                     Clear Filters
                 </button>
             </div>
-        </lwc:if>
+        </template>
 
         <!-- ── Findings list ────────────────────────────────────────────── -->
-        <lwc:if isTrue={hasFindings}>
+        <template lwc:if={hasFindings}>
 
             <!-- Sort label -->
             <div class="sort-label" aria-live="polite">
@@ -36,12 +36,12 @@
                     <li key={item.Id} class="finding-row-wrapper" role="presentation">
 
                         <!-- Group header divider (rendered when this item starts a new severity group) -->
-                        <lwc:if isTrue={item.showGroupHeader}>
+                        <template lwc:if={item.showGroupHeader}>
                             <div class="group-header" role="presentation" aria-hidden="true">
                                 <span class="group-header__label">{item.groupLabel}</span>
                                 <span class="group-header__line"></span>
                             </div>
-                        </lwc:if>
+                        </template>
 
                         <!-- Finding row -->
                         <div class={item.rowClass} role="listitem" data-finding-id={item.Id}>
@@ -128,7 +128,7 @@
             <div class="load-more-zone">
 
                 <!-- Loading spinner state -->
-                <lwc:if isTrue={isLoadingMore}>
+                <template lwc:if={isLoadingMore}>
                     <div class="load-more-spinner" role="status">
                         <lightning-spinner
                             alternative-text="Loading more findings"
@@ -136,11 +136,11 @@
                         ></lightning-spinner>
                         <span class="load-more-spinner__text">Loading more findings...</span>
                     </div>
-                </lwc:if>
+                </template>
 
                 <!-- Load More button state -->
-                <lwc:if isTrue={!isLoadingMore}>
-                    <lwc:if isTrue={hasMore}>
+                <template lwc:if={isNotLoadingMore}>
+                    <template lwc:if={hasMore}>
                         <button
                             class="slds-button slds-button_neutral load-more-btn"
                             type="button"
@@ -148,17 +148,17 @@
                         >
                             {loadMoreLabel}
                         </button>
-                    </lwc:if>
+                    </template>
 
                     <!-- All loaded state -->
-                    <lwc:if isTrue={!hasMore}>
+                    <template lwc:if={hasNoMore}>
                         <span class="all-loaded-text">{allLoadedLabel}</span>
-                    </lwc:if>
-                </lwc:if>
+                    </template>
+                </template>
 
             </div>
 
-        </lwc:if>
+        </template>
 
     </div>
 </template>

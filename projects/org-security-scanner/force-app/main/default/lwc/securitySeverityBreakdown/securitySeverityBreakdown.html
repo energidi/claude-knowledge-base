@@ -1,5 +1,5 @@
 <template>
-    <lwc:if isTrue={hasScanRun}>
+    <template lwc:if={hasScanRun}>
 
         <!-- Severity Breakdown -->
         <div class="section-header">Severity Breakdown</div>
@@ -14,7 +14,7 @@
                     data-severity={row.key}
                     onclick={handleRowClick}
                     onkeydown={handleRowClick}
-                    aria-label={"Filter by " + row.label}
+                    aria-label={row.ariaLabel}
                 >
                     <span class="severity-dot" style={row.dotStyle}></span>
                     <span class="severity-label">{row.label}</span>
@@ -48,5 +48,5 @@
             </div>
         </div>
 
-    </lwc:if>
+    </template>
 </template>

@@ -77,9 +77,9 @@ public without sharing class SecScanRunnerChain implements Queueable, Database.A
         String updated = String.isBlank(existing)
             ? categoryCode
             : existing + ',' + categoryCode;
-        update new SecurityScanRun__c(
-            Id = scanRunId,
-            CompletedCategories__c = updated
+        Database.update(
+            new SecurityScanRun__c(Id = scanRunId, CompletedCategories__c = updated),
+            AccessLevel.SYSTEM_MODE
         );
     }
 
@@ -114,29 +114,37 @@ public without sharing class SecScanRunnerChain implements Queueable, Database.A
             appended = existing + newEntry;
         }
 
-        update new SecurityScanRun__c(
-            Id                  = scanRunId,
-            FailedCategories__c = failedUpdated,
-            ErrorDetails__c     = appended
+        Database.update(
+            new SecurityScanRun__c(
+                Id                  = scanRunId,
+                FailedCategories__c = failedUpdated,
+                ErrorDetails__c     = appended
+            ),
+            AccessLevel.SYSTEM_MODE
         );
     }
 
     private void markRemainingFailed(Id scanRunId, List<String> allRunners, Integer fromIndex) {
-        // Mark from currentIndex onwards (current + all remaining) as failed
+        // Collect all category codes first, then do 1 SELECT + 1 UPDATE (not N+1)
+        List<String> newCodes = new List<String>();
         for (Integer i = fromIndex; i < allRunners.size(); i++) {
-            String cc = deriveCategoryCode(allRunners[i]);
-            SecurityScanRun__c run = [
-                SELECT FailedCategories__c
-                FROM SecurityScanRun__c
-                WHERE Id = :scanRunId
-                LIMIT 1
-            ];
-            String existing = run.FailedCategories__c;
-            update new SecurityScanRun__c(
-                Id = scanRunId,
-                FailedCategories__c = String.isBlank(existing) ? cc : existing + ',' + cc
-            );
+            newCodes.add(deriveCategoryCode(allRunners[i]));
         }
+        if (newCodes.isEmpty()) return;
+        SecurityScanRun__c run = [
+            SELECT FailedCategories__c
+            FROM SecurityScanRun__c
+            WHERE Id = :scanRunId
+            LIMIT 1
+        ];
+        String combined = String.join(newCodes, ',');
+        String merged = String.isBlank(run.FailedCategories__c)
+            ? combined
+            : run.FailedCategories__c + ',' + combined;
+        Database.update(
+            new SecurityScanRun__c(Id = scanRunId, FailedCategories__c = merged),
+            AccessLevel.SYSTEM_MODE
+        );
     }
 
     // Derive the category code from the runner class name

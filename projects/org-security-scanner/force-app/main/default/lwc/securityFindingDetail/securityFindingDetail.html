@@ -55,9 +55,9 @@
                 <h2 class="check-name">{checkName}</h2>
                 <div class="badge-row">
                     <span class={severityBadgeClass}>{severity}</span>
-                    <lwc:if isTrue={findingType}>
+                    <template lwc:if={findingType}>
                         <span class="type-pill">{findingType}</span>
-                    </lwc:if>
+                    </template>
                 </div>
             </div>
 
@@ -97,7 +97,7 @@
         <div class="panel-body">
 
             <!-- Tab 1 - Details -->
-            <lwc:if isTrue={isDetailsTab}>
+            <template lwc:if={isDetailsTab}>
                 <div class="tab-panel">
 
                     <!-- Category + Affected Component -->
@@ -113,35 +113,35 @@
                     </div>
 
                     <!-- Risk / Description -->
-                    <lwc:if isTrue={description}>
+                    <template lwc:if={description}>
                         <section class="detail-section">
                             <h3 class="section-title">Risk</h3>
                             <p class="section-body">{description}</p>
                         </section>
-                    </lwc:if>
+                    </template>
 
                     <!-- Impact -->
-                    <lwc:if isTrue={impact}>
+                    <template lwc:if={impact}>
                         <section class="detail-section">
                             <h3 class="section-title">Impact</h3>
                             <div class="slds-box slds-theme_warning impact-box">
                                 <p class="section-body">{impact}</p>
                             </div>
                         </section>
-                    </lwc:if>
+                    </template>
 
                     <!-- How to Fix -->
-                    <lwc:if isTrue={remediation}>
+                    <template lwc:if={remediation}>
                         <section class="detail-section">
                             <h3 class="section-title">How to Fix</h3>
                             <div class="slds-box slds-theme_shade">
                                 <p class="section-body">{remediation}</p>
                             </div>
                         </section>
-                    </lwc:if>
+                    </template>
 
                     <!-- Recommendation alert -->
-                    <lwc:if isTrue={isRecommendation}>
+                    <template lwc:if={isRecommendation}>
                         <div class="slds-notify slds-notify_alert slds-alert_warning recommendation-alert" role="alert">
                             <lightning-icon
                                 icon-name="utility:warning"
@@ -150,10 +150,10 @@
                             ></lightning-icon>
                             Manual review required - this check cannot be fully automated.
                         </div>
-                    </lwc:if>
+                    </template>
 
                     <!-- Technical Evidence (Automated only) -->
-                    <lwc:if isTrue={hasEvidence}>
+                    <template lwc:if={hasEvidence}>
                         <section class="detail-section">
                             <button
                                 class="slds-button slds-button_reset evidence-toggle"
@@ -169,16 +169,16 @@
                                 <span class="slds-assistive-text">{evidenceToggleLabel}</span>
                             </button>
 
-                            <lwc:if isTrue={_evidenceExpanded}>
+                            <template lwc:if={_evidenceExpanded}>
                                 <div class="evidence-block">
                                     <pre class="evidence-pre">{rawEvidence}</pre>
                                 </div>
-                            </lwc:if>
+                            </template>
                         </section>
-                    </lwc:if>
+                    </template>
 
                     <!-- Official Documentation link -->
-                    <lwc:if isTrue={hasSalesforceDocUrl}>
+                    <template lwc:if={hasSalesforceDocUrl}>
                         <div class="doc-link-row">
                             <a
                                 href={salesforceDocUrl}
@@ -194,13 +194,13 @@
                                 Official Documentation
                             </a>
                         </div>
-                    </lwc:if>
+                    </template>
 
                 </div>
-            </lwc:if>
+            </template>
 
             <!-- Tab 2 - Status -->
-            <lwc:if isTrue={isStatusTab}>
+            <template lwc:if={isStatusTab}>
                 <div class="tab-panel">
                     <c-security-status-change-form
                         finding={finding}
@@ -208,7 +208,7 @@
                         onstatuschange={handleStatusChange}
                     ></c-security-status-change-form>
                 </div>
-            </lwc:if>
+            </template>
 
         </div>
     </div>

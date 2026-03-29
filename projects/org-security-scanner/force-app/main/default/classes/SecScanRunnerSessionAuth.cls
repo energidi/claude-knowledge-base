@@ -240,12 +240,14 @@ public without sharing class SecScanRunnerSessionAuth extends SecScanCategoryRun
         ];
         if (adminProfiles.isEmpty()) return;
 
-        Integer ipRangeCount = [
-            SELECT COUNT()
-            FROM LoginIpRange
-            WHERE Parent.Name = 'System Administrator'
-            WITH SYSTEM_MODE
-        ];
+        Integer ipRangeCount;
+        try {
+            ipRangeCount = Database.countQuery(
+                'SELECT COUNT() FROM LoginIpRange WHERE Parent.Name = \'System Administrator\' WITH SYSTEM_MODE'
+            );
+        } catch (Exception e) {
+            return; // LoginIpRange not queryable in this org
+        }
 
         if (ipRangeCount == 0) {
             addFinding(buildFinding(scanRunId,

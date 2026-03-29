@@ -1,1 +1,1 @@
-public class SecScanException extends Exception {}
+public virtual class SecScanException extends Exception {}

@@ -35,9 +35,7 @@ public class SecScanToolingService {
             } else {
                 // nextRecordsUrl is root-relative: /services/data/v66.0/tooling/query/01g...-2000
                 // Must prepend org domain, NOT baseUrl (which already ends with /tooling/)
-                requestUrl = URL.getOrgDomainUrl() != null
-                    ? URL.getOrgDomainUrl().toExternalForm() + nextUrl
-                    : URL.getSalesforceBaseUrl().toExternalForm() + nextUrl;
+                requestUrl = URL.getOrgDomainUrl().toExternalForm() + nextUrl;
             }
 
             HttpRequest req = buildRequest(requestUrl, sessionId);
@@ -97,10 +95,7 @@ public class SecScanToolingService {
     // --- private helpers ---
 
     private static String getBaseUrl(String sessionId) {
-        String domainUrl = URL.getOrgDomainUrl() != null
-            ? URL.getOrgDomainUrl().toExternalForm()
-            : URL.getSalesforceBaseUrl().toExternalForm();
-        return domainUrl + '/services/data/' + API_VERSION + '/tooling/';
+        return URL.getOrgDomainUrl().toExternalForm() + '/services/data/' + API_VERSION + '/tooling/';
     }
 
     private static HttpRequest buildRequest(String url, String sessionId) {

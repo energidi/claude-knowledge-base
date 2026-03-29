@@ -153,10 +153,14 @@ public without sharing class SecScanRunnerUserAccess extends SecScanCategoryRunn
     @TestVisible
     private void checkUA006(Id scanRunId) {
         Set<Id> mfaEnrolledUserIds = new Set<Id>();
-        for (UserMFAFactor mfa : [
-            SELECT UserId FROM UserMFAFactor WITH SYSTEM_MODE
-        ]) {
-            mfaEnrolledUserIds.add(mfa.UserId);
+        try {
+            List<SObject> mfaRecs = Database.query('SELECT UserId FROM UserMFAFactor WITH SYSTEM_MODE');
+            for (SObject mfa : mfaRecs) {
+                mfaEnrolledUserIds.add((Id) mfa.get('UserId'));
+            }
+        } catch (Exception e) {
+            // UserMFAFactor not queryable in this org - skip MFA check
+            return;
         }
 
         List<User> results = [
@@ -186,22 +190,27 @@ public without sharing class SecScanRunnerUserAccess extends SecScanCategoryRunn
     // UA-007: Users with delegated admin access
     @TestVisible
     private void checkUA007(Id scanRunId) {
-        List<DelegatedAdminUserGroup> groups = [
-            SELECT Id, DelegatedAdminId, DelegateeId, Delegatee.Name, Delegatee.Username
-            FROM DelegatedAdminUserGroup
-            WITH SYSTEM_MODE
-            LIMIT :SecScanConstants.MAX_FINDINGS_PER_CATEGORY
-        ];
+        List<SObject> groups;
+        try {
+            groups = Database.query(
+                'SELECT Id, DelegatedAdminId, DelegateeId, Delegatee.Name, Delegatee.Username ' +
+                'FROM DelegatedAdminUserGroup WITH SYSTEM_MODE LIMIT ' + SecScanConstants.MAX_FINDINGS_PER_CATEGORY
+            );
+        } catch (Exception e) {
+            return; // DelegatedAdminUserGroup not available
+        }
         Set<Id> reported = new Set<Id>();
-        for (DelegatedAdminUserGroup dag : groups) {
-            if (!reported.contains(dag.DelegateeId)) {
-                reported.add(dag.DelegateeId);
-                String userName = dag.Delegatee != null ? dag.Delegatee.Name : 'Unknown';
-                String username = dag.Delegatee != null ? dag.Delegatee.Username : '';
+        for (SObject dag : groups) {
+            Id delegateeId = (Id) dag.get('DelegateeId');
+            if (!reported.contains(delegateeId)) {
+                reported.add(delegateeId);
+                SObject delegatee = (SObject) dag.getSObject('Delegatee');
+                String userName = delegatee != null ? (String) delegatee.get('Name') : 'Unknown';
+                String uname = delegatee != null ? (String) delegatee.get('Username') : '';
                 addFinding(buildFinding(scanRunId,
                     'UA-007', 'Users with delegated admin access',
                     CAT, CAT_CODE, 'Low', 'Automated',
-                    userName + ' (' + username + ')', 'User',
+                    userName + ' (' + uname + ')', 'User',
                     'User ' + userName + ' is assigned to a delegated administration group and can manage other users\' access without being a System Administrator.',
                     'Delegated admins can assign permission sets, reset passwords, and activate/deactivate users within their delegated scope. Misconfigured scope can lead to indirect privilege escalation.',
                     'Review all delegated admin group memberships. Verify scope is limited to the minimum user set required. Remove delegated admin rights from users who no longer require them.',

@@ -8,9 +8,9 @@
                 {completedCount} / {totalCount} categories
             </span>
         </div>
-        <lwc:if isTrue={hasLastChecked}>
+        <template lwc:if={hasLastChecked}>
             <p class="last-checked slds-text-body_small">{lastCheckedLabel}</p>
-        </lwc:if>
+        </template>
 
         <!-- Category checklist -->
         <ul
@@ -22,7 +22,7 @@
                 <li key={row.key} class={row.rowClass}>
 
                     <!-- Completed: green check -->
-                    <lwc:if isTrue={row.isCompleted}>
+                    <template lwc:if={row.isCompleted}>
                         <span class="row-icon row-icon--completed" aria-hidden="true">
                             <lightning-icon
                                 icon-name="utility:check"
@@ -31,10 +31,10 @@
                             ></lightning-icon>
                         </span>
                         <span class="row-label">{row.label}</span>
-                    </lwc:if>
+                    </template>
 
                     <!-- Failed: red error icon -->
-                    <lwc:if isTrue={row.isFailed}>
+                    <template lwc:if={row.isFailed}>
                         <span class="row-icon row-icon--failed" aria-hidden="true">
                             <lightning-icon
                                 icon-name="utility:error"
@@ -44,10 +44,10 @@
                         </span>
                         <span class="row-label">{row.label}</span>
                         <span class="row-badge row-badge--failed">(failed)</span>
-                    </lwc:if>
+                    </template>
 
                     <!-- In-progress: spinner -->
-                    <lwc:if isTrue={row.isInProgress}>
+                    <template lwc:if={row.isInProgress}>
                         <span class="row-icon row-icon--inprogress" aria-hidden="true">
                             <lightning-spinner
                                 size="x-small"
@@ -57,15 +57,15 @@
                         </span>
                         <span class="row-label">{row.label}</span>
                         <span class="row-badge row-badge--inprogress">(scanning...)</span>
-                    </lwc:if>
+                    </template>
 
                     <!-- Pending: grey circle -->
-                    <lwc:if isTrue={row.isPending}>
+                    <template lwc:if={row.isPending}>
                         <span class="row-icon row-icon--pending" aria-hidden="true">
                             <span class="pending-dot"></span>
                         </span>
                         <span class="row-label row-label--pending">{row.label}</span>
-                    </lwc:if>
+                    </template>
 
                 </li>
             </template>

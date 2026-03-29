@@ -24,22 +24,26 @@ public without sharing class SecScanRunnerMetadataSecrets extends SecScanCategor
     @TestVisible
     private void checkMS001(Id scanRunId) {
         // Find CMT field API names matching credential patterns
-        List<CustomField> credFields = [
-            SELECT Id, DeveloperName, TableEnumOrId
-            FROM CustomField
-            WHERE TableEnumOrId LIKE '%__mdt'
-            WITH SYSTEM_MODE
-        ];
+        List<SObject> credFields;
+        try {
+            credFields = Database.query(
+                'SELECT Id, DeveloperName, TableEnumOrId FROM CustomField WHERE TableEnumOrId LIKE \'%__mdt\' WITH SYSTEM_MODE'
+            );
+        } catch (Exception e) {
+            return; // CustomField not queryable in this org
+        }
 
         Set<String> credFieldNames = new Set<String>();
         Map<String, String> fieldToMdt = new Map<String, String>();
 
-        for (CustomField cf : credFields) {
-            String devName = cf.DeveloperName != null ? cf.DeveloperName.toLowerCase() : '';
+        for (SObject cf : credFields) {
+            String devName = cf.get('DeveloperName') != null ? ((String) cf.get('DeveloperName')).toLowerCase() : '';
             for (String pattern : CRED_PATTERNS) {
                 if (devName.contains(pattern)) {
-                    credFieldNames.add(cf.DeveloperName + '__c');
-                    fieldToMdt.put(cf.DeveloperName + '__c', cf.TableEnumOrId);
+                    String apiName = (String) cf.get('DeveloperName');
+                    String tableId = (String) cf.get('TableEnumOrId');
+                    credFieldNames.add(apiName + '__c');
+                    fieldToMdt.put(apiName + '__c', tableId);
                     break;
                 }
             }
@@ -82,12 +86,14 @@ public without sharing class SecScanRunnerMetadataSecrets extends SecScanCategor
     // MS-002: Custom Settings with credential-like fields
     @TestVisible
     private void checkMS002(Id scanRunId) {
-        List<CustomField> credFields = [
-            SELECT Id, DeveloperName, TableEnumOrId
-            FROM CustomField
-            WHERE TableEnumOrId LIKE '%__c'
-            WITH SYSTEM_MODE
-        ];
+        List<SObject> credFields;
+        try {
+            credFields = Database.query(
+                'SELECT Id, DeveloperName, TableEnumOrId FROM CustomField WHERE TableEnumOrId LIKE \'%__c\' WITH SYSTEM_MODE'
+            );
+        } catch (Exception e) {
+            return; // CustomField not queryable in this org
+        }
 
         // Check if the parent is a Custom Setting
         Set<String> customSettingObjects = new Set<String>();
@@ -105,17 +111,17 @@ public without sharing class SecScanRunnerMetadataSecrets extends SecScanCategor
         }
 
         Map<String, Set<String>> settingToFields = new Map<String, Set<String>>();
-        for (CustomField cf : credFields) {
-            String tableId = cf.TableEnumOrId;
+        for (SObject cf : credFields) {
+            String tableId = (String) cf.get('TableEnumOrId');
             if (!customSettingObjects.contains(tableId)) continue;
 
-            String devName = cf.DeveloperName != null ? cf.DeveloperName.toLowerCase() : '';
+            String cfDevName = cf.get('DeveloperName') != null ? ((String) cf.get('DeveloperName')).toLowerCase() : '';
             for (String pattern : CRED_PATTERNS) {
-                if (devName.contains(pattern)) {
+                if (cfDevName.contains(pattern)) {
                     if (!settingToFields.containsKey(tableId)) {
                         settingToFields.put(tableId, new Set<String>());
                     }
-                    settingToFields.get(tableId).add(cf.DeveloperName + '__c');
+                    settingToFields.get(tableId).add((String) cf.get('DeveloperName') + '__c');
                     break;
                 }
             }
@@ -155,27 +161,24 @@ public without sharing class SecScanRunnerMetadataSecrets extends SecScanCategor
     // MS-003: Remote Site Settings with HTTP endpoints
     @TestVisible
     private void checkMS003(Id scanRunId) {
-        List<RemoteSiteSetting> results;
+        List<SObject> results;
         try {
-            results = [
-                SELECT Id, SiteName, SiteURL
-                FROM RemoteSiteSetting
-                WHERE IsActive = true
-                WITH SYSTEM_MODE
-            ];
+            results = Database.query(
+                'SELECT Id, SiteName, SiteURL FROM RemoteSiteSetting WHERE IsActive = true'
+            );
         } catch (Exception e) {
             return;
         }
-        for (RemoteSiteSetting rss : results) {
-            if (rss.SiteURL != null && rss.SiteURL.toLowerCase().startsWith('http://')) {
+        for (SObject rss : results) {
+            if ((String)rss.get('SiteURL') != null && ((String)rss.get('SiteURL')).toLowerCase().startsWith('http://')) {
                 addFinding(buildFinding(scanRunId,
                     'MS-003', 'Remote Site Settings with HTTP endpoints',
                     CAT, CAT_CODE, 'High', 'Automated',
-                    rss.SiteName, 'RemoteSite',
-                    'Active Remote Site Setting "' + rss.SiteName + '" uses an HTTP (not HTTPS) URL: ' + rss.SiteURL + '. Callout data is transmitted unencrypted.',
+                    (String)rss.get('SiteName'), 'RemoteSite',
+                    'Active Remote Site Setting "' + (String)rss.get('SiteName') + '" uses an HTTP (not HTTPS) URL: ' + (String)rss.get('SiteURL') + '. Callout data is transmitted unencrypted.',
                     'HTTP callouts transmit all data in plaintext. Any network observer between Salesforce and the endpoint can intercept the full request and response payload.',
-                    'Replace the HTTP URL with HTTPS for "' + rss.SiteName + '". Update the Remote Site Setting URL. Contact the endpoint owner if HTTPS is unavailable.',
-                    'Site: ' + rss.SiteName + ' | URL: ' + rss.SiteURL, null
+                    'Replace the HTTP URL with HTTPS for "' + (String)rss.get('SiteName') + '". Update the Remote Site Setting URL. Contact the endpoint owner if HTTPS is unavailable.',
+                    'Site: ' + (String)rss.get('SiteName') + ' | URL: ' + (String)rss.get('SiteURL'), null
                 ));
             }
         }

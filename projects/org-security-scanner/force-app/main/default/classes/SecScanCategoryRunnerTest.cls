@@ -105,7 +105,7 @@ private class SecScanCategoryRunnerTest {
         System.assertEquals('Critical', findings[0].Severity__c);
         System.assertEquals(1, (Integer)findings[0].SeverityRank__c, 'Critical rank must be 1');
         System.assertEquals('Automated', findings[0].FindingType__c);
-        System.assertNotNull(findings[0].Description__c);
+        System.assertNotEquals(null, findings[0].Description__c);
     }
 
     @IsTest

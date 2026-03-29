@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-    <label>GU-004 - Guest profile can Create on Case or Lead</label>
+    <label>GU-004 - Guest profile can Create on Cas</label>
     <protected>false</protected>
     <values>
         <field>CheckId__c</field>

@@ -58,6 +58,10 @@ export default class SecurityFindingsList extends LightningElement {
 
     // ─── Derived: empty state ─────────────────────────────────────────────
 
+    get hasNoFindings() { return !this.hasFindings; }
+    get isNotLoadingMore() { return !this.isLoadingMore; }
+    get hasNoMore() { return !this.hasMore; }
+
     get hasFindings() {
         return Array.isArray(this.findings) && this.findings.length > 0;
     }

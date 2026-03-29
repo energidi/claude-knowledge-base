@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-    <label>CAI-006 - Connected App refresh tokens never expire</label>
+    <label>CAI-006 - Connected App refresh tokens n</label>
     <protected>false</protected>
     <values>
         <field>CheckId__c</field>
