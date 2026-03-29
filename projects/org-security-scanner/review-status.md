@@ -1,10 +1,39 @@
 # Org Security Scanner - Development Status
 
-## Current Phase: PHASE 13 COMPLETE - Bug Fixes Applied (Ready to Deploy)
+## Current Phase: PHASE 14 IN PROGRESS - Deploy Revealed 4 More Bugs (PAUSED)
 
 Plan file: `C:\Users\GidiAbramovich\.claude\plans\scalable-strolling-kahan.md`
 GitHub: `https://github.com/energidi/claude-knowledge-base/tree/main/projects/org-security-scanner`
-Latest commit: Phase 13 - 19 bugs fixed (see Bug Fix section below)
+Latest commit: Phase 13 (b9d124d) - Phase 14 fixes are LOCAL ONLY, not yet pushed
+
+### RESUME POINT - 4 remaining bugs before deploy succeeds
+
+Deploy attempt (job 0AfU900000EtDsbKAF) got 215/235 components. 20 errors = 4 root causes + cascades.
+
+| # | File | Bug | Status |
+|---|---|---|---|
+| A | SecScanController.cls | `String desc` variable (reserved word) - renamed to `descText` at lines 327/340 | **FIXED (local)** |
+| B | SecScanRunnerAgentforce.cls | `String desc` variable at lines 99/100/103 - rename to `pluginDesc` | **PENDING** |
+| C | SecScanFindingsControllerTest.cls | `"' OR '1'='1"` - invalid Apex string (double quotes) - fixed to `'\' OR \'1\'=\'1'` at line 430 | **FIXED (local)** |
+| D | 5 LWC CSS files | `var(--lwc-fontSize...)` internal SLDS tokens - replace with hardcoded fallback values | **PENDING** |
+| E | OrgSecurityScannerApp_Page.flexipage-meta.xml | `componentInstances` still invalid in schema even at root level - needs investigation | **PENDING** |
+
+**Cascade errors** (resolve automatically once root causes fixed):
+- CustomTab OrgSecurityScanner - from Flexipage failure
+- CustomApplication OrgSecurityScannerApp - from Flexipage failure
+- PermissionSet OrgSecurityScanner_Admin - from Flexipage failure
+- SecScanControllerTest - from desc fix (will auto-recompile)
+- SecScanRunnerAgentforceTest - from desc fix (will auto-recompile)
+
+**CSS files with --lwc-fontSize tokens (all 5 need fixing):**
+- `securityScanHistory.css` - fontSize4, fontSize3, fontSize2, fontSize1
+- `securityFindingDetail.css`
+- `securityScanProgress.css`
+- `securityStatusChangeForm.css`
+- `securityScoreRing.css`
+
+**Flexipage approach to try next:**
+Remove `componentInstances` entirely - deploy empty AppPage, use Salesforce App Builder GUI to place securityScanner component into main region. This avoids the schema validation issue entirely.
 
 ---
 
@@ -22,7 +51,8 @@ Latest commit: Phase 13 - 19 bugs fixed (see Bug Fix section below)
 | Phase 7 - Permission Set + Tab | COMPLETE | OrgSecurityScanner_Admin PS + OrgSecurityScanner tab |
 | Phase 8-11 - LWC (18 components) | COMPLETE | All 18 LWC components written including root securityScanner |
 | Phase 12 - App Shell | COMPLETE | OrgSecurityScannerApp Lightning App + OrgSecurityScannerApp_Page Flexipage |
-| Phase 13 - Bug Fixes | COMPLETE | 19 confirmed bugs fixed - ready for deployment to devgaug25 |
+| Phase 13 - Bug Fixes | COMPLETE | 19 confirmed bugs fixed and pushed to GitHub |
+| Phase 14 - Deploy Fixes | IN PROGRESS | 4 root bugs found during deploy - 2 fixed locally, 2 pending |
 
 ---
 

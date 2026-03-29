@@ -427,7 +427,7 @@ private class SecScanFindingsControllerTest {
         SecurityScanRun__c run = SecScanTestDataFactory.createCompletedRun();
         SecScanTestDataFactory.createFindings(run.Id, 'High', 2);
 
-        String injectionAttempt = "' OR '1'='1";
+        String injectionAttempt = '\' OR \'1\'=\'1';
         Test.startTest();
         SecScanApiResponse r = SecScanFindingsController.getCurrentScanFindings(
             run.Id, null, null, 100, injectionAttempt

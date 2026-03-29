@@ -324,7 +324,7 @@ public with sharing class SecScanController {
         rows.add(csvRow(headers));
 
         for (SecurityFinding__c f : findings) {
-            String desc        = truncateText ? truncField(f.Description__c) : f.Description__c;
+            String descText    = truncateText ? truncField(f.Description__c) : f.Description__c;
             String impact      = truncateText ? truncField(f.Impact__c)      : f.Impact__c;
             String remediation = truncateText ? truncField(f.Remediation__c) : f.Remediation__c;
 
@@ -337,7 +337,7 @@ public with sharing class SecScanController {
                 f.Status__c,
                 f.AffectedComponent__c,
                 f.AffectedComponentType__c,
-                desc,
+                descText,
                 impact,
                 remediation,
                 f.AcknowledgedBy__r != null ? f.AcknowledgedBy__r.Name : '',
