@@ -12,7 +12,7 @@
     </flexiPageRegions>
     <masterLabel>Org Security Scanner App Page</masterLabel>
     <template>
-        <name>flexipage:appHomeTemplateSingleColumn</name>
+        <name>flexipage:appHomeTemplateHeaderTwoColumns</name>
     </template>
     <type>AppPage</type>
 </FlexiPage>
