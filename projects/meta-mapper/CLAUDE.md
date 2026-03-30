@@ -102,16 +102,69 @@ A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records olde
 
 ---
 
+## Data Model
+
+### Dependency_Job__c
+| Field | Type | Notes |
+|---|---|---|
+| `Target_Metadata_Type__c` | Picklist | CustomField, ValidationRule, Flow, ApexClass, ApexTrigger, WorkflowRule, etc. |
+| `Target_API_Name__c` | Text 255 | Developer Name of the target metadata |
+| `Target_Object__c` | Text 255 | Optional - populated by typeahead for field-scoped searches |
+| `Active_Flows_Only__c` | Checkbox | Default true - drops inactive Flow versions |
+| `Status__c` | Picklist | Initializing, Processing, Completed, Failed |
+| `Error_Message__c` | Long Text 32768 | Full exception on failure |
+| `Visited_IDs__c` | Long Text 131072 | JSON Set<String> of processed Metadata IDs (cycle detection) |
+| `Nodes_Processed__c` | Number | Running counter for progress bar |
+| `Summary_JSON__c` | Long Text 32768 | JSON map of `{MetadataType: count}` - populated on Completed |
+
+### Dependency_Node__c
+| Field | Type | Notes |
+|---|---|---|
+| `Dependency_Job__c` | Master-Detail | Cascade delete |
+| `Parent_Node__c` | Lookup (self) | Builds hierarchical tree |
+| `Metadata_ID__c` | Text 18 | Exact 18-char Tooling API ID |
+| `Metadata_Type__c` | Text 50 | e.g. ApexClass, CustomField, Flow |
+| `Metadata_Name__c` | Text 255 | Human-readable API name |
+| `Level__c` | Number | Depth from root (0 = root target) |
+| `Is_Processed__c` | Checkbox | Engine flag: false = pending child traversal |
+| `Is_Circular__c` | Checkbox | True if this node already appears higher in the tree - rendered but not re-traversed |
+| `Is_Dynamic_Reference__c` | Checkbox | True if reference cannot be statically analyzed (e.g. dynamic Apex string) - flagged in UI |
+| `Context_Data__c` | Long Text 32768 | JSON "pills" - contextual metadata per type (see below) |
+| `Source__c` | Picklist | `ToolingAPI` or `Supplemental` - tracks how the node was discovered |
+
+### Context_Data__c (Pills) by Metadata Type
+| Type | JSON shape |
+|---|---|
+| ApexClass / ApexTrigger | `{"isWrite": true}` - whether the class writes to the target field/object |
+| Flow | `{"activeVersions": 3, "isActive": true}` |
+| WorkflowRule | `{"isActive": true, "triggerType": "onInsertOrUpdate"}` |
+| CustomField | `{"parentObject": "Account", "parentType": "CustomObject"}` |
+| Report | `{"filterUsage": ["filter", "grouping", "column"]}` |
+
+---
+
 ## Key Apex Classes
 
 | Class | Role |
 |---|---|
-| `DependencyJobController` | `@AuraEnabled` LWC entry points; creates jobs, typeahead via `EntityDefinition`, node hierarchy retrieval |
-| `DependencyService` | Stateless logic: Tooling API SOQL formatting, `IN` operator chunking (max 200/query), Active Flows filter |
-| `DependencyQueueable` | Async engine: callouts, cycle detection, limit guardrails, self-chaining, completion/failure handling |
-| `DependencyNotificationService` | Publishes `Dependency_Status__e`; sends Custom Notification (bell) + email on completion |
-| `DependencyCleanupBatch` | Nightly hard-delete of stale jobs |
-| `DependencyCleanupScheduler` | Schedules the batch |
+| `DependencyJobController` | `@AuraEnabled` LWC entry points: `createJob()`, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()` |
+| `DependencyService` | Tooling API SOQL formatting, IN chunking (max **100**/query), QueryMore handling, Active Flows filter |
+| `DependencyTypeHandlerFactory` | Returns the correct `IDependencyTypeHandler` implementation for a given metadata type |
+| `IDependencyTypeHandler` (interface) | `List<Dependency_Node__c> findSupplemental(Id jobId, List<Dependency_Node__c> nodes)` |
+| `CustomFieldHandler` | Supplemental: WorkflowFieldUpdate, ValidationRule formulas, FlexiPage rules, CMT lookups |
+| `ApexClassHandler` | Supplemental: CMT record field references, dynamic reference flagging |
+| `FlowHandler` | Supplemental: QuickActionDefinition trigger flows, subflow references, WebLink URLs |
+| `DependencyQueueable` | Async engine: callouts, type handler dispatch, cycle detection, limit guardrails, QueryMore, self-chaining |
+| `DependencyNotificationService` | Publishes `Dependency_Status__e`; Custom Notification + email on completion |
+| `DependencyCleanupBatch` | Nightly hard-delete of stale jobs (>24 hours) |
+| `DependencyCleanupScheduler` | Schedules the cleanup batch at 02:00 |
+
+### Type Handler Pattern
+Every `IDependencyTypeHandler` implementation follows the same contract:
+- Receives the current batch of `Dependency_Node__c` records of its type
+- Executes supplemental queries (Tooling API, SOQL, Metadata API) to find dependencies **not** returned by `MetadataComponentDependency`
+- Returns additional `Dependency_Node__c` records to be inserted with `Source__c = 'Supplemental'`
+- Sets `Is_Dynamic_Reference__c = true` on nodes that cannot be statically resolved
 
 ---
 
@@ -122,23 +175,59 @@ A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records olde
 | `metaMapperApp` | Root shell; owns `jobId` state; switches between input and results view |
 | `metaMapperInput` | Metadata type dropdown, API name field, typeahead object lookup (debounced 300ms, queries `EntityDefinition`) |
 | `metaMapperProgress` | `lightning-progress-bar` driven by Platform Events; empApi subscribe/unsubscribe lifecycle |
-| `metaMapperResults` | Tab container for Tree View and Graph View; hosts export controls |
-| `metaMapperGraph` | ECharts Static Resource loader + force-directed graph renderer |
-| `metaMapperExport` | Pure client-side CSV and JSON download (no server round-trip) |
+| `metaMapperResults` | Tab container for Tree View and Graph View; stats tile (count by type from `Summary_JSON__c`); hosts export controls |
+| `metaMapperGraph` | ECharts Static Resource loader + force-directed graph renderer; type filter sidebar; circular/dynamic reference visual indicators |
+| `metaMapperExport` | Pure client-side CSV, JSON, and **package.xml** download (no server round-trip) |
+
+---
+
+## Query Strategy
+
+### IN Clause Chunking
+Chunk Metadata ID lists into groups of **100** per Tooling API query (not 200). Above ~300 IDs, HTTP 414 (URI Too Long) errors occur - 100 is the battle-tested safe limit.
+
+### QueryMore
+Tooling API results exceeding 2,000 rows return a `nextRecordsUrl`. `DependencyService` must follow `nextRecordsUrl` iteratively until `done = true` before returning results to the Queueable.
+
+### Reactive HTTP 414 Handling
+If a callout returns HTTP 414 or 431, split the current batch in half and retry both halves. Do not fail the job on this error.
+
+### Supplemental Query Gaps
+`MetadataComponentDependency` does **not** track these - supplemental handlers fill the gap:
+
+| Gap | Handler | Strategy |
+|---|---|---|
+| Workflow Field Updates → Custom Field | `CustomFieldHandler` | Query `WorkflowFieldUpdate` WHERE `Field = :apiName` |
+| Validation Rule formulas | `CustomFieldHandler` | Query `ValidationRule` bodies, regex match field API name |
+| FlexiPage visibility rules | `CustomFieldHandler` | Query `FlexiPage` metadata, parse XML for field references |
+| Custom Metadata Type record lookups | `CustomFieldHandler` / `ApexClassHandler` | SOQL on CMT records, filter fields named `class`, `handler`, `type` |
+| Lookup field relationships | `CustomFieldHandler` | Query `CustomField` WHERE `ReferenceTo = :objectName` |
+| Dynamic Apex string references | `ApexClassHandler` | Flag `Is_Dynamic_Reference__c = true`; cannot be statically resolved |
+
+---
+
+## Export Formats
+
+| Format | Structure |
+|---|---|
+| CSV | Flat: `Level, Metadata_Type, Metadata_Name, Metadata_ID, Parent_Name, Is_Circular, Is_Dynamic` |
+| JSON | Nested tree mirroring `Dependency_Node__c` hierarchy with `Context_Data__c` pills included |
+| package.xml | Valid Salesforce deployment manifest grouped by `<types>`. Excludes managed package components (namespace prefix detected). |
 
 ---
 
 ## Source API Version
 
-`66.0` (configured in `sfdx-project.json`). Use this version for all Tooling API endpoint paths.
+`66.0` (configured in `sfdx-project.json`). Use this version for all Tooling API endpoint paths. Minimum supported: v49.0 (when `MetadataComponentDependency` became reliable).
 
 ---
 
 ## Known Limitations
 
-- `MetadataComponentDependency` (Tooling API) does not capture dynamic Apex string references or some formula field lookups. Results reflect only what the API exposes.
-- Named Credential requires one-time admin authorization post-install and cannot be scripted.
-- `Active Flows Only` mode excludes inactive Flow versions by design to preserve heap.
+- `MetadataComponentDependency` does not capture all dependency types. Supplemental handlers partially fill these gaps but cannot resolve dynamic Apex string references - these are flagged with `Is_Dynamic_Reference__c = true` in the UI.
+- Named Credential requires one-time admin authorization post-install and cannot be scripted or source-tracked.
+- `Active Flows Only` mode excludes inactive Flow versions by design to preserve heap and reduce DML.
+- package.xml export excludes managed package components (namespace-prefixed) by default.
 
 ---
 
