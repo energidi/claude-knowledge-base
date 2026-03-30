@@ -93,6 +93,22 @@ Remove `componentInstances` entirely - deploy empty AppPage, use Salesforce App 
 - Assign `OrgSecurityScanner_Admin` permission set to your user before running a scan
 - Session ID limitation: production orgs with IP locking may need Named Credential pattern before use there
 
+## Phase 15 - COMPLETE - Dashboard blank content fixed
+
+**Root cause:** `securityScanner` was placed in the HEADER region of `flexipage:appHomeTemplateHeaderTwoColumns`. Header region has auto/intrinsic height. The CSS chain `:host { height:100% }` -> `.app-container { height:100% }` -> `.content-area { flex:1 1 0 }` resolved to 0px remaining height for the content area. Header bar + tab strip showed (intrinsic content height) but dashboard/findings/history were invisible (0px).
+
+**Fix:** Added `min-height: calc(100vh - 80px)` to `.app-container` in `securityScanner.css`. This guarantees the component fills the viewport even when the flexipage parent region has auto height.
+
+**File changed:** `force-app/main/default/lwc/securityScanner/securityScanner.css`
+
+**Deploy:** `0AfU900000Eu3uPKAR` - Succeeded 2026-03-30
+
+**Next steps:**
+1. Refresh the app in devgaug25 - dashboard content, heatmap, and scan stats should now be visible
+2. Test Findings (241) tab - findings list should render
+3. Test History tab - scan history should render
+4. Run Apex tests: `sf apex run test --target-org devgaug25 --result-format human --wait 10`
+
 ---
 
 ## Phase 4 Checklist (COMPLETE)
