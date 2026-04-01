@@ -183,6 +183,7 @@ for (Dependency_Job__c job : scope) {
 | `Nodes_Processed__c` | Number | Running counter for progress bar |
 | `Summary_JSON__c` | Long Text 32768 | JSON map of `{MetadataType: count}` - populated on Completed |
 | `Closed_At__c` | DateTime | Stamped when Status transitions to Completed, Failed, or Cancelled. Cleanup batch uses this field - never CreatedDate - to avoid deleting in-progress jobs. |
+| `Rechain_Count__c` | Number | Incremented each time the Queueable self-chains. If this value increases by N (configurable in CMDT) without a corresponding increase in `Nodes_Processed__c`, the engine is hot-looping on a pathological node and pauses with a user-facing warning. |
 
 > **Visited_IDs__c removed.** A Long Text 131072 field caps at ~5,957 IDs (22 chars/ID with JSON formatting). Enterprise orgs can easily exceed this, causing `StringException` and crashing the Queueable chain. Cycle detection is instead performed via two-tier logic (see Cycle Detection below).
 
@@ -202,6 +203,8 @@ for (Dependency_Job__c job : scope) {
 | `Source__c` | Picklist | `ToolingAPI` or `Supplemental` - tracks how the node was discovered |
 | `Path__c` | Long Text 32768 | Pipe-delimited ancestor `Metadata_ID__c` chain from root to this node - used for true cycle detection |
 | `Supplemental_Confidence__c` | Number (3,0) | 0-100 confidence score for supplemental nodes only. Regex/XML matches are inherently fuzzy; score reflects match certainty. Nodes below 70 display a warning badge in the UI. Null for ToolingAPI nodes. |
+| `Node_Unique_Key__c` | Text 40 (External ID, Unique) | Composite key: `JobId + ':' + Metadata_ID__c`. Used for upsert to prevent duplicate nodes from race conditions in concurrent Queueable chains. |
+| `Ancestors_Hash__c` | Text 255 | Concatenated 6-char base64url hashes of ancestor `Metadata_ID__c` values. Used as a bloom-filter shortcut for cycle detection before invoking `String.contains()` on the full `Path__c`. Reduces CPU on deep trees. If hash check finds a suspected cycle, validate conclusively against `Path__c`. |
 
 ### Context_Data__c (Pills) by Metadata Type
 | Type | JSON shape |
@@ -216,19 +219,37 @@ for (Dependency_Job__c job : scope) {
 
 ## Key Apex Classes
 
+**Interfaces (Dependency Injection / testability):**
+
+| Interface | Contract |
+|---|---|
+| `IDependencyService` | `fetchDependencies(List<String> ids, DependencyOptions opts)`, `buildContextData(Dependency_Node__c node)`, `computeScore(String handlerType, String matchBasis)` |
+| `IDependencyTypeHandler` | `List<Dependency_Node__c> findSupplemental(Id jobId, List<Dependency_Node__c> nodes)` |
+| `INotificationService` | `publishProgress(String jobId, String status, Integer count, String msg)`, `sendCompletion(String jobId, String userId)` |
+| `ISettingsProvider` | `MetaMapper_Settings__mdt getSettings()` - read once per execution, cached per-transaction |
+
+**Selectors (all SOQL centralized here):**
+
+| Selector | Key Methods |
+|---|---|
+| `DependencyJobSelector` | `getByIdForEngine(String jobId)` - minimal fields for engine; `getClosedJobsBefore(DateTime threshold)` - for cleanup |
+| `DependencyNodeSelector` | `nextUnprocessed(String jobId, Integer lim)` - ordered fetch; `dedupForResults(String jobId, Set<String> ids)` - scoped dedup query; `listByJob(String jobId)` - for export |
+
+**Classes:**
+
 | Class | Role |
 |---|---|
-| `DependencyJobController` | `@AuraEnabled` LWC entry points: `createJob()`, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()`, `cancelJob()` |
-| `DependencyService` | Tooling API SOQL formatting, IN chunking (max **100**/query), QueryMore handling, Active Flows filter |
-| `DependencyTypeHandlerFactory` | Returns the correct `IDependencyTypeHandler` implementation for a given metadata type |
-| `IDependencyTypeHandler` (interface) | `List<Dependency_Node__c> findSupplemental(Id jobId, List<Dependency_Node__c> nodes)` |
-| `CustomFieldHandler` | Supplemental: WorkflowFieldUpdate, ValidationRule formulas, FlexiPage rules, CMT lookups |
-| `ApexClassHandler` | Supplemental: CMT record field references, dynamic reference flagging |
-| `FlowHandler` | Supplemental: QuickActionDefinition trigger flows, subflow references, WebLink URLs |
-| `DependencyQueueable` | Async engine: callouts, type handler dispatch, cycle detection, limit guardrails, QueryMore, self-chaining. Constructor signature: `DependencyQueueable(String jobId, Boolean activeFlowsOnly)` - `Active_Flows_Only__c` is passed at construction time to avoid an extra SOQL per chained execution. |
-| `DependencyNotificationService` | Publishes `Dependency_Status__e`; Custom Notification + email on completion |
-| `DependencyCleanupBatch` | Nightly hard-delete of stale jobs (>24 hours) |
-| `DependencyCleanupScheduler` | Schedules the cleanup batch at 02:00 |
+| `DependencyJobController` | `@AuraEnabled` (USER_MODE): `createJob()` with async guard + preflight check, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()`, `cancelJob()`. Delegates to services - no SOQL/DML directly. |
+| `DependencyService` (implements `IDependencyService`) | Tooling API SOQL formatting, character-budget chunking, QueryMore, Active Flows filter, `buildContextData()`, `computeScore()` |
+| `DependencyTypeHandlerFactory` | `IDependencyTypeHandler getHandler(String metadataType)` - returns correct handler or no-op default |
+| `CustomFieldHandler` | Supplemental: WorkflowFieldUpdate (95), ValidationRule regex (65), FlexiPage XML (60), CMT lookups (85), Lookup relationships (95) |
+| `ApexClassHandler` | Supplemental: CMT references (85); flags `Is_Dynamic_Reference__c` |
+| `FlowHandler` | Supplemental: QuickActionDefinition, subflows, WebLink URLs |
+| `DependencyQueueable` | Async engine. Constructor: `DependencyQueueable(String jobId, Boolean activeFlowsOnly)`. Savepoint/catch; cancel check; CMDT read via `ISettingsProvider`; hot-loop detection; pre-batch + mid-loop seven-limit guardrail; scoped dedup + upsert by `Node_Unique_Key__c`; two-tier cycle detection; callouts; handlers; one PE event per execution (suppressed if `Disable_PE__c`); self-chain. |
+| `DependencyNotificationService` (implements `INotificationService`) | `publishProgress()` - one event per execution; `sendCompletionNotification()` |
+| `DependencyCleanupBatch` | Scope = 1. Explicit node chunk-delete before parent. Filter: `Closed_At__c` + closed statuses. |
+| `DependencyCleanupScheduler` | Schedules cleanup at 02:00 |
+| `NamedCredentialHealthCheck` | Setup-only Apex class: verifies Tooling API reachability via Named Credential. Called by pre-flight LWC check on page load. |
 
 ### Type Handler Pattern
 Every `IDependencyTypeHandler` implementation follows the same contract:
@@ -239,16 +260,135 @@ Every `IDependencyTypeHandler` implementation follows the same contract:
 
 ---
 
+## Hot-Loop Backoff Detection
+
+If `DependencyQueueable` self-chains repeatedly without processing any new nodes (e.g. a single pathological node saturates every guardrail before children can be inserted), the engine must detect and break the loop.
+
+**Detection logic:**
+- On each self-chain, increment `Rechain_Count__c` on the Job and compare `Nodes_Processed__c` to the previous value stored in a transient variable.
+- If `Rechain_Count__c` increases by `Hotloop_Threshold__c` (default 5) without any change in `Nodes_Processed__c`, transition Job to `Status__c = 'Paused'` (new status value), set `Error_Message__c` with diagnostic context, and publish a `Dependency_Status__e` warning event.
+- The LWC surfaces this as a user-visible warning: "The scan paused because it encountered a highly complex component. Review the error details and retry with a smaller batch size."
+
+> `Status__c` gains a `Paused` value. `DependencyJobController` exposes a `resumeJob(String jobId)` method that re-enqueues with `Rechain_Count__c` reset, after admin lowers `Batch_Size__c` in CMDT.
+
+---
+
 ## Key LWC Components
 
 | Component | Role |
 |---|---|
-| `metaMapperApp` | Root shell; owns `jobId` state; switches between input and results view |
-| `metaMapperInput` | Metadata type dropdown, API name field, typeahead object lookup (debounced 300ms, queries `EntityDefinition`) |
-| `metaMapperProgress` | `lightning-progress-bar` driven by Platform Events; empApi subscribe/unsubscribe lifecycle |
-| `metaMapperResults` | Tab container for Tree View and Graph View; stats tile (count by type from `Summary_JSON__c`); hosts export controls |
-| `metaMapperGraph` | ECharts Static Resource loader + force-directed graph renderer; type filter sidebar; circular/dynamic reference visual indicators; graph density toggle (default: first 3 levels only, "Expand All" button reveals full tree - prevents browser choke on 5,000+ node graphs) |
-| `metaMapperExport` | Pure client-side CSV, JSON, and **package.xml** download (no server round-trip) |
+| `metaMapperApp` | Root shell; owns `jobId` state; switches between input, progress, and results views. Runs pre-flight Named Credential health check on mount; shows setup error state if check fails. |
+| `metaMapperInput` | Metadata type picklist, API name text input, typeahead object lookup (debounced 300ms, queries `EntityDefinition`), "Active Flows Only" checkbox with tooltip explanation. Shows estimated node complexity preview when available. Validates required fields before enabling submit. |
+| `metaMapperProgress` | `lightning-progress-bar` + human-readable status label ("Analyzing metadata...", "Paused - limit reached", "Cancelling..."). Subscribes to `Dependency_Status__e` via `lightning/empApi`; falls back to `getJobStatus()` polling if `Disable_PE__c = true`. Displays elapsed time. Cancel button transitions to disabled "Cancelling..." spinner on click; shows confirmation modal before cancelling. |
+| `metaMapperResults` | Tab container: "Tree View" and "Graph View" sharing filter state. Stats tile (type counts from `Summary_JSON__c`). Hosts export controls with primary (CSV/JSON) and advanced (package.xml) tiers. |
+| `metaMapperTree` | Virtual-rendered SLDS tree with search, type filter, level filter, and confidence filter. Supports collapse/expand per branch. Keyboard navigable. |
+| `metaMapperGraph` | ECharts force-directed graph. Node click: opens component in Salesforce Setup. Right-click: "Copy API Name". Hover: tooltip with `Context_Data__c` pills in plain English. "Expand All" guard: shows modal warning if node count > 1,000. Persistent sidebar legend (always visible). "Focus path to root" breadcrumb. Type filter + level slider. |
+| `metaMapperExport` | Primary export: CSV and JSON (analysis outputs). Advanced export (collapsible): package.xml (developer artifact). No server round-trip. |
+
+---
+
+## UX Design Specification
+
+### Pre-Flight Check
+On `metaMapperApp` mount, call `NamedCredentialHealthCheck.verify()` via `@AuraEnabled`. If the Named Credential is not authenticated or unreachable:
+- Block the input form entirely
+- Show a friendly empty state: "MetaMapper needs one-time setup. Follow the setup guide to authorize the Tooling API connection." with a direct link to `setup/SETUP.md`
+- Do not allow job submission until the check passes
+
+### Input Screen (`metaMapperInput`)
+
+| Element | Behavior |
+|---|---|
+| Metadata Type picklist | Required; shows supported types only |
+| API Name input | Required; inline validation on blur |
+| Target Object typeahead | Required only when type is `CustomField`; shows validation message if omitted |
+| "Active Flows Only" checkbox | Default checked; tooltip: "When checked, inactive Flow versions are excluded from results. This reduces scan scope but may miss deprecated dependencies." |
+| Complexity preview | After API Name is entered, show: "Estimated scan scope: [Small / Medium / Large / Very Large] based on historical averages for this metadata type." (non-blocking, best-effort) |
+| Submit button | Disabled until required fields valid; label "Analyze Dependencies" |
+
+### Progress Screen (`metaMapperProgress`)
+
+**Status labels (human-readable, not Status__c API values):**
+
+| Status__c value | UI label |
+|---|---|
+| Initializing | "Setting up your analysis..." |
+| Processing | "Analyzing metadata... [N] components found so far" |
+| Paused | "Analysis paused - encountered a complex component. Adjust batch size and retry." |
+| Cancelled | "Analysis cancelled. Partial results are available below." |
+| Completed | "Analysis complete. [N] components found." |
+| Failed | "Analysis failed. [error summary]. See details for diagnostics." |
+
+**Cancel interaction:**
+1. User clicks "Cancel" - show confirmation modal: "Stop the analysis? The job will stop at the next checkpoint. Partial results already found will remain available."
+2. On confirm: button transitions to disabled "Cancelling..." with spinner; calls `cancelJob()`
+3. LWC waits for `Dependency_Status__e` with `Status__c = 'Cancelled'` before re-enabling UI
+
+### Graph View (`metaMapperGraph`)
+
+**Node visual language (SLDS-compliant, not color-only):**
+
+| Node type | Color | Icon | Shape indicator |
+|---|---|---|---|
+| Is_Circular__c | Type color | `utility:rotate` | Dashed border |
+| Is_Dynamic_Reference__c | Type color | `utility:warning` | Solid border (no tilde prefix) |
+| Source__c = Supplemental | Type color | `utility:info` | [S] badge |
+| Supplemental_Confidence__c < 70 | Type color | `utility:error` | Red badge; click opens popover |
+| Normal node | Type color | Type-specific icon | Solid border |
+
+**Interactions:**
+- **Click:** opens component in Salesforce Setup in new tab
+- **Right-click:** context menu with "Copy API Name", "Focus path to root", "Collapse subtree"
+- **Hover:** SLDS tooltip showing `Metadata_Type__c`, `Metadata_Name__c`, `Context_Data__c` pills in plain English, confidence score (if supplemental)
+- **"Expand All" guard:** if `Nodes_Processed__c > 1,000`, clicking "Expand All" shows modal: "This graph contains [N] nodes. Expanding all levels may slow or freeze your browser. Consider using the Level Filter or exporting to CSV instead."
+- **"Focus path to root":** highlights the direct ancestor chain from selected node to root; dims all other nodes
+- **Persistent legend:** always-visible sidebar listing all node types with color swatch + icon + label
+
+**Confidence badge popover (Supplemental nodes with score < 70):**
+Plain-English explanation by handler:
+- ValidationRule regex: "This dependency was found by scanning the text of a Validation Rule formula. The match may include false positives from comments or cross-object references. Verify manually before making changes."
+- FlexiPage XML: "This dependency was found by parsing Lightning page XML. The match is version-sensitive and may not reflect all configurations."
+
+### Tree View (`metaMapperTree`)
+
+| Feature | Behavior |
+|---|---|
+| Rendering | Virtual (only visible rows rendered); handles 10,000+ nodes without freeze |
+| Search | Full-text search on `Metadata_Name__c`; highlights matches; clears with X |
+| Filters | Type multi-select, Level range slider, Confidence threshold, Is_Circular, Is_Dynamic, Source |
+| Collapse/Expand | Per branch; keyboard navigable (arrow keys, Enter, Space) |
+| Node action | Click opens in Salesforce Setup |
+
+### Accessibility
+
+- All color distinctions reinforced by SLDS icon + shape (not color alone)
+- Contrast ratios: all palette colors verified WCAG AA against white and Salesforce dark backgrounds before implementation
+- ARIA labels on all interactive graph elements; `role="tree"` on tree view
+- Keyboard navigation: Tab to focus graph container; arrow keys to traverse nodes; Enter to open in Setup
+- Screen reader: every node badge includes `aria-label` in plain English (e.g. "Warning: low confidence supplemental match")
+- Color-blind safe: icon + border shape carry meaning independent of hue
+
+### Export Hierarchy
+
+**Primary exports (prominent placement):**
+- CSV - "Download as Spreadsheet" - for analysis in Excel / Sheets
+- JSON - "Download as JSON" - for programmatic processing
+
+**Advanced exports (collapsible "Advanced" section):**
+- package.xml - "Download Deployment Manifest" - developer artifact for deployment pipelines; tooltip explains what it is and when to use it
+
+### Settings UI (CMDT labels)
+
+When surfacing `MetaMapper_Settings__mdt` fields in any admin UI, use human-readable labels:
+
+| Field API name | UI label | Help text |
+|---|---|---|
+| `Retention_Hours__c` | "Keep completed jobs for" | "Jobs older than this are automatically deleted. Minimum 1 hour. Recommended: 72+ hours for diagnostic use." |
+| `Batch_Size__c` | "Analysis speed (standard)" | "How many metadata components to analyze per processing step. Lower this if you see timeout errors." |
+| `Flow_Batch_Size__c` | "Analysis speed (Flow jobs)" | "Lower batch size used when 'Active Flows Only' is enabled, because each Flow requires an extra check." |
+| `Dml_Reserve_Rows__c` | "Safety margin (DML rows)" | "Advanced: number of database rows to reserve as a safety buffer. Increase for orgs with very connected metadata." |
+| `Disable_PE__c` | "Disable live progress updates" | "Turn on if your org is hitting real-time event limits. Progress will refresh every few seconds instead." |
+| `Hotloop_Threshold__c` | "Pause after N stuck retries" | "If the analysis retries this many times without finding new components, it pauses and alerts you." |
 
 ---
 
@@ -295,11 +435,19 @@ Decimal cpuPct = (Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime();
 // --- Query rows budget ---
 Integer queryRowsRemaining = Limits.getLimitQueryRows() - Limits.getQueryRows();
 
+// --- SOQL query count budget ---
+Integer queriesRemaining = Limits.getLimitQueries() - Limits.getQueries();
+
+// --- DML statement count budget (150 limit; reserve 10 for handler inserts) ---
+Integer dmlStmtsRemaining = Limits.getLimitDmlStatements() - Limits.getDmlStatements();
+
 if (calloutsRemaining < headroom
     || dmlRemaining < dmlReserve          // dmlReserve from MetaMapper_Settings__mdt, default 750
     || heapPct >= 0.80
     || cpuPct >= 0.75
-    || queryRowsRemaining < 1000) {
+    || queryRowsRemaining < 1000
+    || queriesRemaining < 10
+    || dmlStmtsRemaining < 10) {
     System.enqueueJob(new DependencyQueueable(jobId, activeFlowsOnly));
     return;
 }
@@ -350,6 +498,8 @@ All tunable runtime parameters are stored in `MetaMapper_Settings__mdt` Custom M
 | `Batch_Size__c` | Number | 50 | Unprocessed nodes queried per Queueable execution (non-Flow jobs). Tune down for high-DML orgs. |
 | `Flow_Batch_Size__c` | Number | 30 | Batch size when `Active_Flows_Only__c = true`. Lower because each Flow node may require a second validation callout, reducing effective callout headroom. |
 | `Dml_Reserve_Rows__c` | Number | 750 | DML rows to reserve in the guardrail before chaining. Raise for orgs with high-fan-out metadata (e.g. heavily referenced CustomObjects). |
+| `Disable_PE__c` | Checkbox | false | When true, suppresses `Dependency_Status__e` publish and falls back to polling via `getJobStatus()`. Use when org is approaching the daily Platform Event delivery limit. |
+| `Hotloop_Threshold__c` | Number | 5 | Number of consecutive re-chains with zero `Nodes_Processed__c` progress before the engine pauses the job and surfaces a warning to the UI. |
 
 > Hard-coding batch size and DML reserve is inappropriate for an enterprise tool. A highly-connected org may need `Flow_Batch_Size__c = 15` and `Dml_Reserve_Rows__c = 1500`. Admins tune without a code deploy.
 
