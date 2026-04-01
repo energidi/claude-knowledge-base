@@ -67,7 +67,7 @@ The core challenge: enterprise org metadata trees are too large for synchronous 
 
 1. User submits a search via the LWC - an `@AuraEnabled` controller creates a `Dependency_Job__c` record and inserts the root `Dependency_Node__c`, then enqueues `DependencyQueueable`.
 2. Each `DependencyQueueable` execution queries a batch of unprocessed nodes (`Is_Processed__c = false`), calls the Tooling API via Named Credential, inserts new child nodes, marks current nodes processed, and checks limit proximity.
-3. If limits are approaching (>80% callouts or heap), it self-enqueues a fresh instance and exits - preserving all state in the database.
+3. If limits are approaching, it self-enqueues a fresh instance and exits. Threshold is **60% callouts** when `Active_Flows_Only__c = true` and Flow nodes are in the batch (each Flow chunk consumes 2 callouts: dependency query + Flow status validation). Otherwise **80%**. Heap threshold is always 80%.
 4. When no unprocessed nodes remain, the job transitions to `Completed` and fires notifications.
 
 ### Tooling API Callout (Loopback Auth)
@@ -80,7 +80,9 @@ Direct Tooling API calls from within async Apex require a **Named Credential loo
 
 ### Cycle Detection
 
-Circular metadata dependencies (A depends on B depends on A) would cause infinite chaining. Each `Dependency_Job__c` has a `Visited_IDs__c` Long Text Area (131,072 chars) storing a JSON-serialized `Set<String>` of all `Metadata_ID__c` values already inserted. `DependencyQueueable` deserializes this set on entry, skips any Tooling API result already in it, and re-serializes on exit.
+At the start of each Queueable execution, `DependencyQueueable` queries `SELECT Metadata_ID__c FROM Dependency_Node__c WHERE Dependency_Job__c = :jobId` to build the visited `Set<String>` from the database. This scales to any tree depth with no upper bound. Any Tooling API result whose `Metadata_ID__c` is already in this set is inserted with `Is_Circular__c = true` and `Is_Processed__c = true` - rendered in the UI but not re-traversed. No field write-back is needed; the database is the source of truth.
+
+> **Why not a text field?** A Long Text 131072 field caps at ~5,957 IDs (22 chars/ID with JSON formatting). Enterprise org dependency trees can easily exceed this, causing `StringException` and crashing the entire Queueable chain.
 
 ### Live Progress (Platform Events)
 
@@ -88,7 +90,9 @@ Circular metadata dependencies (A depends on B depends on A) would cause infinit
 
 ### Graph Visualization
 
-`metaMapperGraph` loads Apache ECharts from the `ECharts` Static Resource (bundled `echarts.min.js` - no CDN). It receives a flat `Dependency_Node__c` list and builds the ECharts `graph` series client-side, using `Parent_Node__c` to derive edge links. Node color is keyed to `Metadata_Type__c`.
+`metaMapperGraph` loads Apache ECharts from the `ECharts` Static Resource (no CDN). It receives a flat `Dependency_Node__c` list and builds the ECharts `graph` series client-side, using `Parent_Node__c` to derive edge links. Node color is keyed to `Metadata_Type__c`.
+
+> **Static Resource build**: use `echarts/dist/echarts.min.js` (core minified build, ~1.0-1.2MB) sourced from the npm package. Do **not** use the full bundle - it includes maps and 3D features and risks exceeding Salesforce's 5MB static resource hard limit.
 
 ### Security Model
 
@@ -113,9 +117,10 @@ A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records olde
 | `Active_Flows_Only__c` | Checkbox | Default true - drops inactive Flow versions |
 | `Status__c` | Picklist | Initializing, Processing, Completed, Failed |
 | `Error_Message__c` | Long Text 32768 | Full exception on failure |
-| `Visited_IDs__c` | Long Text 131072 | JSON Set<String> of processed Metadata IDs (cycle detection) |
 | `Nodes_Processed__c` | Number | Running counter for progress bar |
 | `Summary_JSON__c` | Long Text 32768 | JSON map of `{MetadataType: count}` - populated on Completed |
+
+> **Visited_IDs__c removed.** A Long Text 131072 field caps at ~5,957 IDs (22 chars/ID with JSON formatting). Enterprise orgs can easily exceed this, causing `StringException` and crashing the Queueable chain. Cycle detection is instead performed by querying the database at the start of each Queueable execution (see Cycle Detection below).
 
 ### Dependency_Node__c
 | Field | Type | Notes |
