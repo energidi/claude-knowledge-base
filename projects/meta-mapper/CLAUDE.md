@@ -4,6 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Implementation Gate (Non-Negotiable)
+
+**Do not write, generate, or modify any code or metadata files until the user explicitly says to proceed.**
+
+This applies to every phase and every artifact - Apex classes, LWC components, object metadata, static resources, test classes, config files, and any other deployable file. Design discussions, plan updates, and CLAUDE.md edits are permitted. Code is not.
+
+---
+
 ## Project Overview
 
 MetaMapper is an open-source, 100% native Salesforce application that visualizes deep metadata dependencies using the Tooling API. It targets enterprise/LDV orgs where synchronous Governor Limits are a hard constraint. All runtime data stays within the Salesforce trust boundary - no external APIs, no CDN calls.
