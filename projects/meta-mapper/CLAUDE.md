@@ -91,14 +91,20 @@ Direct Tooling API calls from within async Apex require a **Named Credential loo
 A single global visited set incorrectly flags shared/diamond dependencies (node B reachable via A→B and C→B) as circular. These are valid repeated references, not cycles. Two separate concerns must be separated:
 
 **Tier 1 - Global deduplication (`processedIds`):**
-After retrieving Tooling API results for the current batch, query the DB for only those specific IDs:
-`SELECT Metadata_ID__c FROM Dependency_Node__c WHERE Dependency_Job__c = :jobId AND Metadata_ID__c IN :currentBatchIds`
-This returns a maximum of 100 rows (one per ID in the current batch), uses negligible heap, and avoids the full-table scan that would occur when querying all previously inserted nodes. If a result is already in this set, **skip insertion entirely** (deduplication). Do NOT mark as circular.
+After the Tooling API returns dependency results for the current batch, query the DB scoped to only those returned IDs:
+`SELECT Metadata_ID__c FROM Dependency_Node__c WHERE Dependency_Job__c = :jobId AND Metadata_ID__c IN :currentResultIds`
+Rows returned = number of already-inserted matches within `currentResultIds` (bounded by the result set size, not by the IN list size). This avoids the full-table scan that would occur when querying all previously inserted nodes. If a result is already in this set, **skip insertion entirely** (deduplication). Do NOT mark as circular.
 
-> **Why not query all nodes upfront?** At 10k-20k nodes a full-scan query consumes a large portion of the 6MB async heap before any Tooling API work begins. The targeted query achieves identical deduplication at constant cost (max 100 rows).
+> **Why not query all nodes upfront?** At 10k-20k nodes a full-scan query consumes a large portion of the 6MB async heap before any Tooling API work begins. Scoping to `currentResultIds` limits the dedup query to matches within the current callout's result set only.
 
 **Tier 2 - True ancestry cycle detection (`Path__c`):**
-Each `Dependency_Node__c` stores a pipe-delimited `Path__c` field: the chain of ancestor `Metadata_ID__c` values from root to this node. When inserting a child node, its `Path__c = parent.Path__c + '|' + parent.Metadata_ID__c`. Before inserting, check: if the new node's `Metadata_ID__c` appears anywhere in `parent.Path__c` - that is a true cycle (A→B→A pattern). Insert with `Is_Circular__c = true`, `Is_Processed__c = true`. Do not enqueue for traversal.
+Each `Dependency_Node__c` stores a pipe-delimited `Path__c` field: the chain of ancestor `Metadata_ID__c` values from root to this node.
+
+- **Root node:** `Path__c = ''` (empty string, not null). This ensures the first child path is built as `'' + '|' + rootId = '|rootId'`, which is handled by trimming the leading pipe, OR by initializing root as `Path__c = rootId` and children as `parentPath + '|' + parentId`.
+- **Correct path-building:** `child.Path__c = (String.isBlank(parent.Path__c) ? '' : parent.Path__c + '|') + parent.Metadata_ID__c`. This avoids a leading delimiter on first-level children.
+- **Cycle check:** if `parent.Path__c` contains the new node's `Metadata_ID__c`, it is a true ancestry cycle (A→B→A pattern).
+- **Circular node path:** Keep the **full `Path__c`** on circular nodes - do NOT set to null. The path is most valuable precisely when a cycle is found (debugging, export). Mark `Is_Circular__c = true`, `Is_Processed__c = true`. Append the cycle-closing segment to `Context_Data__c` as `{"cycleClosesAt": "<parentMetadataId>"}` for UI visualization.
+- **CPU consideration:** `String.contains()` on a long Path__c string inside an inner loop is CPU-intensive for deep trees. Check `Limits.getCpuTime()` against the guardrail threshold **inside the node-processing loop**, not only at the batch boundary.
 
 > **Path__c capacity:** At 18 chars/ID + 1 delimiter, a depth-1,500 path would be ~28,500 chars - within the Long Text 32768 limit. Deeper trees are unrealistic in practice.
 
@@ -132,7 +138,34 @@ Guard: `DependencyJobController.createJob()` should validate `!System.isQueueabl
 
 ### Data Lifecycle
 
-A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records older than 24 hours. Deletion cascades to `Dependency_Node__c` via Master-Detail. `DependencyCleanupScheduler` registers this batch at 02:00.
+`DependencyCleanupBatch` runs nightly at 02:00 via `DependencyCleanupScheduler`. It hard-deletes closed jobs older than `MetaMapper_Settings__mdt.Retention_Hours__c`.
+
+**Lifecycle rule (critical):**
+- Only delete jobs where `Status__c IN ('Completed', 'Failed', 'Cancelled')` AND `Closed_At__c < :DateTime.now().addHours(-retentionHours)`. Never delete `Initializing` or `Processing` jobs - a long-running in-progress scan must not be destroyed by the cleanup window.
+- `Closed_At__c` (DateTime field on `Dependency_Job__c`) is stamped by the Queueable engine the moment a job transitions to Completed, Failed, or Cancelled. Using `CreatedDate` would incorrectly target long-running jobs still in progress.
+
+**Cascade delete DML trap (critical):**
+Master-Detail cascade deletion counts child record deletes against the 10,000 DML row limit of the batch `execute()` transaction. A job with 15,000 nodes would cause `System.LimitException: Too many DML rows` on the first delete call.
+
+Fix: `DependencyCleanupBatch` must explicitly delete child `Dependency_Node__c` records in chunks **before** deleting the parent `Dependency_Job__c`. The batch scope is per Job record; for each Job in scope, query and delete its nodes in chunks of 9,000 rows (safe headroom below 10,001), then delete the parent.
+
+```
+// In execute(Database.BatchableContext ctx, List<Dependency_Job__c> scope):
+for (Dependency_Job__c job : scope) {
+    List<Dependency_Node__c> nodes = [
+        SELECT Id FROM Dependency_Node__c
+        WHERE Dependency_Job__c = :job.Id
+        LIMIT 9000
+    ];
+    while (!nodes.isEmpty()) {
+        delete nodes;
+        nodes = [SELECT Id FROM Dependency_Node__c WHERE Dependency_Job__c = :job.Id LIMIT 9000];
+    }
+    delete job;
+}
+```
+
+> Batch size for `DependencyCleanupBatch` should be set to 1 (one Job per execute() call) to guarantee that the full node-deletion loop completes within one transaction's DML budget.
 
 ---
 
@@ -149,6 +182,7 @@ A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records olde
 | `Error_Message__c` | Long Text 32768 | Full exception on failure |
 | `Nodes_Processed__c` | Number | Running counter for progress bar |
 | `Summary_JSON__c` | Long Text 32768 | JSON map of `{MetadataType: count}` - populated on Completed |
+| `Closed_At__c` | DateTime | Stamped when Status transitions to Completed, Failed, or Cancelled. Cleanup batch uses this field - never CreatedDate - to avoid deleting in-progress jobs. |
 
 > **Visited_IDs__c removed.** A Long Text 131072 field caps at ~5,957 IDs (22 chars/ID with JSON formatting). Enterprise orgs can easily exceed this, causing `StringException` and crashing the Queueable chain. Cycle detection is instead performed via two-tier logic (see Cycle Detection below).
 
@@ -230,7 +264,10 @@ Tooling API results exceeding 2,000 rows return a `nextRecordsUrl`. `DependencyS
 If a callout returns HTTP 414 or 431, split the current batch in half and retry both halves. Do not fail the job on this error.
 
 ### Limit Guardrails (Remaining-Budget Model)
-Do not use percentage thresholds alone. Evaluate four independent limits before each batch; chain immediately if any is breached:
+
+**Placement: the guardrail runs in two places - not just at the end of the execution:**
+1. **Pre-batch check** - before starting the Tooling API callout for the current node batch.
+2. **Mid-loop check (per node)** - inside the result-processing loop, before adding newly discovered children to the insert list. A single high-fan-out node (e.g. a core Custom Object) can return 4,000+ dependencies in one callout; the post-loop check would be too late.
 
 ```
 // --- Callout budget (remaining-headroom model) ---
@@ -243,28 +280,32 @@ Integer calloutsRemaining = Limits.getLimitCallouts() - Limits.getCallouts();
 Integer headroom = 1 + (queryMorePossible ? 1 : 0) + (needsFlowValidation ? 1 : 0) + 2;
 
 // --- DML row budget ---
-// A highly-connected node can return 2,000+ children. Reserve 500 rows as minimum
-// headroom to safely complete the current insert + supplemental handler inserts.
+// Reserve DML_Reserve_Rows__c rows (default 750) from MetaMapper_Settings__mdt.
+// Conservative: a single high-fan-out node can return 2,000+ children.
 Integer dmlRemaining = Limits.getLimitDmlRows() - Limits.getDmlRows();
 
 // --- Heap budget ---
 Decimal heapPct = (Decimal) Limits.getHeapSize() / Limits.getLimitHeapSize();
 
 // --- CPU time budget ---
+// Also check mid-loop: String.contains() on long Path__c strings inside the
+// result-processing loop can spike CPU unexpectedly for deeply nested trees.
 Decimal cpuPct = (Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime();
 
+// --- Query rows budget ---
+Integer queryRowsRemaining = Limits.getLimitQueryRows() - Limits.getQueryRows();
+
 if (calloutsRemaining < headroom
-    || dmlRemaining < 500
+    || dmlRemaining < dmlReserve          // dmlReserve from MetaMapper_Settings__mdt, default 750
     || heapPct >= 0.80
-    || cpuPct >= 0.75) {
+    || cpuPct >= 0.75
+    || queryRowsRemaining < 1000) {
     System.enqueueJob(new DependencyQueueable(jobId, activeFlowsOnly));
     return;
 }
 ```
 
-This is more reliable than a fixed percentage heuristic because it accounts for the actual operations still to execute in the current transaction.
-
-> **DML risk scenario:** A single highly-referenced component (e.g., a core Custom Object) can return 2,000 children per Tooling API callout. Processing 5 such nodes in one batch = 10,000 DML rows - enough to breach the 10,001 row limit before callout or heap limits are hit.
+> **DML risk scenario:** A single highly-referenced component can return 4,000+ children per Tooling API callout. Processing 3 such nodes in one batch = 12,000 DML rows - breaching the 10,001 limit before heap or callout limits. The mid-loop check catches this before the insert list is built.
 
 ### USER_MODE Scope
 Apply `WITH USER_MODE` / `AccessLevel.USER_MODE` **only at the `@AuraEnabled` controller boundary** - where user intent drives data access. The Queueable engine, cleanup batch, and notification service operate in SYSTEM_MODE for reliable internal orchestration. Applying USER_MODE to engine internals risks permission-related failures that are implementation failures, not security requirements.
@@ -305,18 +346,48 @@ All tunable runtime parameters are stored in `MetaMapper_Settings__mdt` Custom M
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
-| `Retention_Hours__c` | Number | 24 | Hours before job hard-delete. Min 1, recommended ≥72 for diagnostic use. |
+| `Retention_Hours__c` | Number | 72 | Hours before job hard-delete. Min 1, recommended ≥72 for diagnostic use. |
 | `Batch_Size__c` | Number | 50 | Unprocessed nodes queried per Queueable execution (non-Flow jobs). Tune down for high-DML orgs. |
 | `Flow_Batch_Size__c` | Number | 30 | Batch size when `Active_Flows_Only__c = true`. Lower because each Flow node may require a second validation callout, reducing effective callout headroom. |
+| `Dml_Reserve_Rows__c` | Number | 750 | DML rows to reserve in the guardrail before chaining. Raise for orgs with high-fan-out metadata (e.g. heavily referenced CustomObjects). |
 
-> Hard-coding batch size is inappropriate for an enterprise tool. A highly-connected org with large Flow graphs may need `Flow_Batch_Size__c = 15` to stay within the callout + DML guardrails. Admins can tune without a code deploy.
+> Hard-coding batch size and DML reserve is inappropriate for an enterprise tool. A highly-connected org may need `Flow_Batch_Size__c = 15` and `Dml_Reserve_Rows__c = 1500`. Admins tune without a code deploy.
+
+---
+
+## Failure Handling Pattern (DependencyQueueable)
+
+An uncaught exception in `execute()` rolls back the entire Queueable transaction - including any DML that set `Status__c = 'Failed'`. The failure status update must therefore be structured so it survives the rollback.
+
+**Required pattern - Savepoint + explicit catch:**
+
+```
+public void execute(QueueableContext ctx) {
+    Savepoint sp = Database.setSavepoint();
+    try {
+        // ... all engine work ...
+    } catch (Exception e) {
+        Database.rollback(sp);   // Roll back partial engine work
+        // Status update is now a fresh DML outside the failed transaction scope
+        updateJobFailed(jobId, e.getMessage());      // update + Platform Event publish
+    }
+}
+```
+
+`updateJobFailed()` must be a private method that:
+1. Updates `Dependency_Job__c.Status__c = 'Failed'`, sets `Error_Message__c` and `Closed_At__c`.
+2. Publishes a `Dependency_Status__e` failure event.
+3. Does NOT re-throw the exception (allows the catch block's DML to commit).
+
+> **Why savepoint?** Without `Database.rollback(sp)`, partial engine work (e.g., some nodes inserted, some not) remains in the database in a corrupt intermediate state. The rollback cleans this up; the subsequent status update DML commits cleanly in the same transaction as a separate operation after the rollback point.
 
 ---
 
 ## Known Limitations
 
 - `MetadataComponentDependency` does not capture all dependency types. Supplemental handlers fill 5 known static gaps. **Dynamic Apex string references are a permanent blind spot** - they cannot be resolved by any supplemental query and are flagged with `Is_Dynamic_Reference__c = true` in the UI. This is not a gap to be closed; it is an inherent Salesforce platform limitation.
-- Supplemental handler matches (ValidationRule regex, FlexiPage XML parsing) are best-effort. Results may include false positives due to comments, whitespace, cross-object references, or `$Label` usage in formula bodies. These nodes are flagged with `Supplemental_Confidence__c < 70` and display a warning badge - treat them as leads for manual verification, not confirmed dependencies.
+- Supplemental handler matches (ValidationRule regex, FlexiPage XML parsing) are best-effort. Results may include false positives. Confidence scoring is deterministic per handler: WorkflowFieldUpdate exact match = 95, ValidationRule regex = 65, FlexiPage XML parse = 60, CMT field lookup = 85, Lookup relationship = 95. Nodes with `Supplemental_Confidence__c < 70` display a warning badge - treat as leads, not confirmed dependencies.
+- `DependencyCleanupBatch` must delete child `Dependency_Node__c` records in chunks before deleting parent jobs. Implicit Master-Detail cascade counts against the 10,000 DML row limit; a job with 15,000 nodes would exceed it on a single parent delete.
 - Named Credential requires one-time admin authorization post-install and cannot be scripted or source-tracked.
 - `Active Flows Only` mode excludes inactive Flow versions by design to preserve heap and reduce DML.
 - package.xml export excludes managed package components (namespace-prefixed) by default.
