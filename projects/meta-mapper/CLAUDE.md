@@ -91,7 +91,11 @@ Direct Tooling API calls from within async Apex require a **Named Credential loo
 A single global visited set incorrectly flags shared/diamond dependencies (node B reachable via A→B and C→B) as circular. These are valid repeated references, not cycles. Two separate concerns must be separated:
 
 **Tier 1 - Global deduplication (`processedIds`):**
-Query `SELECT Metadata_ID__c FROM Dependency_Node__c WHERE Dependency_Job__c = :jobId` at Queueable start. If a Tooling API result is already in this set, **skip insertion entirely** (deduplication). Do NOT mark as circular.
+After retrieving Tooling API results for the current batch, query the DB for only those specific IDs:
+`SELECT Metadata_ID__c FROM Dependency_Node__c WHERE Dependency_Job__c = :jobId AND Metadata_ID__c IN :currentBatchIds`
+This returns a maximum of 100 rows (one per ID in the current batch), uses negligible heap, and avoids the full-table scan that would occur when querying all previously inserted nodes. If a result is already in this set, **skip insertion entirely** (deduplication). Do NOT mark as circular.
+
+> **Why not query all nodes upfront?** At 10k-20k nodes a full-scan query consumes a large portion of the 6MB async heap before any Tooling API work begins. The targeted query achieves identical deduplication at constant cost (max 100 rows).
 
 **Tier 2 - True ancestry cycle detection (`Path__c`):**
 Each `Dependency_Node__c` stores a pipe-delimited `Path__c` field: the chain of ancestor `Metadata_ID__c` values from root to this node. When inserting a child node, its `Path__c = parent.Path__c + '|' + parent.Metadata_ID__c`. Before inserting, check: if the new node's `Metadata_ID__c` appears anywhere in `parent.Path__c` - that is a true cycle (A→B→A pattern). Insert with `Is_Circular__c = true`, `Is_Processed__c = true`. Do not enqueue for traversal.
@@ -102,9 +106,17 @@ Each `Dependency_Node__c` stores a pipe-delimited `Path__c` field: the chain of 
 
 `DependencyQueueable` checks `Status__c` as the first operation in `execute()`. If `Status__c = 'Cancelled'`, it exits immediately without enqueuing a successor. The `cancelJob(String jobId)` `@AuraEnabled` method in `DependencyJobController` sets `Status__c = 'Cancelled'` (WITH USER_MODE). The LWC Cancel button calls this method. Queueables that are already enqueued will check on entry and terminate cooperatively - there is no force-kill mechanism in Salesforce.
 
+### Async Context Guard
+
+`createJob()` in `DependencyJobController` must only be invoked from a synchronous Lightning context (LWC `@AuraEnabled` call). If called from an already-async context (e.g., a Copilot Action, a Batch finish handler), `System.enqueueJob()` inside a Queueable that is itself inside a Queueable will exceed Salesforce's nested async restrictions in certain governor contexts.
+
+Guard: `DependencyJobController.createJob()` should validate `!System.isQueueable() && !System.isBatch() && !System.isFuture()` and throw a descriptive exception if called from an unsupported async context. Document this constraint in `setup/SETUP.md`.
+
 ### Live Progress (Platform Events)
 
-`DependencyQueueable` publishes `Dependency_Status__e` events after each DML commit. The `metaMapperProgress` LWC subscribes via `lightning/empApi` on mount and unsubscribes on destroy - no polling. Do not publish events inside a try-catch that swallows the exception.
+`DependencyQueueable` publishes **exactly one** `Dependency_Status__e` event per Queueable execution - after the final DML commit of that execution, not after each inner batch loop iteration. The `metaMapperProgress` LWC subscribes via `lightning/empApi` on mount and unsubscribes on destroy - no polling. Do not publish events inside a try-catch that swallows the exception.
+
+> **Why one event per execution?** Salesforce enforces a daily org-wide Platform Event delivery limit (50,000 for Standard Volume). At 50 nodes per Queueable execution, a 10,000-node job generates ~200 executions = ~200 events - well within limits. Publishing per inner batch loop (e.g., once per IN-chunk callout) would multiply this by 5-10x and could exhaust the org's daily allocation during concurrent admin scans.
 
 ### Graph Visualization
 
@@ -155,6 +167,7 @@ A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records olde
 | `Context_Data__c` | Long Text 32768 | JSON "pills" - contextual metadata per type (see below) |
 | `Source__c` | Picklist | `ToolingAPI` or `Supplemental` - tracks how the node was discovered |
 | `Path__c` | Long Text 32768 | Pipe-delimited ancestor `Metadata_ID__c` chain from root to this node - used for true cycle detection |
+| `Supplemental_Confidence__c` | Number (3,0) | 0-100 confidence score for supplemental nodes only. Regex/XML matches are inherently fuzzy; score reflects match certainty. Nodes below 70 display a warning badge in the UI. Null for ToolingAPI nodes. |
 
 ### Context_Data__c (Pills) by Metadata Type
 | Type | JSON shape |
@@ -178,7 +191,7 @@ A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records olde
 | `CustomFieldHandler` | Supplemental: WorkflowFieldUpdate, ValidationRule formulas, FlexiPage rules, CMT lookups |
 | `ApexClassHandler` | Supplemental: CMT record field references, dynamic reference flagging |
 | `FlowHandler` | Supplemental: QuickActionDefinition trigger flows, subflow references, WebLink URLs |
-| `DependencyQueueable` | Async engine: callouts, type handler dispatch, cycle detection, limit guardrails, QueryMore, self-chaining |
+| `DependencyQueueable` | Async engine: callouts, type handler dispatch, cycle detection, limit guardrails, QueryMore, self-chaining. Constructor signature: `DependencyQueueable(String jobId, Boolean activeFlowsOnly)` - `Active_Flows_Only__c` is passed at construction time to avoid an extra SOQL per chained execution. |
 | `DependencyNotificationService` | Publishes `Dependency_Status__e`; Custom Notification + email on completion |
 | `DependencyCleanupBatch` | Nightly hard-delete of stale jobs (>24 hours) |
 | `DependencyCleanupScheduler` | Schedules the cleanup batch at 02:00 |
@@ -200,7 +213,7 @@ Every `IDependencyTypeHandler` implementation follows the same contract:
 | `metaMapperInput` | Metadata type dropdown, API name field, typeahead object lookup (debounced 300ms, queries `EntityDefinition`) |
 | `metaMapperProgress` | `lightning-progress-bar` driven by Platform Events; empApi subscribe/unsubscribe lifecycle |
 | `metaMapperResults` | Tab container for Tree View and Graph View; stats tile (count by type from `Summary_JSON__c`); hosts export controls |
-| `metaMapperGraph` | ECharts Static Resource loader + force-directed graph renderer; type filter sidebar; circular/dynamic reference visual indicators |
+| `metaMapperGraph` | ECharts Static Resource loader + force-directed graph renderer; type filter sidebar; circular/dynamic reference visual indicators; graph density toggle (default: first 3 levels only, "Expand All" button reveals full tree - prevents browser choke on 5,000+ node graphs) |
 | `metaMapperExport` | Pure client-side CSV, JSON, and **package.xml** download (no server round-trip) |
 
 ---
@@ -217,23 +230,41 @@ Tooling API results exceeding 2,000 rows return a `nextRecordsUrl`. `DependencyS
 If a callout returns HTTP 414 or 431, split the current batch in half and retry both halves. Do not fail the job on this error.
 
 ### Limit Guardrails (Remaining-Budget Model)
-Do not use percentage thresholds alone. Calculate the **minimum callouts needed to safely complete the current operation**:
+Do not use percentage thresholds alone. Evaluate four independent limits before each batch; chain immediately if any is breached:
 
 ```
-Integer remaining = Limits.getLimitCallouts() - Limits.getCallouts();
-// Headroom needed:
-// 1 per node batch (dependency query)
+// --- Callout budget (remaining-headroom model) ---
+Integer calloutsRemaining = Limits.getLimitCallouts() - Limits.getCallouts();
+// Headroom needed per remaining batch:
+// +1 dependency query
 // +1 if QueryMore may be needed
-// +1 if Active_Flows_Only__c = true and Flow nodes in batch (status validation)
-// +2 buffer for retry on 414/431
-Integer headroom = 2 + (queryMorePossible ? 1 : 0) + (needsFlowValidation ? 1 : 0) + 2;
-if (remaining < headroom) {
-    System.enqueueJob(new DependencyQueueable(jobId));
+// +1 if Active_Flows_Only__c = true and Flow nodes present (status validation callout)
+// +2 buffer for reactive 414/431 retry splits
+Integer headroom = 1 + (queryMorePossible ? 1 : 0) + (needsFlowValidation ? 1 : 0) + 2;
+
+// --- DML row budget ---
+// A highly-connected node can return 2,000+ children. Reserve 500 rows as minimum
+// headroom to safely complete the current insert + supplemental handler inserts.
+Integer dmlRemaining = Limits.getLimitDmlRows() - Limits.getDmlRows();
+
+// --- Heap budget ---
+Decimal heapPct = (Decimal) Limits.getHeapSize() / Limits.getLimitHeapSize();
+
+// --- CPU time budget ---
+Decimal cpuPct = (Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime();
+
+if (calloutsRemaining < headroom
+    || dmlRemaining < 500
+    || heapPct >= 0.80
+    || cpuPct >= 0.75) {
+    System.enqueueJob(new DependencyQueueable(jobId, activeFlowsOnly));
     return;
 }
 ```
 
-This is more reliable than a fixed 60%/80% heuristic because it accounts for the actual operations still to execute in the current transaction.
+This is more reliable than a fixed percentage heuristic because it accounts for the actual operations still to execute in the current transaction.
+
+> **DML risk scenario:** A single highly-referenced component (e.g., a core Custom Object) can return 2,000 children per Tooling API callout. Processing 5 such nodes in one batch = 10,000 DML rows - enough to breach the 10,001 row limit before callout or heap limits are hit.
 
 ### USER_MODE Scope
 Apply `WITH USER_MODE` / `AccessLevel.USER_MODE` **only at the `@AuraEnabled` controller boundary** - where user intent drives data access. The Queueable engine, cleanup batch, and notification service operate in SYSTEM_MODE for reliable internal orchestration. Applying USER_MODE to engine internals risks permission-related failures that are implementation failures, not security requirements.
@@ -268,25 +299,29 @@ Apply `WITH USER_MODE` / `AccessLevel.USER_MODE` **only at the `@AuraEnabled` co
 
 ---
 
-## Data Retention Configuration
+## Runtime Configuration (MetaMapper_Settings__mdt)
 
-Retention period is configurable via `MetaMapper_Settings__mdt` Custom Metadata (single record `Default`):
+All tunable runtime parameters are stored in `MetaMapper_Settings__mdt` Custom Metadata (single record `Default`). `DependencyQueueable` and `DependencyCleanupBatch` read this record at the start of each execution.
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `Retention_Hours__c` | Number | 24 | Hours before job hard-delete. Min 1, recommended ≥72 for diagnostic use. |
+| `Batch_Size__c` | Number | 50 | Unprocessed nodes queried per Queueable execution (non-Flow jobs). Tune down for high-DML orgs. |
+| `Flow_Batch_Size__c` | Number | 30 | Batch size when `Active_Flows_Only__c = true`. Lower because each Flow node may require a second validation callout, reducing effective callout headroom. |
 
-`DependencyCleanupBatch` reads this value at runtime. Hard-coding 24 hours is inappropriate for a diagnostic tool where admins need to inspect failed runs and compare results across time.
+> Hard-coding batch size is inappropriate for an enterprise tool. A highly-connected org with large Flow graphs may need `Flow_Batch_Size__c = 15` to stay within the callout + DML guardrails. Admins can tune without a code deploy.
 
 ---
 
 ## Known Limitations
 
 - `MetadataComponentDependency` does not capture all dependency types. Supplemental handlers fill 5 known static gaps. **Dynamic Apex string references are a permanent blind spot** - they cannot be resolved by any supplemental query and are flagged with `Is_Dynamic_Reference__c = true` in the UI. This is not a gap to be closed; it is an inherent Salesforce platform limitation.
+- Supplemental handler matches (ValidationRule regex, FlexiPage XML parsing) are best-effort. Results may include false positives due to comments, whitespace, cross-object references, or `$Label` usage in formula bodies. These nodes are flagged with `Supplemental_Confidence__c < 70` and display a warning badge - treat them as leads for manual verification, not confirmed dependencies.
 - Named Credential requires one-time admin authorization post-install and cannot be scripted or source-tracked.
 - `Active Flows Only` mode excludes inactive Flow versions by design to preserve heap and reduce DML.
 - package.xml export excludes managed package components (namespace-prefixed) by default.
 - Cancellation is cooperative. A Queueable already in the flex queue will check `Status__c` on entry and exit cleanly - it cannot be force-killed immediately.
+- `createJob()` must be called from a synchronous Lightning context only. Invocation from Batch, Future, or Queueable contexts is blocked by an async-context guard. See `setup/SETUP.md` for integration constraints.
 
 ---
 
