@@ -67,7 +67,7 @@ The core challenge: enterprise org metadata trees are too large for synchronous 
 
 1. User submits a search via the LWC - an `@AuraEnabled` controller creates a `Dependency_Job__c` record and inserts the root `Dependency_Node__c`, then enqueues `DependencyQueueable`.
 2. Each `DependencyQueueable` execution queries a batch of unprocessed nodes (`Is_Processed__c = false`), calls the Tooling API via Named Credential, inserts new child nodes, marks current nodes processed, and checks limit proximity.
-3. If limits are approaching, it self-enqueues a fresh instance and exits. Threshold is **60% callouts** when `Active_Flows_Only__c = true` and Flow nodes are in the batch (each Flow chunk consumes 2 callouts: dependency query + Flow status validation). Otherwise **80%**. Heap threshold is always 80%.
+3. When the remaining callout budget drops below a safe threshold, it self-enqueues a fresh instance and exits. The guardrail uses a **remaining-callout budget** model (not percentage alone): reserve explicit headroom for QueryMore follow-ups, Flow status validation, and retry splits. Chain when `remaining < headroom`; see Limit Guardrails section below.
 4. When no unprocessed nodes remain, the job transitions to `Completed` and fires notifications.
 
 ### Tooling API Callout (Loopback Auth)
@@ -78,11 +78,21 @@ Direct Tooling API calls from within async Apex require a **Named Credential loo
 - Callout target: `callout:MetaMapper_Tooling_API/services/data/v66.0/tooling/query/?q=...`
 - These three config items cannot be source-tracked; setup instructions live in `setup/SETUP.md`
 
-### Cycle Detection
+### Cycle Detection (Two-Tier)
 
-At the start of each Queueable execution, `DependencyQueueable` queries `SELECT Metadata_ID__c FROM Dependency_Node__c WHERE Dependency_Job__c = :jobId` to build the visited `Set<String>` from the database. This scales to any tree depth with no upper bound. Any Tooling API result whose `Metadata_ID__c` is already in this set is inserted with `Is_Circular__c = true` and `Is_Processed__c = true` - rendered in the UI but not re-traversed. No field write-back is needed; the database is the source of truth.
+A single global visited set incorrectly flags shared/diamond dependencies (node B reachable via A→B and C→B) as circular. These are valid repeated references, not cycles. Two separate concerns must be separated:
 
-> **Why not a text field?** A Long Text 131072 field caps at ~5,957 IDs (22 chars/ID with JSON formatting). Enterprise org dependency trees can easily exceed this, causing `StringException` and crashing the entire Queueable chain.
+**Tier 1 - Global deduplication (`processedIds`):**
+Query `SELECT Metadata_ID__c FROM Dependency_Node__c WHERE Dependency_Job__c = :jobId` at Queueable start. If a Tooling API result is already in this set, **skip insertion entirely** (deduplication). Do NOT mark as circular.
+
+**Tier 2 - True ancestry cycle detection (`Path__c`):**
+Each `Dependency_Node__c` stores a pipe-delimited `Path__c` field: the chain of ancestor `Metadata_ID__c` values from root to this node. When inserting a child node, its `Path__c = parent.Path__c + '|' + parent.Metadata_ID__c`. Before inserting, check: if the new node's `Metadata_ID__c` appears anywhere in `parent.Path__c` - that is a true cycle (A→B→A pattern). Insert with `Is_Circular__c = true`, `Is_Processed__c = true`. Do not enqueue for traversal.
+
+> **Path__c capacity:** At 18 chars/ID + 1 delimiter, a depth-1,500 path would be ~28,500 chars - within the Long Text 32768 limit. Deeper trees are unrealistic in practice.
+
+### Cancellation
+
+`DependencyQueueable` checks `Status__c` as the first operation in `execute()`. If `Status__c = 'Cancelled'`, it exits immediately without enqueuing a successor. The `cancelJob(String jobId)` `@AuraEnabled` method in `DependencyJobController` sets `Status__c = 'Cancelled'` (WITH USER_MODE). The LWC Cancel button calls this method. Queueables that are already enqueued will check on entry and terminate cooperatively - there is no force-kill mechanism in Salesforce.
 
 ### Live Progress (Platform Events)
 
@@ -115,12 +125,12 @@ A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records olde
 | `Target_API_Name__c` | Text 255 | Developer Name of the target metadata |
 | `Target_Object__c` | Text 255 | Optional - populated by typeahead for field-scoped searches |
 | `Active_Flows_Only__c` | Checkbox | Default true - drops inactive Flow versions |
-| `Status__c` | Picklist | Initializing, Processing, Completed, Failed |
+| `Status__c` | Picklist | Initializing, Processing, Completed, Failed, **Cancelled** |
 | `Error_Message__c` | Long Text 32768 | Full exception on failure |
 | `Nodes_Processed__c` | Number | Running counter for progress bar |
 | `Summary_JSON__c` | Long Text 32768 | JSON map of `{MetadataType: count}` - populated on Completed |
 
-> **Visited_IDs__c removed.** A Long Text 131072 field caps at ~5,957 IDs (22 chars/ID with JSON formatting). Enterprise orgs can easily exceed this, causing `StringException` and crashing the Queueable chain. Cycle detection is instead performed by querying the database at the start of each Queueable execution (see Cycle Detection below).
+> **Visited_IDs__c removed.** A Long Text 131072 field caps at ~5,957 IDs (22 chars/ID with JSON formatting). Enterprise orgs can easily exceed this, causing `StringException` and crashing the Queueable chain. Cycle detection is instead performed via two-tier logic (see Cycle Detection below).
 
 ### Dependency_Node__c
 | Field | Type | Notes |
@@ -132,10 +142,11 @@ A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records olde
 | `Metadata_Name__c` | Text 255 | Human-readable API name |
 | `Level__c` | Number | Depth from root (0 = root target) |
 | `Is_Processed__c` | Checkbox | Engine flag: false = pending child traversal |
-| `Is_Circular__c` | Checkbox | True if this node already appears higher in the tree - rendered but not re-traversed |
+| `Is_Circular__c` | Checkbox | True only when this node's `Metadata_ID__c` appears in its own `Path__c` (true ancestry cycle) |
 | `Is_Dynamic_Reference__c` | Checkbox | True if reference cannot be statically analyzed (e.g. dynamic Apex string) - flagged in UI |
 | `Context_Data__c` | Long Text 32768 | JSON "pills" - contextual metadata per type (see below) |
 | `Source__c` | Picklist | `ToolingAPI` or `Supplemental` - tracks how the node was discovered |
+| `Path__c` | Long Text 32768 | Pipe-delimited ancestor `Metadata_ID__c` chain from root to this node - used for true cycle detection |
 
 ### Context_Data__c (Pills) by Metadata Type
 | Type | JSON shape |
@@ -152,7 +163,7 @@ A nightly `DependencyCleanupBatch` hard-deletes `Dependency_Job__c` records olde
 
 | Class | Role |
 |---|---|
-| `DependencyJobController` | `@AuraEnabled` LWC entry points: `createJob()`, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()` |
+| `DependencyJobController` | `@AuraEnabled` LWC entry points: `createJob()`, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()`, `cancelJob()` |
 | `DependencyService` | Tooling API SOQL formatting, IN chunking (max **100**/query), QueryMore handling, Active Flows filter |
 | `DependencyTypeHandlerFactory` | Returns the correct `IDependencyTypeHandler` implementation for a given metadata type |
 | `IDependencyTypeHandler` (interface) | `List<Dependency_Node__c> findSupplemental(Id jobId, List<Dependency_Node__c> nodes)` |
@@ -189,13 +200,35 @@ Every `IDependencyTypeHandler` implementation follows the same contract:
 ## Query Strategy
 
 ### IN Clause Chunking
-Chunk Metadata ID lists into groups of **100** per Tooling API query (not 200). Above ~300 IDs, HTTP 414 (URI Too Long) errors occur - 100 is the battle-tested safe limit.
+Start with batches of **100 IDs** as a safe default, but split is driven by **estimated query character length**, not a fixed count. The Tooling API REST endpoint embeds SOQL in the URL - URI length depends on the IDs themselves, encoding, and the surrounding SOQL string. If estimated URL length exceeds 8KB, halve the batch before sending. 100 IDs is the starting estimate; the dynamic check is authoritative.
 
 ### QueryMore
-Tooling API results exceeding 2,000 rows return a `nextRecordsUrl`. `DependencyService` must follow `nextRecordsUrl` iteratively until `done = true` before returning results to the Queueable.
+Tooling API results exceeding 2,000 rows return a `nextRecordsUrl`. `DependencyService` must follow `nextRecordsUrl` iteratively until `done = true` before returning results to the Queueable. Each follow-up counts against the callout budget.
 
 ### Reactive HTTP 414 Handling
 If a callout returns HTTP 414 or 431, split the current batch in half and retry both halves. Do not fail the job on this error.
+
+### Limit Guardrails (Remaining-Budget Model)
+Do not use percentage thresholds alone. Calculate the **minimum callouts needed to safely complete the current operation**:
+
+```
+Integer remaining = Limits.getLimitCallouts() - Limits.getCallouts();
+// Headroom needed:
+// 1 per node batch (dependency query)
+// +1 if QueryMore may be needed
+// +1 if Active_Flows_Only__c = true and Flow nodes in batch (status validation)
+// +2 buffer for retry on 414/431
+Integer headroom = 2 + (queryMorePossible ? 1 : 0) + (needsFlowValidation ? 1 : 0) + 2;
+if (remaining < headroom) {
+    System.enqueueJob(new DependencyQueueable(jobId));
+    return;
+}
+```
+
+This is more reliable than a fixed 60%/80% heuristic because it accounts for the actual operations still to execute in the current transaction.
+
+### USER_MODE Scope
+Apply `WITH USER_MODE` / `AccessLevel.USER_MODE` **only at the `@AuraEnabled` controller boundary** - where user intent drives data access. The Queueable engine, cleanup batch, and notification service operate in SYSTEM_MODE for reliable internal orchestration. Applying USER_MODE to engine internals risks permission-related failures that are implementation failures, not security requirements.
 
 ### Supplemental Query Gaps
 `MetadataComponentDependency` does **not** track these - supplemental handlers fill the gap:
@@ -227,12 +260,25 @@ If a callout returns HTTP 414 or 431, split the current batch in half and retry 
 
 ---
 
+## Data Retention Configuration
+
+Retention period is configurable via `MetaMapper_Settings__mdt` Custom Metadata (single record `Default`):
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `Retention_Hours__c` | Number | 24 | Hours before job hard-delete. Min 1, recommended ≥72 for diagnostic use. |
+
+`DependencyCleanupBatch` reads this value at runtime. Hard-coding 24 hours is inappropriate for a diagnostic tool where admins need to inspect failed runs and compare results across time.
+
+---
+
 ## Known Limitations
 
-- `MetadataComponentDependency` does not capture all dependency types. Supplemental handlers partially fill these gaps but cannot resolve dynamic Apex string references - these are flagged with `Is_Dynamic_Reference__c = true` in the UI.
+- `MetadataComponentDependency` does not capture all dependency types. Supplemental handlers fill 5 known static gaps. **Dynamic Apex string references are a permanent blind spot** - they cannot be resolved by any supplemental query and are flagged with `Is_Dynamic_Reference__c = true` in the UI. This is not a gap to be closed; it is an inherent Salesforce platform limitation.
 - Named Credential requires one-time admin authorization post-install and cannot be scripted or source-tracked.
 - `Active Flows Only` mode excludes inactive Flow versions by design to preserve heap and reduce DML.
 - package.xml export excludes managed package components (namespace-prefixed) by default.
+- Cancellation is cooperative. A Queueable already in the flex queue will check `Status__c` on entry and exit cleanly - it cannot be force-killed immediately.
 
 ---
 
