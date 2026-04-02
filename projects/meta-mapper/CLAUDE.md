@@ -118,11 +118,47 @@ Each `Dependency_Node__c` stores a pipe-delimited `Path__c` field: the chain of 
 
 Guard: `DependencyJobController.createJob()` should validate `!System.isQueueable() && !System.isBatch() && !System.isFuture()` and throw a descriptive exception if called from an unsupported async context. Document this constraint in `setup/SETUP.md`.
 
+### Concurrency Guard
+
+Multiple admins running simultaneous large scans compete for the Salesforce flex queue and Tooling API, creating risk of `ConcurrentPerOrgLongTxn` errors and HTTP timeout cascades.
+
+`createJob()` must check active Queueable count before accepting a new job:
+
+```
+Integer activeQueueables = [
+    SELECT COUNT() FROM AsyncApexJob
+    WHERE JobType = 'Queueable'
+    AND Status IN ('Processing', 'Preparing')
+];
+Integer maxConcurrent = (Integer) settings.Max_Concurrent_Jobs__c; // default 2
+if (activeQueueables >= maxConcurrent) {
+    throw new DependencyJobException(
+        'Another MetaMapper scan is already running. Wait for it to complete before starting a new one.'
+    );
+}
+```
+
+`Max_Concurrent_Jobs__c` is a new `MetaMapper_Settings__mdt` field (Number, default 2). The LWC surfaces the rejection as a user-friendly banner: "A scan is already in progress. MetaMapper runs one scan at a time to avoid impacting org performance."
+
+> **Why 2?** One active + one in-flight is the pragmatic limit for orgs under normal load. Admins can raise to 3-5 for orgs with a large flex queue allocation and fast metadata trees.
+
 ### Live Progress (Platform Events)
 
 `DependencyQueueable` publishes **exactly one** `Dependency_Status__e` event per Queueable execution - after the final DML commit of that execution, not after each inner batch loop iteration. The `metaMapperProgress` LWC subscribes via `lightning/empApi` on mount and unsubscribes on destroy - no polling. Do not publish events inside a try-catch that swallows the exception.
 
 > **Why one event per execution?** Salesforce enforces a daily org-wide Platform Event delivery limit (50,000 for Standard Volume). At 50 nodes per Queueable execution, a 10,000-node job generates ~200 executions = ~200 events - well within limits. Publishing per inner batch loop (e.g., once per IN-chunk callout) would multiply this by 5-10x and could exhaust the org's daily allocation during concurrent admin scans.
+
+**Dynamic Platform Event degradation (auto-protect against limit exhaustion):**
+`DependencyNotificationService.publishProgress()` must check the org's remaining daily PE allocation before each publish. If the org has consumed >80% of its daily limit, suppress the event automatically and fall back to polling - without requiring admin intervention:
+
+```
+// In DependencyNotificationService.publishProgress():
+List<OrgLimit> limits = OrgLimits.getMap().values(); // query platform limits
+// Find 'DailyDeliveredPlatformEvents' in OrgLimits map
+// If (used / limit) >= 0.80: skip publish, log to Error_Message__c
+```
+
+This is additive to `Disable_PE__c` - the CMDT switch remains for proactive admin control, while the runtime check provides automatic degradation. When auto-degraded, set `Disable_PE__c = true` on the CMDT Default record so all subsequent executions in the same day also skip publishing without re-checking limits on every call.
 
 ### Graph Visualization
 
@@ -147,19 +183,22 @@ Guard: `DependencyJobController.createJob()` should validate `!System.isQueueabl
 **Cascade delete DML trap (critical):**
 Master-Detail cascade deletion counts child record deletes against the 10,000 DML row limit of the batch `execute()` transaction. A job with 15,000 nodes would cause `System.LimitException: Too many DML rows` on the first delete call.
 
-Fix: `DependencyCleanupBatch` must explicitly delete child `Dependency_Node__c` records in chunks **before** deleting the parent `Dependency_Job__c`. The batch scope is per Job record; for each Job in scope, query and delete its nodes in chunks of 9,000 rows (safe headroom below 10,001), then delete the parent.
+Fix: `DependencyCleanupBatch` must explicitly delete child `Dependency_Node__c` records in chunks **before** deleting the parent `Dependency_Job__c`. The batch scope is per Job record; for each Job in scope, query and delete its nodes in configurable chunks, then delete the parent.
+
+**Chunk size: `Node_Chunk_Size__c` in `MetaMapper_Settings__mdt` (default 2,000).** Do NOT use 9,000. MetaMapper is deployed into customer orgs where managed packages, record-triggered Flows, or Apex Triggers may fire on delete events for any Custom Object. A chunk of 9,000 leaves only 1,000 DML rows for customer automation - insufficient for orgs with non-trivial delete handlers. 2,000 provides 8,000 rows of headroom for customer triggers while keeping the cleanup loop practical.
 
 ```
 // In execute(Database.BatchableContext ctx, List<Dependency_Job__c> scope):
+Integer chunkSize = (Integer) settings.Node_Chunk_Size__c; // default 2000
 for (Dependency_Job__c job : scope) {
     List<Dependency_Node__c> nodes = [
         SELECT Id FROM Dependency_Node__c
         WHERE Dependency_Job__c = :job.Id
-        LIMIT 9000
+        LIMIT :chunkSize
     ];
     while (!nodes.isEmpty()) {
         delete nodes;
-        nodes = [SELECT Id FROM Dependency_Node__c WHERE Dependency_Job__c = :job.Id LIMIT 9000];
+        nodes = [SELECT Id FROM Dependency_Node__c WHERE Dependency_Job__c = :job.Id LIMIT :chunkSize];
     }
     delete job;
 }
@@ -184,6 +223,7 @@ for (Dependency_Job__c job : scope) {
 | `Summary_JSON__c` | Long Text 32768 | JSON map of `{MetadataType: count}` - populated on Completed |
 | `Closed_At__c` | DateTime | Stamped when Status transitions to Completed, Failed, or Cancelled. Cleanup batch uses this field - never CreatedDate - to avoid deleting in-progress jobs. |
 | `Rechain_Count__c` | Number | Incremented each time the Queueable self-chains. If this value increases by N (configurable in CMDT) without a corresponding increase in `Nodes_Processed__c`, the engine is hot-looping on a pathological node and pauses with a user-facing warning. |
+| `AI_Summary__c` | Long Text 32768 | Plain-English summary populated at job Completed. Derived from `Summary_JSON__c`. Example: "This scan found 42 dependencies, including 3 active Flows and 5 Apex classes." Enables Agentforce Actions and Einstein Copilot to consume job results without parsing JSON. Null until Completed. |
 
 > **Visited_IDs__c removed.** A Long Text 131072 field caps at ~5,957 IDs (22 chars/ID with JSON formatting). Enterprise orgs can easily exceed this, causing `StringException` and crashing the Queueable chain. Cycle detection is instead performed via two-tier logic (see Cycle Detection below).
 
@@ -204,7 +244,7 @@ for (Dependency_Job__c job : scope) {
 | `Path__c` | Long Text 32768 | Pipe-delimited ancestor `Metadata_ID__c` chain from root to this node - used for true cycle detection |
 | `Supplemental_Confidence__c` | Number (3,0) | 0-100 confidence score for supplemental nodes only. Regex/XML matches are inherently fuzzy; score reflects match certainty. Nodes below 70 display a warning badge in the UI. Null for ToolingAPI nodes. |
 | `Node_Unique_Key__c` | Text 40 (External ID, Unique) | Composite key: `JobId + ':' + Metadata_ID__c`. Used for upsert to prevent duplicate nodes from race conditions in concurrent Queueable chains. |
-| `Ancestors_Hash__c` | Text 255 | Concatenated 6-char base64url hashes of ancestor `Metadata_ID__c` values. Used as a bloom-filter shortcut for cycle detection before invoking `String.contains()` on the full `Path__c`. Reduces CPU on deep trees. If hash check finds a suspected cycle, validate conclusively against `Path__c`. |
+| `Ancestors_Hash__c` | Long Text 32768 | Concatenated 6-char base64url hashes of ancestor `Metadata_ID__c` values. Used as a bloom-filter shortcut for cycle detection before invoking `String.contains()` on the full `Path__c`. Reduces CPU on deep trees. If hash check finds a suspected cycle, validate conclusively against `Path__c`. **Field must be Long Text 32768 - Text 255 overflows at depth >42 (255 / 6 chars = 42 hashes max), causing a silent `StringException` on upsert.** |
 
 ### Context_Data__c (Pills) by Metadata Type
 | Type | JSON shape |
@@ -239,14 +279,14 @@ for (Dependency_Job__c job : scope) {
 
 | Class | Role |
 |---|---|
-| `DependencyJobController` | `@AuraEnabled` (USER_MODE): `createJob()` with async guard + preflight check, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()`, `cancelJob()`. Delegates to services - no SOQL/DML directly. |
+| `DependencyJobController` | `@AuraEnabled` (USER_MODE): `createJob()` with async guard + concurrency guard + preflight check, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()`, `cancelJob()`, `resumeJob()`. Delegates to services - no SOQL/DML directly. |
 | `DependencyService` (implements `IDependencyService`) | Tooling API SOQL formatting, character-budget chunking, QueryMore, Active Flows filter, `buildContextData()`, `computeScore()` |
 | `DependencyTypeHandlerFactory` | `IDependencyTypeHandler getHandler(String metadataType)` - returns correct handler or no-op default |
 | `CustomFieldHandler` | Supplemental: WorkflowFieldUpdate (95), ValidationRule regex (65), FlexiPage XML (60), CMT lookups (85), Lookup relationships (95) |
 | `ApexClassHandler` | Supplemental: CMT references (85); flags `Is_Dynamic_Reference__c` |
 | `FlowHandler` | Supplemental: QuickActionDefinition, subflows, WebLink URLs |
 | `DependencyQueueable` | Async engine. Constructor: `DependencyQueueable(String jobId, Boolean activeFlowsOnly)`. Savepoint/catch; cancel check; CMDT read via `ISettingsProvider`; hot-loop detection; pre-batch + mid-loop seven-limit guardrail; scoped dedup + upsert by `Node_Unique_Key__c`; two-tier cycle detection; callouts; handlers; one PE event per execution (suppressed if `Disable_PE__c`); self-chain. |
-| `DependencyNotificationService` (implements `INotificationService`) | `publishProgress()` - one event per execution; `sendCompletionNotification()` |
+| `DependencyNotificationService` (implements `INotificationService`) | `publishProgress()` - one event per execution; checks org daily PE allocation via `OrgLimits` before publishing (auto-suppresses and flips `Disable_PE__c` if >80% consumed); `sendCompletionNotification()`; populates `AI_Summary__c` at job Completed. |
 | `DependencyCleanupBatch` | Scope = 1. Explicit node chunk-delete before parent. Filter: `Closed_At__c` + closed statuses. |
 | `DependencyCleanupScheduler` | Schedules cleanup at 02:00 |
 | `NamedCredentialHealthCheck` | Setup-only Apex class: verifies Tooling API reachability via Named Credential. Called by pre-flight LWC check on page load. |
@@ -290,10 +330,15 @@ If `DependencyQueueable` self-chains repeatedly without processing any new nodes
 ## UX Design Specification
 
 ### Pre-Flight Check
-On `metaMapperApp` mount, call `NamedCredentialHealthCheck.verify()` via `@AuraEnabled`. If the Named Credential is not authenticated or unreachable:
-- Block the input form entirely
-- Show a friendly empty state: "MetaMapper needs one-time setup. Follow the setup guide to authorize the Tooling API connection." with a direct link to `setup/SETUP.md`
-- Do not allow job submission until the check passes
+On `metaMapperApp` mount, call `NamedCredentialHealthCheck.verify()` via `@AuraEnabled`. Block the input form entirely until the check resolves. Three distinct failure states (not a single generic error):
+
+| Failure type | Detected by | UI message | Action link |
+|---|---|---|---|
+| Named Credential not authorized | HTTP 401 from health check callout | "MetaMapper needs one-time setup. An admin must authorize the Tooling API connection." | Link to `setup/SETUP.md` |
+| Current user lacks permission | HTTP 403 or FIELD_CUSTOM_VALIDATION_EXCEPTION on Job insert | "You don't have access to MetaMapper. Ask your admin to assign you the MetaMapper Admin permission set." | No link; text only |
+| Tooling API temporarily unreachable | HTTP 5xx or callout timeout | "MetaMapper cannot reach the Tooling API right now. This may be a temporary org issue." | "Retry" button that re-runs the health check |
+
+Do not collapse all three into a single "setup required" message - each requires a different user action and a different responsible party (admin vs user vs wait).
 
 ### Input Screen (`metaMapperInput`)
 
@@ -339,9 +384,9 @@ On `metaMapperApp` mount, call `NamedCredentialHealthCheck.verify()` via `@AuraE
 **Interactions:**
 - **Click:** opens component in Salesforce Setup in new tab
 - **Right-click:** context menu with "Copy API Name", "Focus path to root", "Collapse subtree"
-- **Hover:** SLDS tooltip showing `Metadata_Type__c`, `Metadata_Name__c`, `Context_Data__c` pills in plain English, confidence score (if supplemental)
+- **Hover:** SLDS tooltip with this exact template: `[Metadata_Name__c] ([Metadata_Type__c]) | [plain-English pill rendering] | [Confidence: N% - verify manually]` where pill rendering maps `Context_Data__c` keys to human sentences (e.g. `isWrite: true` -> "Writes to this field"; `activeVersions: 3` -> "3 active versions"; `cycleClosesAt: X` -> "Cycle closes at X"). Never render raw JSON in the tooltip.
 - **"Expand All" guard:** if `Nodes_Processed__c > 1,000`, clicking "Expand All" shows modal: "This graph contains [N] nodes. Expanding all levels may slow or freeze your browser. Consider using the Level Filter or exporting to CSV instead."
-- **"Focus path to root":** highlights the direct ancestor chain from selected node to root; dims all other nodes
+- **"Focus path to root":** highlights the direct ancestor chain from selected node to root; dims all other nodes. A **"Clear Focus"** button appears in the graph toolbar while focus is active - do not rely on "click anywhere" alone as the only dismissal affordance.
 - **Persistent legend:** always-visible sidebar listing all node types with color swatch + icon + label
 
 **Confidence badge popover (Supplemental nodes with score < 70):**
@@ -358,6 +403,43 @@ Plain-English explanation by handler:
 | Filters | Type multi-select, Level range slider, Confidence threshold, Is_Circular, Is_Dynamic, Source |
 | Collapse/Expand | Per branch; keyboard navigable (arrow keys, Enter, Space) |
 | Node action | Click opens in Salesforce Setup |
+
+### Tree/Graph Synchronization Rules
+
+The Tree View and Graph View share the same underlying data set. These rules govern their coordination:
+
+| Interaction | Tree View | Graph View |
+|---|---|---|
+| Type filter changed | Hides/shows rows of that type | Hides/shows nodes of that type |
+| Level filter changed | Collapses/shows depth | Dims/hides nodes beyond level |
+| Node selected (click) in Tree | Node highlighted in tree | Corresponding node highlighted in graph (same `Metadata_ID__c`) |
+| Node selected (click) in Graph | Corresponding row scrolled into view and highlighted in tree | Node highlighted |
+| "Focus path to root" triggered in Graph | Tree scrolls to root; ancestor chain nodes highlighted | Ancestor chain highlighted; others dimmed |
+| Tab switched (Tree -> Graph) | Focus state in Tree clears | Graph renders with same filter state as Tree |
+| Tab switched (Graph -> Tree) | Tree renders with same filter state as Graph | Focus state in Graph clears |
+| Search applied in Tree | Tree filters rows | Graph is NOT affected (search is Tree-only) |
+
+> Filters (type, level) are shared state owned by `metaMapperResults`. Search is Tree-local state. Selection and focus are transient and clear on tab switch.
+
+### Empty and Error States
+
+| Scenario | UI |
+|---|---|
+| Job completed with zero results | Empty state illustration + "No dependencies found for [API name]. This metadata type may not have trackable dependencies, or the component may not exist." |
+| Job failed mid-way | Error banner with collapsed detail: "[error summary]" + "View full error" expander showing `Error_Message__c`. "Start a new scan" button. |
+| `getNodeHierarchy()` loading | Skeleton loader (3 rows of shimmer) in both Tree and Graph tabs while results load. Do not show empty state during loading. |
+| Job status = Paused | Warning banner (not error): "Scan paused due to a complex component. An admin can lower Batch Size in MetaMapper Settings and use Resume Scan to continue." + "Resume Scan" button (calls `resumeJob()`). |
+| Concurrency rejection | Toast notification: "A scan is already in progress. Wait for it to complete before starting a new one." |
+
+### Responsive Behavior
+
+| Viewport | Behavior |
+|---|---|
+| >= 1280px (desktop) | Full layout: sidebar legend + graph canvas + filter panel all visible |
+| 1024px - 1279px (tablet landscape) | Sidebar legend collapses into a toggle button; filter panel moves to a collapsible drawer |
+| < 1024px (tablet portrait / mobile) | Graph switches to pan-only mode with reduced node labels; tree view is the primary interface; graph available via tab but shows "For best results, use a desktop browser" banner |
+
+Use Salesforce responsive design tokens and the SLDS grid system. Do not hard-code pixel widths.
 
 ### Accessibility
 
@@ -500,6 +582,8 @@ All tunable runtime parameters are stored in `MetaMapper_Settings__mdt` Custom M
 | `Dml_Reserve_Rows__c` | Number | 750 | DML rows to reserve in the guardrail before chaining. Raise for orgs with high-fan-out metadata (e.g. heavily referenced CustomObjects). |
 | `Disable_PE__c` | Checkbox | false | When true, suppresses `Dependency_Status__e` publish and falls back to polling via `getJobStatus()`. Use when org is approaching the daily Platform Event delivery limit. |
 | `Hotloop_Threshold__c` | Number | 5 | Number of consecutive re-chains with zero `Nodes_Processed__c` progress before the engine pauses the job and surfaces a warning to the UI. |
+| `Max_Concurrent_Jobs__c` | Number | 2 | Maximum number of simultaneously active MetaMapper Queueables. `createJob()` rejects new submissions above this threshold with a user-facing message. Raise for orgs with large flex queue allocations. |
+| `Node_Chunk_Size__c` | Number | 2000 | DML chunk size for `DependencyCleanupBatch` node deletion. Default 2,000 (leaves 8,000 DML rows for customer automation). Do not raise above 4,000 for open-source deployments into unknown orgs. |
 
 > Hard-coding batch size and DML reserve is inappropriate for an enterprise tool. A highly-connected org may need `Flow_Batch_Size__c = 15` and `Dml_Reserve_Rows__c = 1500`. Admins tune without a code deploy.
 
@@ -543,6 +627,9 @@ public void execute(QueueableContext ctx) {
 - package.xml export excludes managed package components (namespace-prefixed) by default.
 - Cancellation is cooperative. A Queueable already in the flex queue will check `Status__c` on entry and exit cleanly - it cannot be force-killed immediately.
 - `createJob()` must be called from a synchronous Lightning context only. Invocation from Batch, Future, or Queueable contexts is blocked by an async-context guard. See `setup/SETUP.md` for integration constraints.
+- Concurrent scans are limited by `Max_Concurrent_Jobs__c` (default 2). A new job submission is rejected if the active Queueable count is at the limit. This is a deliberate safety constraint, not a bug.
+- `Ancestors_Hash__c` bloom filter has a negligible probability of false-positive cycle detection; the full `Path__c` string is always used to confirm before setting `Is_Circular__c = true`.
+- `AI_Summary__c` is populated only on job Completed. Failed, Cancelled, and Paused jobs do not have an AI summary. Agentforce Actions should check `Status__c = 'Completed'` before reading this field.
 
 ---
 
