@@ -166,6 +166,8 @@ This is additive to `Disable_PE__c` - the CMDT switch remains for proactive admi
 
 > **Static Resource build**: use `echarts/dist/echarts.min.js` (core minified build, ~1.0-1.2MB) sourced from the npm package. Do **not** use the full bundle - it includes maps and 3D features and risks exceeding Salesforce's 5MB static resource hard limit.
 
+> **Dark mode**: register a Salesforce-compatible dark theme via `echarts.registerTheme('sfDark', { backgroundColor: '#1B1B1B', textStyle: { color: '#FFFFFF' }, ... })`. Apply when `document.body.classList.contains('slds-theme_inverse')`. Use `slds-theme_inverse` detection, not a manual preference flag.
+
 ### Security Model
 
 - OWD: `Dependency_Job__c` = Private (users see only their own jobs)
@@ -279,13 +281,13 @@ for (Dependency_Job__c job : scope) {
 
 | Class | Role |
 |---|---|
-| `DependencyJobController` | `@AuraEnabled` (USER_MODE): `createJob()` with async guard + concurrency guard + preflight check, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()`, `cancelJob()`, `resumeJob()`. Delegates to services - no SOQL/DML directly. |
+| `DependencyJobController` | `@AuraEnabled` (USER_MODE): `createJob()` with async guard + concurrency guard + preflight check, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()`, `cancelJob()`, `resumeJob(String jobId, Integer overrideBatchSize)` - passes transient batch override to Queueable (does not write CMDT). Delegates to services - no SOQL/DML directly. |
 | `DependencyService` (implements `IDependencyService`) | Tooling API SOQL formatting, character-budget chunking, QueryMore, Active Flows filter, `buildContextData()`, `computeScore()` |
 | `DependencyTypeHandlerFactory` | `IDependencyTypeHandler getHandler(String metadataType)` - returns correct handler or no-op default |
 | `CustomFieldHandler` | Supplemental: WorkflowFieldUpdate (95), ValidationRule regex (65), FlexiPage XML (60), CMT lookups (85), Lookup relationships (95) |
 | `ApexClassHandler` | Supplemental: CMT references (85); flags `Is_Dynamic_Reference__c` |
 | `FlowHandler` | Supplemental: QuickActionDefinition, subflows, WebLink URLs |
-| `DependencyQueueable` | Async engine. Constructor: `DependencyQueueable(String jobId, Boolean activeFlowsOnly)`. Savepoint/catch; cancel check; CMDT read via `ISettingsProvider`; hot-loop detection; pre-batch + mid-loop seven-limit guardrail; scoped dedup + upsert by `Node_Unique_Key__c`; two-tier cycle detection; callouts; handlers; one PE event per execution (suppressed if `Disable_PE__c`); self-chain. |
+| `DependencyQueueable` | Async engine. Constructor: `DependencyQueueable(String jobId, Boolean activeFlowsOnly, Integer overrideBatchSize)` - `overrideBatchSize` is null for normal execution; set to half of `Batch_Size__c` when `resumeJob()` triggers after a hot-loop pause. Savepoint/catch; cancel check; CMDT read via `ISettingsProvider`; hot-loop detection; pre-batch + mid-loop seven-limit guardrail; scoped dedup + upsert by `Node_Unique_Key__c`; two-tier cycle detection; callouts; handlers; one PE event per execution (suppressed if `Disable_PE__c`); self-chain. |
 | `DependencyNotificationService` (implements `INotificationService`) | `publishProgress()` - one event per execution; checks org daily PE allocation via `OrgLimits` before publishing (auto-suppresses and flips `Disable_PE__c` if >80% consumed); `sendCompletionNotification()`; populates `AI_Summary__c` at job Completed. |
 | `DependencyCleanupBatch` | Scope = 1. Explicit node chunk-delete before parent. Filter: `Closed_At__c` + closed statuses. |
 | `DependencyCleanupScheduler` | Schedules cleanup at 02:00 |
@@ -309,7 +311,7 @@ If `DependencyQueueable` self-chains repeatedly without processing any new nodes
 - If `Rechain_Count__c` increases by `Hotloop_Threshold__c` (default 5) without any change in `Nodes_Processed__c`, transition Job to `Status__c = 'Paused'` (new status value), set `Error_Message__c` with diagnostic context, and publish a `Dependency_Status__e` warning event.
 - The LWC surfaces this as a user-visible warning: "The scan paused because it encountered a highly complex component. Review the error details and retry with a smaller batch size."
 
-> `Status__c` gains a `Paused` value. `DependencyJobController` exposes a `resumeJob(String jobId)` method that re-enqueues with `Rechain_Count__c` reset, after admin lowers `Batch_Size__c` in CMDT.
+> `Status__c` gains a `Paused` value. `DependencyJobController` exposes a `resumeJob(String jobId, Integer overrideBatchSize)` method. When the LWC calls `resumeJob`, it passes a suggested batch size (half of the current `Batch_Size__c` CMDT value). The Queueable uses this transient override for the resumed run only - it does NOT write back to CMDT. This eliminates the friction of requiring an admin to manually navigate to CMDT settings before retrying. The LWC pause banner displays: "Scan paused. Resuming with a reduced batch size may help. [Resume with reduced batch size] or [Resume with current settings]."
 
 ---
 
@@ -320,16 +322,17 @@ If `DependencyQueueable` self-chains repeatedly without processing any new nodes
 | `metaMapperApp` | Root shell; owns `jobId` state; switches between input, progress, and results views. Runs pre-flight Named Credential health check on mount; shows setup error state if check fails. |
 | `metaMapperInput` | Metadata type picklist, API name text input, typeahead object lookup (debounced 300ms, queries `EntityDefinition`), "Active Flows Only" checkbox with tooltip explanation. Shows estimated node complexity preview when available. Validates required fields before enabling submit. |
 | `metaMapperProgress` | `lightning-progress-bar` + human-readable status label ("Analyzing metadata...", "Paused - limit reached", "Cancelling..."). Subscribes to `Dependency_Status__e` via `lightning/empApi`; falls back to `getJobStatus()` polling if `Disable_PE__c = true`. Displays elapsed time. Cancel button transitions to disabled "Cancelling..." spinner on click; shows confirmation modal before cancelling. |
-| `metaMapperResults` | Tab container: "Tree View" and "Graph View" sharing filter state. Stats tile (type counts from `Summary_JSON__c`). Hosts export controls with primary (CSV/JSON) and advanced (package.xml) tiers. |
+| `metaMapperResults` | Tab container: "Tree View" and "Graph View" sharing filter state. **AI Summary card** at top (visible when `Status__c = Completed`): displays `AI_Summary__c` with "Copy" button and "Ask Copilot" quick action. Stats tile (type counts from `Summary_JSON__c`). Hosts export controls. |
 | `metaMapperTree` | Virtual-rendered SLDS tree with search, type filter, level filter, and confidence filter. Supports collapse/expand per branch. Keyboard navigable. |
-| `metaMapperGraph` | ECharts force-directed graph. Node click: opens component in Salesforce Setup. Right-click: "Copy API Name". Hover: tooltip with `Context_Data__c` pills in plain English. "Expand All" guard: shows modal warning if node count > 1,000. Persistent sidebar legend (always visible). "Focus path to root" breadcrumb. Type filter + level slider. |
-| `metaMapperExport` | Primary export: CSV and JSON (analysis outputs). Advanced export (collapsible): package.xml (developer artifact). No server round-trip. |
+| `metaMapperGraph` | ECharts force-directed graph. Node click: opens component in Salesforce Setup. Right-click: "Copy API Name". Hover: tooltip with `Context_Data__c` pills in plain English. Node selection: click selects node and populates the **Node Details Panel** (sidebar). "Expand All" guard: shows modal warning if node count > 1,000. Persistent sidebar legend. "Focus path to root". Graph toolbar search (quick-find: highlights matching nodes without affecting Tree). "?" keyboard shortcut legend. Type filter + level slider. ECharts theme registered for Salesforce dark mode (`slds-theme_inverse`). |
+| `metaMapperNodeDetail` | Sidebar panel (right side of results screen). Renders full node data when a node is selected in either Tree or Graph: `Metadata_Name__c`, `Metadata_Type__c`, `Level__c`, `Source__c`, `Supplemental_Confidence__c`, all `Context_Data__c` pills in plain English, `Path__c` rendered as breadcrumb, `Is_Circular__c` / `Is_Dynamic_Reference__c` flags with explanations. "Open in Setup" button (primary action). Closes when selection is cleared. |
+| `metaMapperExport` | Primary export: CSV ("Download as CSV") and JSON ("Download Full Hierarchy (JSON)"). Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD]`. Advanced export (collapsible): package.xml ("Download Deployment Manifest"). No server round-trip. |
 
 ---
 
 ## UX Design Specification
 
-### Pre-Flight Check
+### Pre-Flight Check + First-Time Onboarding
 On `metaMapperApp` mount, call `NamedCredentialHealthCheck.verify()` via `@AuraEnabled`. Block the input form entirely until the check resolves. Three distinct failure states (not a single generic error):
 
 | Failure type | Detected by | UI message | Action link |
@@ -339,6 +342,13 @@ On `metaMapperApp` mount, call `NamedCredentialHealthCheck.verify()` via `@AuraE
 | Tooling API temporarily unreachable | HTTP 5xx or callout timeout | "MetaMapper cannot reach the Tooling API right now. This may be a temporary org issue." | "Retry" button that re-runs the health check |
 
 Do not collapse all three into a single "setup required" message - each requires a different user action and a different responsible party (admin vs user vs wait).
+
+**First-time guided tour:** After the Named Credential health check passes for the first time (detected via a `localStorage` flag `metaMapper_tourSeen`), show a one-time `lightning-modal` walkthrough with three slides:
+1. "Reading the graph" - explains the legend, node colors, and border shapes.
+2. "Warning badges" - explains `Is_Dynamic_Reference__c`, `Supplemental_Confidence__c < 70`, and `Is_Circular__c` badges.
+3. "Supplemental results" - explains that some dependencies are found via secondary queries and may require manual verification.
+
+User can dismiss at any time. "Don't show again" checkbox persists the `localStorage` flag. Tour is never shown again after the first dismissal.
 
 ### Input Screen (`metaMapperInput`)
 
@@ -388,6 +398,10 @@ Do not collapse all three into a single "setup required" message - each requires
 - **"Expand All" guard:** if `Nodes_Processed__c > 1,000`, clicking "Expand All" shows modal: "This graph contains [N] nodes. Expanding all levels may slow or freeze your browser. Consider using the Level Filter or exporting to CSV instead."
 - **"Focus path to root":** highlights the direct ancestor chain from selected node to root; dims all other nodes. A **"Clear Focus"** button appears in the graph toolbar while focus is active - do not rely on "click anywhere" alone as the only dismissal affordance.
 - **Persistent legend:** always-visible sidebar listing all node types with color swatch + icon + label
+- **Graph toolbar search:** lightweight search box on the graph toolbar (Ctrl+K shortcut). Highlights matching nodes in the graph canvas without filtering them out. Does not affect Tree View (Tree-local search remains separate). Clears with Esc.
+- **"?" keyboard shortcut legend:** small "?" icon button in graph toolbar. Opens a popover listing: `Ctrl+K` = Search graph, `Esc` = Clear focus / search, arrow keys = traverse nodes, `Enter` = Open in Setup, right-click = Context menu. Rendered as an SLDS popover, not a modal.
+- **Node Details Panel:** selecting a node (single click) populates the `metaMapperNodeDetail` sidebar panel with full node data. "Open in Setup" is the primary action button in the panel, not triggered by the click itself. This separates selection (inspect) from navigation (open Setup).
+- **ECharts dark mode:** register a Salesforce-compatible dark theme using `echarts.registerTheme('sfDark', {...})` with SLDS dark background token (`#1B1B1B`) and text token (`#FFFFFF`). Apply theme when `document.body.classList.contains('slds-theme_inverse')`.
 
 **Confidence badge popover (Supplemental nodes with score < 70):**
 Plain-English explanation by handler:
@@ -450,14 +464,27 @@ Use Salesforce responsive design tokens and the SLDS grid system. Do not hard-co
 - Screen reader: every node badge includes `aria-label` in plain English (e.g. "Warning: low confidence supplemental match")
 - Color-blind safe: icon + border shape carry meaning independent of hue
 
+### Results Screen - AI Summary Card
+
+When `Status__c = Completed`, display a prominent card at the top of the Results screen (above both tabs):
+
+| Element | Detail |
+|---|---|
+| Card title | "Scan Summary" |
+| Body | `AI_Summary__c` text verbatim (e.g. "This scan found 42 dependencies: 3 active Flows, 5 Apex classes...") |
+| "Copy" button | Copies `AI_Summary__c` to clipboard |
+| "Ask Copilot" button | Opens Einstein Copilot (if available) with `AI_Summary__c` pre-populated as context. Conditionally rendered - only shown if Copilot is enabled in the org. |
+
+The card is not shown for Failed, Cancelled, or Paused jobs. For Paused jobs, a warning banner replaces it.
+
 ### Export Hierarchy
 
 **Primary exports (prominent placement):**
-- CSV - "Download as Spreadsheet" - for analysis in Excel / Sheets
-- JSON - "Download as JSON" - for programmatic processing
+- "Download as CSV" - flat row-per-node, for analysis in Excel / Sheets. Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD].csv`
+- "Download Full Hierarchy (JSON)" - nested tree with all `Context_Data__c` pills. Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD].json`
 
 **Advanced exports (collapsible "Advanced" section):**
-- package.xml - "Download Deployment Manifest" - developer artifact for deployment pipelines; tooltip explains what it is and when to use it
+- "Download Deployment Manifest" - package.xml, developer artifact; tooltip: "Use this to deploy or retrieve the components found in this scan using Salesforce CLI or VS Code."
 
 ### Settings UI (CMDT labels)
 
@@ -471,6 +498,8 @@ When surfacing `MetaMapper_Settings__mdt` fields in any admin UI, use human-read
 | `Dml_Reserve_Rows__c` | "Safety margin (DML rows)" | "Advanced: number of database rows to reserve as a safety buffer. Increase for orgs with very connected metadata." |
 | `Disable_PE__c` | "Disable live progress updates" | "Turn on if your org is hitting real-time event limits. Progress will refresh every few seconds instead." |
 | `Hotloop_Threshold__c` | "Pause after N stuck retries" | "If the analysis retries this many times without finding new components, it pauses and alerts you." |
+| `Max_Concurrent_Jobs__c` | "Max concurrent scans" | "How many MetaMapper scans can run at the same time. Default 2. Raise only for orgs with large async capacity." |
+| `Node_Chunk_Size__c` | "Cleanup chunk size (Advanced)" | "Records deleted per database transaction during cleanup. Default 2,000. Lower this value if you see 'Too many DML statements' errors from other automation during cleanup." |
 
 ---
 
