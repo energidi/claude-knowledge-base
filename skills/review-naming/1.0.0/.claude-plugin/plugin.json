@@ -1,0 +1,8 @@
+{
+  "name": "review-naming",
+  "description": "Audit metadata and code naming conventions and descriptions across any design or codebase",
+  "version": "1.0.0",
+  "author": {
+    "name": "Gidi Abramovich"
+  }
+}
