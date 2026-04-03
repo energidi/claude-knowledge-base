@@ -348,7 +348,7 @@ Do not collapse all three into a single "setup required" message - each requires
 2. "Warning badges" - explains `Is_Dynamic_Reference__c`, `Supplemental_Confidence__c < 70`, and `Is_Circular__c` badges.
 3. "Supplemental results" - explains that some dependencies are found via secondary queries and may require manual verification.
 
-User can dismiss at any time. "Don't show again" checkbox persists the `localStorage` flag. Tour is never shown again after the first dismissal.
+User can dismiss at any time. "Don't show again" checkbox persists the `localStorage` flag. Tour will not reappear on the same browser after dismissal. It will reappear on a different browser or after clearing browser storage - this is acceptable behaviour for a localStorage-based flag.
 
 ### Input Screen (`metaMapperInput`)
 
@@ -398,7 +398,7 @@ User can dismiss at any time. "Don't show again" checkbox persists the `localSto
 - **"Expand All" guard:** if `Nodes_Processed__c > 1,000`, clicking "Expand All" shows modal: "This graph contains [N] nodes. Expanding all levels may slow or freeze your browser. Consider using the Level Filter or exporting to CSV instead."
 - **"Focus path to root":** highlights the direct ancestor chain from selected node to root; dims all other nodes. A **"Clear Focus"** button appears in the graph toolbar while focus is active - do not rely on "click anywhere" alone as the only dismissal affordance.
 - **Persistent legend:** always-visible sidebar listing all node types with color swatch + icon + label
-- **Graph toolbar search:** lightweight search box on the graph toolbar (Ctrl+K shortcut). Highlights matching nodes in the graph canvas without filtering them out. Does not affect Tree View (Tree-local search remains separate). Clears with Esc.
+- **Graph toolbar search:** lightweight search box on the graph toolbar (Ctrl+K shortcut). Placeholder text: "Search nodes in this graph..." Inline note below the input: "(Search applies to Graph view only)". Highlights matching nodes in the graph canvas without filtering them out. Does not affect Tree View (Tree-local search remains separate). Clears with Esc.
 - **"?" keyboard shortcut legend:** small "?" icon button in graph toolbar. Opens a popover listing: `Ctrl+K` = Search graph, `Esc` = Clear focus / search, arrow keys = traverse nodes, `Enter` = Open in Setup, right-click = Context menu. Rendered as an SLDS popover, not a modal.
 - **Node Details Panel:** selecting a node (single click) populates the `metaMapperNodeDetail` sidebar panel with full node data. "Open in Setup" is the primary action button in the panel, not triggered by the click itself. This separates selection (inspect) from navigation (open Setup).
 - **ECharts dark mode:** register a Salesforce-compatible dark theme using `echarts.registerTheme('sfDark', {...})` with SLDS dark background token (`#1B1B1B`) and text token (`#FFFFFF`). Apply theme when `document.body.classList.contains('slds-theme_inverse')`.
@@ -451,7 +451,9 @@ The Tree View and Graph View share the same underlying data set. These rules gov
 |---|---|
 | >= 1280px (desktop) | Full layout: sidebar legend + graph canvas + filter panel all visible |
 | 1024px - 1279px (tablet landscape) | Sidebar legend collapses into a toggle button; filter panel moves to a collapsible drawer |
-| < 1024px (tablet portrait / mobile) | Graph switches to pan-only mode with reduced node labels; tree view is the primary interface; graph available via tab but shows "For best results, use a desktop browser" banner |
+| < 1024px (tablet portrait / mobile) | Graph switches to pan-only mode with reduced node labels; tree view is the primary interface; graph available via tab but shows "For best results, use a desktop browser" banner. Node Details Panel becomes a full-screen modal with an explicit "Close" button in the header. |
+
+MetaMapper is a **desktop-first application**. The responsive behaviour on tablet and mobile is graceful degradation, not full feature parity. Do not invest implementation effort in making the graph fully interactive on mobile - Tree View is the intentional primary interface on small viewports.
 
 Use Salesforce responsive design tokens and the SLDS grid system. Do not hard-code pixel widths.
 
@@ -473,7 +475,8 @@ When `Status__c = Completed`, display a prominent card at the top of the Results
 | Card title | "Scan Summary" |
 | Body | `AI_Summary__c` text verbatim (e.g. "This scan found 42 dependencies: 3 active Flows, 5 Apex classes...") |
 | "Copy" button | Copies `AI_Summary__c` to clipboard |
-| "Ask Copilot" button | Opens Einstein Copilot (if available) with `AI_Summary__c` pre-populated as context. Conditionally rendered - only shown if Copilot is enabled in the org. |
+| "Ask Copilot" button | Opens Einstein Copilot with `AI_Summary__c` pre-populated. Conditionally rendered: shown only if Copilot is enabled in the org. If Copilot is unavailable, show helper text "Einstein Copilot not available in this org." in place of the button (do not hide silently). |
+| Card height | Compact by default - maximum 3 lines of `AI_Summary__c` visible; overflow revealed by a "Show more" inline toggle. Prevents the card from pushing Tree/Graph tabs below the fold. |
 
 The card is not shown for Failed, Cancelled, or Paused jobs. For Paused jobs, a warning banner replaces it.
 
@@ -484,7 +487,7 @@ The card is not shown for Failed, Cancelled, or Paused jobs. For Paused jobs, a 
 - "Download Full Hierarchy (JSON)" - nested tree with all `Context_Data__c` pills. Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD].json`
 
 **Advanced exports (collapsible "Advanced" section):**
-- "Download Deployment Manifest" - package.xml, developer artifact; tooltip: "Use this to deploy or retrieve the components found in this scan using Salesforce CLI or VS Code."
+- "Download Deployment Manifest" - package.xml, developer artifact; tooltip: "Use this to deploy or retrieve the components found in this scan using Salesforce CLI or VS Code. Includes only components from this scan (managed packages excluded)."
 
 ### Settings UI (CMDT labels)
 
@@ -500,6 +503,9 @@ When surfacing `MetaMapper_Settings__mdt` fields in any admin UI, use human-read
 | `Hotloop_Threshold__c` | "Pause after N stuck retries" | "If the analysis retries this many times without finding new components, it pauses and alerts you." |
 | `Max_Concurrent_Jobs__c` | "Max concurrent scans" | "How many MetaMapper scans can run at the same time. Default 2. Raise only for orgs with large async capacity." |
 | `Node_Chunk_Size__c` | "Cleanup chunk size (Advanced)" | "Records deleted per database transaction during cleanup. Default 2,000. Lower this value if you see 'Too many DML statements' errors from other automation during cleanup." |
+
+**Admin-only controls (Settings UI):**
+- "Reset First-Time Tour" button: clears the `metaMapper_tourSeen` localStorage flag for the current browser session. Useful for admins demoing the tour to new team members. Implemented as a client-side JS action - no Apex required.
 
 ---
 
