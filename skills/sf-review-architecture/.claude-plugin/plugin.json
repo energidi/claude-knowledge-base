@@ -1,0 +1,8 @@
+{
+  "name": "sf-review-architecture",
+  "description": "Salesforce technical architecture review against 6 pillars: data model, security, async/governor limits, integration safety, query strategy, failure handling",
+  "version": "1.0.0",
+  "author": {
+    "name": "Gidi Abramovich"
+  }
+}

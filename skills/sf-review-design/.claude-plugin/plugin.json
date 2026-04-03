@@ -1,0 +1,8 @@
+{
+  "name": "sf-review-design",
+  "description": "Full Salesforce design review orchestrator: runs architecture, UX, and naming reviews in sequence and produces a single prioritized master findings table with a GO/NO-GO verdict",
+  "version": "1.0.0",
+  "author": {
+    "name": "Gidi Abramovich"
+  }
+}

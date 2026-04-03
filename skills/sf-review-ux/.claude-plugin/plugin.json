@@ -1,0 +1,8 @@
+{
+  "name": "sf-review-ux",
+  "description": "Salesforce LWC/SLDS UX and UI design review covering empty/error states, accessibility (WCAG AA), responsive degradation, interaction consistency, component synchronization, and copy quality",
+  "version": "1.0.0",
+  "author": {
+    "name": "Gidi Abramovich"
+  }
+}
