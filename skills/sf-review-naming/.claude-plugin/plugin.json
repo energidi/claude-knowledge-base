@@ -1,0 +1,8 @@
+{
+  "name": "sf-review-naming",
+  "description": "Salesforce metadata naming and description audit. Enforces naming standards (purpose over implementation, no jargon, no abbreviations, consistent patterns) and checks every component has a meaningful description.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Gidi Abramovich"
+  }
+}
