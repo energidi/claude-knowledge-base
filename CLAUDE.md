@@ -238,6 +238,26 @@ print('Saved.')
 - Keep the previous versioned script intact as a rollback reference.
 - If content text contains single quotes, use double quotes for the outer Python string or escape with `\'`.
 
+## Speed Rules (Learned from MetaMapper iterations)
+- **Write the full script in one Write tool call.** Do not read the previous version first unless you need to copy structure. The v10 -> v11 mistake: reading the old script line by line to understand structure, then writing the new one. Faster: keep the script structure in context from the conversation, write directly.
+- **Apply ALL CLAUDE.md edits before writing the script.** CLAUDE.md is the single source of truth. Write it first, then derive the script from it. Never write the script and CLAUDE.md in parallel from two separate mental models.
+- **Do not re-read CLAUDE.md before each script write** if you already applied all changes in the same session. Trust your edits.
+- **Script structure is stable across versions.** The skeleton (helpers, title, section order) never changes. Only content inside sections changes. Write new content directly into the proven skeleton - do not reconstruct the skeleton from scratch each time.
+- **Batch all CLAUDE.md edits, then write script once.** Do not interleave: edit CLAUDE.md line, write script, edit CLAUDE.md line, write script. Complete all edits first, then write script once.
+
+---
+
+# External Review Round Workflow
+
+When the user pastes architecture or UX reviews from external sources:
+
+1. **Parse all reviews first.** Read every review in the message before producing any output.
+2. **Present an assessment table** - one row per actionable item. Columns: `#`, `Source`, `Issue`, `Action`, `Impact`. Mark items to skip with reason.
+3. **Wait for explicit approval** ("do it", "yes", "proceed") before applying anything.
+4. **On approval: apply ALL CLAUDE.md edits first**, then write the new versioned Word doc script once.
+5. **Never name AI tools in technical design documents.** Strip all reviewer names, tool names, and score references from the Word doc content. These have no engineering value.
+6. **Deploy immediately after generation** - no separate prompt needed. Push CLAUDE.md + Word doc to GitHub in one commit.
+
 ---
 
 # Documentation (Near Token Limit)
