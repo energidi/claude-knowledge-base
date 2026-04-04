@@ -14,7 +14,7 @@ This applies to every phase and every artifact - Apex classes, LWC components, o
 
 ## Project Overview
 
-MetaMapper is an open-source, 100% native Salesforce application that visualizes deep metadata dependencies using the Tooling API. It targets enterprise/LDV orgs where synchronous Governor Limits are a hard constraint. All runtime data stays within the Salesforce trust boundary - no external APIs, no CDN calls.
+MetaMapper is an open-source, 100% native Salesforce application that maps reachable metadata dependencies using the Tooling API. For each component it discovers, it stores one representative path - the first path found during traversal. It targets enterprise/LDV orgs where synchronous Governor Limits are a hard constraint. All runtime data stays within the Salesforce trust boundary - no external APIs, no CDN calls.
 
 ---
 
@@ -163,6 +163,8 @@ List<OrgLimit> limits = OrgLimits.getMap().values(); // query platform limits
 
 This is additive to `Disable_Platform_Events__c` - the CMDT switch remains for proactive admin control, while the runtime check provides automatic degradation. When auto-degraded, set `Disable_Platform_Events__c = true` on the CMDT Default record so all subsequent executions in the same day also skip publishing without re-checking limits on every call. **Append to `Error_Status_Message__c`** when auto-suppress fires: `"[timestamp] Platform Events suppressed - org daily delivery limit >80% consumed. Progress updates switched to polling."` so admins have visibility without needing debug logs.
 
+**CMDT mutation path:** `DependencyNotificationService` writes the flag via `Metadata.Operations.enqueueDeployment()` (async, does not consume a DML statement). If the deployment call itself fails (e.g. insufficient metadata deployment permissions), the suppression flag is NOT persisted - but the event is still skipped for the current execution. On the next execution, the OrgLimits check will run again and attempt the write again. The suppression notice is appended to `Error_Status_Message__c` regardless of whether the CMDT write succeeds, ensuring admin visibility is never gated on metadata deployment access.
+
 ### Graph Visualization
 
 `metaMapperGraph` loads Apache ECharts from the `ECharts` Static Resource (no CDN). It receives a flat `Metadata_Dependency__c` list and builds the ECharts `graph` series client-side, using `Parent_Dependency__c` to derive edge links. Node color is keyed to `Metadata_Type__c`.
@@ -247,16 +249,21 @@ Master-Detail cascade deletion counts child record deletes against the 10,000 DM
 | `Ancestor_Path__c` | Long Text 32768 | Pipe-delimited ancestor `Metadata_Id__c` chain from root to this node - used for true cycle detection |
 | `Supplemental_Confidence__c` | Number (3,0) | 0-100 confidence score for supplemental nodes only. Regex/XML matches are inherently fuzzy; score reflects match certainty. Nodes below 70 display a warning badge in the UI. Null for ToolingAPI nodes. |
 | `Deduplication_Key__c` | Text 80 (External ID, Unique) | Composite key: `JobId + ':' + Metadata_Id__c`. Used for upsert to prevent duplicate nodes from race conditions in concurrent Queueable chains. Text 80 provides headroom for future scoping additions beyond the current 37-char minimum. |
-| `Ancestor_Hash_Index__c` | Long Text 32768 | Concatenated 6-char base64url hashes of ancestor `Metadata_Id__c` values. Used as a hash shortcut for cycle detection before invoking `String.contains()` on the full `Ancestor_Path__c`. Algorithm: for each ancestor ID, take the first 6 chars of its base64url-encoded SHA-256 hash, concatenate all hashes into this field. If `Ancestor_Hash_Index__c.contains(shortHash)` is true, validate conclusively against `Ancestor_Path__c` before marking circular. Reduces CPU on deep trees by skipping the full string scan on most nodes. **Field must be Long Text 32768 - Text 255 overflows at depth >42 (255 / 6 chars = 42 hashes max), causing a silent `StringException` on upsert.** |
+| `Ancestor_Hash_Prefixes__c` | Long Text 32768 | Concatenated 6-char base64url hashes of ancestor `Metadata_Id__c` values. Used as a hash shortcut for cycle detection before invoking `String.contains()` on the full `Ancestor_Path__c`. Algorithm: for each ancestor ID, take the first 6 chars of its base64url-encoded SHA-256 hash, concatenate all hashes into this field. If `Ancestor_Hash_Prefixes__c.contains(shortHash)` is true, validate conclusively against `Ancestor_Path__c` before marking circular. Reduces CPU on deep trees by skipping the full string scan on most nodes. **Field must be Long Text 32768 - Text 255 overflows at depth >42 (255 / 6 chars = 42 hashes max), causing a silent `StringException` on upsert.** |
 
 ### Dependency_Context__c (Pills) by Metadata Type
+
+All `Dependency_Context__c` payloads include a root `"v": 1` version key. The LWC renders unknown keys as plain text with a fallback label rather than failing. Handlers must increment `"v"` when the payload schema changes - the LWC version check gate is the only compatibility contract.
+
 | Type | JSON shape |
 |---|---|
-| ApexClass / ApexTrigger | `{"isWrite": true}` - whether the class writes to the target field/object |
-| Flow | `{"activeVersions": 3, "isActive": true}` |
-| WorkflowRule | `{"isActive": true, "triggerType": "onInsertOrUpdate"}` |
-| CustomField | `{"parentObject": "Account", "parentType": "CustomObject"}` |
-| Report | `{"filterUsage": ["filter", "grouping", "column"]}` |
+| ApexClass / ApexTrigger | `{"v": 1, "isWrite": true}` - whether the class writes to the target field/object |
+| Flow | `{"v": 1, "activeVersions": 3, "isActive": true}` |
+| WorkflowRule | `{"v": 1, "isActive": true, "triggerType": "onInsertOrUpdate"}` |
+| CustomField | `{"v": 1, "parentObject": "Account", "parentType": "CustomObject"}` |
+| Report | `{"v": 1, "filterUsage": ["filter", "grouping", "column"]}` |
+
+`Result_Summary__c` also carries a version key at root: `{"v": 1, "ApexClass": 5, "Flow": 3}`. LWC stat tile ignores unknown keys rather than failing.
 
 ---
 
@@ -283,9 +290,9 @@ Master-Detail cascade deletion counts child record deletes against the 10,000 DM
 | Class | Role |
 |---|---|
 | `DependencyJobController` | `@AuraEnabled` (USER_MODE): `createJob()` with async guard + concurrency guard + preflight check, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()`, `cancelJob()`, `resumeJob(String jobId, Integer overrideBatchSize)` - passes transient batch override to Queueable (does not write CMDT). Delegates to services - no SOQL/DML directly. |
-| `MetadataDependencyService` (implements `IMetadataDependencyService`) | Tooling API SOQL formatting, character-budget chunking, QueryMore, Active Flows filter, `buildContextData()`, `computeScore()` |
+| `MetadataDependencyService` (implements `IMetadataDependencyService`) | Tooling API SOQL formatting, character-budget chunking, QueryMore, Active Flows filter, `buildContextData()`, `computeScore()`. **Heap pre-check rule (critical):** must check `Limits.getHeapSize()` BEFORE calling `JSON.deserializeUntyped()` on the raw HTTP response body - `Limits.getHeapSize()` is delayed and does not reflect the memory cost of the pending deserialization. If the raw response body string length exceeds 500,000 characters (~500KB), split the batch in half and re-query rather than deserializing the full payload. |
 | `DependencyTypeHandlerFactory` | `IDependencyTypeHandler getHandler(String metadataType)` - returns correct handler or no-op default |
-| `CustomFieldHandler` | Supplemental: WorkflowFieldUpdate (95), ValidationRule regex (65), FlexiPage XML (60), CMT lookups (85), Lookup relationships (95) |
+| `CustomFieldHandler` | Supplemental: WorkflowFieldUpdate (95), ValidationRule regex (65), FlexiPage XML (60), CMT lookups (85), Lookup relationships (95). **Regex safety rule:** all regex patterns must be non-backtracking (no nested quantifiers). Before each regex call, check `Limits.getCpuTime() / Limits.getLimitCpuTime() >= 0.60` - if true, skip the field, log a diagnostic notice to `Error_Status_Message__c`, and continue. ValidationRule formula fields in complex orgs can be 10,000+ characters; unbounded backtracking patterns will hit the CPU limit and fail the Queueable. |
 | `ApexClassHandler` | Supplemental: CMT references (85); flags `Is_Dynamic_Reference__c` |
 | `FlowHandler` | Supplemental: QuickActionDefinition, subflows, WebLink URLs |
 | `DependencyQueueable` | Async engine. Constructor: `DependencyQueueable(String jobId, Boolean activeFlowsOnly, Integer overrideBatchSize)` - `overrideBatchSize` is null for normal execution; set to half of `Scan_Batch_Size__c` when `resumeJob()` triggers after a hot-loop pause. Savepoint/catch; cancel check; CMDT read via `ISettingsProvider`; hot-loop detection; pre-batch + mid-loop seven-limit guardrail; scoped dedup + upsert by `Deduplication_Key__c`; two-tier cycle detection; callouts; HTTP 414/431 reactive split-and-retry (halves batch, retries both halves as separate callouts, does not fail job - logs restart to `Error_Status_Message__c`); handlers; one PE event per execution (suppressed if `Disable_Platform_Events__c`); self-chain. **DML bulkification rule (critical):** child nodes discovered during the result-processing loop are accumulated in a `List<Metadata_Dependency__c>` and upserted in a single bulk statement after the loop completes (or before a mid-loop self-chain fires). Never upsert per-node inside the loop. |
@@ -312,7 +319,7 @@ If `DependencyQueueable` self-chains repeatedly without processing any new nodes
 **Detection logic:**
 - On each self-chain, increment `Processing_Cycle_Count__c` on the Job and compare `Components_Analyzed__c` to the previous value stored in a transient variable.
 - If `Processing_Cycle_Count__c` increases by `Stall_Detection_Threshold__c` (default 5) without any change in `Components_Analyzed__c`, transition Job to `Status__c = 'Paused'` (new status value), set `Error_Status_Message__c` with diagnostic context, and publish a `Dependency_Scan_Status__e` warning event.
-- The LWC surfaces this as a user-visible warning: "The scan paused because it encountered a highly complex component. You can resume at a slower speed or with current settings."
+- The LWC surfaces this as a user-visible warning: "MetaMapper paused because it encountered a component with extremely deep or wide dependencies. You can resume at a slower speed or with current settings."
 
 > `Status__c` gains a `Paused` value. `DependencyJobController` exposes a `resumeJob(String jobId, Integer overrideBatchSize)` method. When the LWC calls `resumeJob`, it passes a suggested batch size (half of the current `Scan_Batch_Size__c` CMDT value). The Queueable uses this transient override for the resumed run only - it does NOT write back to CMDT. This eliminates the friction of requiring an admin to manually navigate to CMDT settings before retrying. The LWC pause banner displays: "Scan paused. [Resume at a slower speed] or [Resume with current settings]."
 
@@ -329,7 +336,7 @@ If `DependencyQueueable` self-chains repeatedly without processing any new nodes
 | `metaMapperTree` | Virtual-rendered SLDS tree with search, type filter, level filter, and confidence filter. Supports collapse/expand per branch. Keyboard navigable. |
 | `metaMapperGraph` | ECharts force-directed graph. Node click: opens component in Salesforce Setup. Right-click: "Copy API Name". Hover: tooltip with `Dependency_Context__c` pills in plain English. Node selection: click selects node and populates the **Node Details Panel** (sidebar). "Expand All" guard: shows modal warning if node count > 1,000. Persistent sidebar legend. "Focus path to root". Graph toolbar search (quick-find: highlights matching nodes without affecting Tree). "?" keyboard shortcut legend. Type filter + level slider. ECharts theme registered for Salesforce dark mode (`slds-theme_inverse`). |
 | `metaMapperNodeDetail` | Sidebar panel (right side of results screen). Renders full node data when a node is selected in either Tree or Graph: `Metadata_Name__c`, `Metadata_Type__c`, `Dependency_Depth__c`, `Discovery_Source__c`, `Supplemental_Confidence__c`, all `Dependency_Context__c` pills in plain English, `Ancestor_Path__c` rendered as breadcrumb, `Is_Circular__c` / `Is_Dynamic_Reference__c` flags with explanations. "Open in Setup" button (primary action). "Copy Link" button generates a deep-link URL (`[current URL]?jobId=[jobId]&nodeId=[Metadata_Id__c]`) and copies to clipboard. Closes when selection is cleared. |
-| `metaMapperExport` | Primary export: CSV ("Download as CSV") and JSON ("Download Complete Hierarchy (for developers)"). Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD]`. Advanced export (collapsible): package.xml ("Download Deployment Manifest"). No server round-trip. |
+| `metaMapperExport` | Primary export: CSV ("Download as CSV") and JSON ("Download Complete Hierarchy (for developers)"). Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD]_[HHmm]`. Advanced export (collapsible): package.xml ("Download Deployment Manifest"). No server round-trip. |
 
 ---
 
@@ -409,7 +416,7 @@ User can dismiss at any time. "Don't show again" checkbox persists the `localSto
 - **"?" keyboard shortcut legend:** small "?" icon button in graph toolbar. Opens a popover listing: `Ctrl+K` = Search graph, `Shift+?` = Open keyboard legend (global), `Esc` = Clear focus / search, arrow keys = traverse nodes, `Enter` = Open in Setup, right-click = Context menu. `Shift+?` works even when focus is inside the graph canvas. Rendered as an SLDS popover, not a modal.
 - **Node Details Panel:** selecting a node (single click) populates the `metaMapperNodeDetail` sidebar panel with full node data. "Open in Setup" is the primary action button in the panel, not triggered by the click itself. This separates selection (inspect) from navigation (open Setup).
 - **Spanning tree notice:** a dismissible info badge is shown in the persistent graph legend: "Showing the first-discovered path to each component. A node reachable via multiple paths appears once." Dismissed via a close icon; state persisted in `localStorage` key `metaMapper_spanningTreeNotice_v1`. Does not reappear after dismissal on the same browser.
-- **Large graph performance warning:** when `Components_Analyzed__c > 8,000`, show a persistent banner above the graph canvas: "Large graph detected ([N] components). For best performance, use Tree View or apply filters to reduce scope." Banner is dismissible. Does not affect Tree View.
+- **Large graph performance warning:** when `Components_Analyzed__c > 8,000`, show a persistent banner above the graph canvas: "Large graph detected ([N] components). For best performance, use Tree View or apply filters to reduce scope." Banner includes a "Switch to Tree View" button that activates the Tree tab directly. Banner is dismissible. Does not affect Tree View.
 - **ECharts dark mode:** register a Salesforce-compatible dark theme using `echarts.registerTheme('sfDark', {...})` with SLDS dark background token (`#1B1B1B`) and text token (`#FFFFFF`). Apply theme when `document.body.classList.contains('slds-theme_inverse')`.
 
 **Confidence badge popover (Supplemental nodes with score < 70):**
@@ -493,8 +500,8 @@ The card is not shown for Failed, Cancelled, or Paused jobs. For Paused jobs, a 
 ### Export Hierarchy
 
 **Primary exports (prominent placement):**
-- "Download as CSV" - flat row-per-node, for analysis in Excel / Sheets. Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD].csv`
-- "Download Complete Hierarchy (for developers)" - nested tree with all `Dependency_Context__c` pills. Tooltip: "Contains all dependency data including context fields. Useful for scripting, auditing, or custom tooling." Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD].json`
+- "Download as CSV" - flat row-per-node, for analysis in Excel / Sheets. Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD]_[HHmm].csv`
+- "Download Complete Hierarchy (for developers)" - nested tree with all `Dependency_Context__c` pills. Tooltip: "Contains all dependency data including context fields. Useful for scripting, auditing, or custom tooling." Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD]_[HHmm].json`
 
 **Advanced exports (collapsible "Advanced" section):**
 - "Download Deployment Manifest" - package.xml, developer artifact; tooltip: "Use this to deploy or retrieve the components found in this scan using Salesforce CLI or VS Code. Includes only components from this scan (managed packages excluded)."
@@ -656,9 +663,11 @@ public void execute(QueueableContext ctx) {
 ```
 
 `updateJobFailed()` must be a private method that:
-1. Updates `Metadata_Scan_Job__c.Status__c = 'Failed'`, sets `Error_Status_Message__c` and `Closed_At__c`.
+1. Updates `Metadata_Scan_Job__c.Status__c = 'Failed'`, sets `Error_Status_Message__c` to `e.getMessage() + '\n' + e.getStackTraceString()`, and sets `Closed_At__c`.
 2. Publishes a `Dependency_Scan_Status__e` failure event.
 3. Does NOT re-throw the exception (allows the catch block's DML to commit).
+
+> **Why stack trace?** `e.getMessage()` alone is insufficient for async debugging - the stack trace identifies the exact line and call chain where the failure occurred, which is critical for diagnosing limit errors and callout failures in production without debug logs.
 
 > **Why savepoint?** Without `Database.rollback(sp)`, partial engine work (e.g., some nodes inserted, some not) remains in the database in a corrupt intermediate state. The rollback cleans this up; the subsequent status update DML commits cleanly in the same transaction as a separate operation after the rollback point.
 
@@ -709,7 +718,7 @@ Every component must carry a description in its metadata XML. Descriptions must 
 | `Ancestor_Path__c` | Pipe-delimited chain of Metadata_Id__c values from the root component down to this node's parent (e.g. "id1|id2|id3"). Used to detect true ancestry cycles. Preserved on circular nodes for debugging and export. Do not edit manually. |
 | `Supplemental_Confidence__c` | Confidence score (0-100) for supplemental dependencies only. Reflects how certain the match is: exact field matches score 95, regex formula matches score 65. Nodes below 70 display a warning badge prompting manual verification. Null for Tooling API nodes. |
 | `Deduplication_Key__c` | Composite key used to prevent duplicate records: format is "JobId:Metadata_Id__c". Used as an External ID for upsert operations in the scan engine. Prevents race conditions when multiple async cycles discover the same component simultaneously. Do not edit manually. |
-| `Ancestor_Hash_Index__c` | Internal engine field. Stores concatenated 6-character hash prefixes of ancestor component IDs. Used as a fast lookup index to avoid expensive full-string ancestry checks on most nodes. Only consulted by the cycle detection engine. Do not edit manually. |
+| `Ancestor_Hash_Prefixes__c` | Internal engine field. Stores concatenated 6-character hash prefixes of ancestor component IDs. Used as a fast lookup index to avoid expensive full-string ancestry checks on most nodes. Only consulted by the cycle detection engine. Do not edit manually. |
 
 ### Permission Set - MetaMapper_Admin
 
@@ -753,8 +762,10 @@ Every component must carry a description in its metadata XML. Descriptions must 
 - Cancellation is cooperative. A Queueable already in the flex queue will check `Status__c` on entry and exit cleanly - it cannot be force-killed immediately.
 - `createJob()` must be called from a synchronous Lightning context only. Invocation from Batch, Future, or Queueable contexts is blocked by an async-context guard. See `setup/SETUP.md` for integration constraints.
 - Concurrent scans are limited by `Max_Concurrent_Jobs__c` (default 2). A new job submission is rejected if the active Queueable count is at the limit. This is a deliberate safety constraint, not a bug.
-- `Ancestor_Hash_Index__c` hash shortcut has a negligible probability of false-positive cycle detection (hash collision on the 6-char prefix); the full `Ancestor_Path__c` string is always used to confirm before setting `Is_Circular__c = true`.
+- `Ancestor_Hash_Prefixes__c` hash shortcut has a negligible probability of false-positive cycle detection (hash collision on the 6-char prefix); the full `Ancestor_Path__c` string is always used to confirm before setting `Is_Circular__c = true`.
 - `Scan_Summary_Text__c` is populated only on job Completed. Failed, Cancelled, and Paused jobs do not have an AI summary. Agentforce Actions should check `Status__c = 'Completed'` before reading this field.
+- **Data storage impact:** each scan generates one `Metadata_Dependency__c` record per discovered node. A large scan (20,000+ nodes) can consume 40-100MB of data storage. Orgs with constrained storage should reduce `Retention_Hours__c` or run scans on demand rather than routinely. Concurrent scans multiply this cost proportionally.
+- **Depth-limited preview mode not yet implemented:** users who only need immediate parent/child context can workaround by scanning a direct field reference rather than the full object. A formal depth-cap option (limiting traversal to `Dependency_Depth__c <= 2`) is deferred to a future release.
 
 ---
 
