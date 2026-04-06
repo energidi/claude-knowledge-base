@@ -89,7 +89,7 @@ npm run prettier:verify       # Check formatting without writing
 
 ### Processing Model
 
-The core challenge: enterprise org metadata trees are too large for synchronous Apex (10s CPU, 6MB heap). The solution is a **Queueable chain + Custom Object state machine**:
+The core challenge: enterprise org metadata trees are too large for synchronous Apex (10s CPU, 6MB synchronous heap). Async Queueable context provides 12MB heap and no CPU hard timeout - but governor limits still apply per execution. The solution is a **Queueable chain + Custom Object state machine**:
 
 1. User submits a search via the LWC - an `@AuraEnabled` controller creates a `Metadata_Scan_Job__c` record and inserts the root `Metadata_Dependency__c`, then enqueues `DependencyQueueable`.
 2. Each `DependencyQueueable` execution queries a batch of unprocessed nodes (`Dependencies_Fetched__c = false`), calls the Tooling API via Named Credential, inserts new child nodes, marks current nodes processed, and checks limit proximity.
@@ -113,7 +113,7 @@ After the Tooling API returns dependency results for the current batch, query th
 `SELECT Metadata_Id__c FROM Metadata_Dependency__c WHERE Metadata_Scan_Job__c = :jobId AND Metadata_Id__c IN :currentResultIds`
 Rows returned = number of already-inserted matches within `currentResultIds` (bounded by the result set size, not by the IN list size). This avoids the full-table scan that would occur when querying all previously inserted nodes. If a result is already in this set, **skip insertion entirely** (deduplication). Do NOT mark as circular.
 
-> **Why not query all nodes upfront?** At 10k-20k nodes a full-scan query consumes a large portion of the 6MB async heap before any Tooling API work begins. Scoping to `currentResultIds` limits the dedup query to matches within the current callout's result set only.
+> **Why not query all nodes upfront?** At 10k-20k nodes a full-scan query consumes a large portion of the 12MB async heap before any Tooling API work begins. Scoping to `currentResultIds` limits the dedup query to matches within the current callout's result set only.
 
 **Tier 2 - True ancestry cycle detection (`Ancestor_Path__c`):**
 Each `Metadata_Dependency__c` stores a pipe-delimited `Ancestor_Path__c` field: the chain of ancestor `Metadata_Id__c` values from root to this node.
@@ -121,14 +121,16 @@ Each `Metadata_Dependency__c` stores a pipe-delimited `Ancestor_Path__c` field: 
 - **Root node:** `Ancestor_Path__c = ''` (empty string, not null). This ensures the first child path is built as `'' + '|' + rootId = '|rootId'`, which is handled by trimming the leading pipe, OR by initializing root as `Ancestor_Path__c = rootId` and children as `parentPath + '|' + parentId`.
 - **Correct path-building:** `child.Ancestor_Path__c = (String.isBlank(parent.Ancestor_Path__c) ? '' : parent.Ancestor_Path__c + '|') + parent.Metadata_Id__c`. This avoids a leading delimiter on first-level children.
 - **Cycle check:** use delimiter-safe containment: `('|' + parent.Ancestor_Path__c + '|').contains('|' + newNodeId + '|')`. A raw `String.contains(id)` is vulnerable to false positives where one 18-char ID is a substring of another. The delimiter-wrapped form is the authoritative check.
-- **Circular node path:** Keep the **full `Ancestor_Path__c`** on circular nodes - do NOT set to null. The path is most valuable precisely when a cycle is found (debugging, export). Mark `Is_Circular__c = true`, `Dependencies_Fetched__c = true`. Append the cycle-closing segment to `Dependency_Context__c` as `{"cycleClosesAt": "<parentMetadataId>"}` for UI visualization.
+- **Circular node path:** Keep the **full `Ancestor_Path__c`** on circular nodes - do NOT set to null. The path is most valuable precisely when a cycle is found (debugging, export). Mark `Is_Circular__c = true`, `Dependencies_Fetched__c = true`. Append the cycle-closing segment to `Component_Attributes__c` as `{"cycleClosesAt": "<parentMetadataId>"}` for UI visualization.
 - **CPU consideration:** `String.contains()` on a long Ancestor_Path__c string inside an inner loop is CPU-intensive for deep trees. Check `Limits.getCpuTime()` against the guardrail threshold **inside the node-processing loop**, not only at the batch boundary.
 
-> **Ancestor_Path__c capacity:** At 18 chars/ID + 1 delimiter, a depth-1,500 path would be ~28,500 chars - within the Long Text 32768 limit. Deeper trees are unrealistic in practice.
+> **Ancestor_Path__c capacity and guard:** At 18 chars/ID + 1 delimiter, a depth-1,500 path would be ~28,500 chars - within the Long Text 32768 limit. However, appending beyond 32,000 chars causes a silent truncation or `StringException`. **Before building the path for any child node**, check: `if ((parent.Ancestor_Path__c?.length() ?? 0) + 20 > 32000)` - if true, mark the child as `Is_Circular__c = true`, `Dependencies_Fetched__c = true`, log to `Error_Status_Message__c` ("Max ancestor depth exceeded at [nodeId]; traversal stopped at this node"), and skip insertion. Do NOT fail the job.
 
 ### Cancellation
 
 `DependencyQueueable` checks `Status__c` as the first operation in `execute()`. If `Status__c = 'Cancelled'`, it exits immediately without enqueuing a successor. The `cancelJob(String jobId)` `@AuraEnabled` method in `DependencyJobController` sets `Status__c = 'Cancelled'` (WITH USER_MODE). The LWC Cancel button calls this method. Queueables that are already enqueued will check on entry and terminate cooperatively - there is no force-kill mechanism in Salesforce.
+
+**cancelJob() failure handling:** Wrap the USER_MODE DML in a try/catch. If the update fails (e.g. user lacks CRUD/FLS on `Status__c`), throw `DependencyJobException('Unable to cancel: insufficient permissions to update job status. Contact your admin.')`. The LWC must catch this exception and render it as a toast error - never leave the Cancel button in a permanent "Cancelling..." spinner when the server-side call failed.
 
 ### Async Context Guard
 
@@ -193,7 +195,7 @@ This is additive to `Disable_Platform_Events__c` - the CMDT switch remains for p
 ### Security Model
 
 - OWD: `Metadata_Scan_Job__c` = Private (users see only their own jobs)
-- All Apex DML/SOQL uses `WITH USER_MODE` or `AccessLevel.USER_MODE` - FLS and CRUD enforced at runtime
+- `@AuraEnabled` controller methods (`DependencyJobController`) use `WITH USER_MODE` or `AccessLevel.USER_MODE` - FLS and CRUD enforced at the controller boundary. Async engine classes (`DependencyQueueable`, `ResultSerializerQueueable`, `DependencyCleanupBatch`, `DependencyNodeCleanupBatch`) operate in SYSTEM_MODE for reliable internal orchestration.
 - `ContentVersion` / `ContentDocumentLink` records are created in SYSTEM_MODE by `ResultSerializerQueueable`. `ContentVersion.FirstPublishLocationId` is set to the job record ID (not a Chatter library) so Salesforce automatically creates the only `ContentDocumentLink` - tied to the job. No additional links to files libraries or other records are created. After the auto-created `ContentDocumentLink` is created, `ResultSerializerQueueable` must query it and explicitly set `ShareType = 'V'` (viewer) and `Visibility = 'InternalUsers'`. Using `'InternalUsers'` ensures the file is never visible to community or guest users even if a community portal is granted access to the job record. Do NOT use `'AllUsers'` - that value includes portal/community users with access to the parent record.
 - Permission Set `MetaMapper_Admin` grants CRUD on both custom objects, Named Credential principal access, and LWC/controller access
 
@@ -221,6 +223,8 @@ If the serialization or ContentVersion creation fails (e.g., heap or callout lim
 
 `Max_Stored_Jobs__c` (default 5) limits the number of completed scan jobs retained org-wide. When the 6th job completes, the oldest completed job is deleted (job record + ContentVersion). This keeps file storage bounded at ~5-15MB for completed jobs regardless of how many scans are run.
 
+**Ring buffer deletion must be deterministic and safe under concurrent completions:** The deletion query must use `FOR UPDATE` to serialize concurrent `ResultSerializerQueueable` executions: `[SELECT Id FROM Metadata_Scan_Job__c WHERE Status__c = 'Completed' ORDER BY Status_Closed_At__c ASC, Id ASC LIMIT 1 FOR UPDATE]`. Sort by `Status_Closed_At__c ASC, Id ASC` for determinism when two jobs have identical timestamps. Wrap deletion in a try/catch - a failed ring buffer delete (e.g. record already deleted by a concurrent instance) must NOT fail the job. Log the error to `Error_Status_Message__c` and continue.
+
 `Retention_Hours__c` applies **only to Failed and Cancelled jobs** - it no longer governs completed jobs, which are managed by the ring buffer instead.
 
 #### Nightly Cleanup (Failed and Cancelled Jobs)
@@ -241,13 +245,13 @@ Master-Detail cascade deletion counts child record deletes against the 10,000 DM
 **`DependencyCleanupBatch`** (job discovery):
 - `start()`: returns QueryLocator for Failed/Cancelled jobs where `Status_Closed_At__c < threshold`
 - `execute(scope)`: no DML - accumulates job IDs
-- `finish()`: fires one `DependencyNodeCleanupBatch(jobId, true)` per accumulated job ID. Each fires as a separate batch transaction with its own DML budget. Note: Salesforce limits `Database.executeBatch()` calls per transaction; if a large number of expired jobs accumulate (unusual), `finish()` should submit in groups and rely on subsequent nightly runs to clear the remainder.
+- `finish()`: fires one `DependencyNodeCleanupBatch(jobId, CleanupMode.NODES_AND_JOB)` per accumulated job ID. **Maximum 4 submissions per `finish()` call** - Salesforce limits `Database.executeBatch()` calls per transaction. If more than 4 expired jobs accumulate, submit the first 4 and leave the remainder for the next nightly run. Document: "Cleanup backlog from >4 expired jobs clears over multiple nightly runs."
 - Batch size: 10 (multiple jobs per discovery pass is safe since execute() does no DML)
 
 **`DependencyNodeCleanupBatch`** (node + job deletion):
-- Constructor: `DependencyNodeCleanupBatch(String jobId, Boolean deleteJob)`. **`deleteJob` controls `finish()` behavior** - must be explicitly passed for every invocation. Two distinct calling paths:
-  - **Nightly cleanup path** (`DependencyCleanupBatch.finish()`): `deleteJob = true` - nodes deleted, then job record deleted.
-  - **Serializer path** (`ResultSerializerQueueable`): `deleteJob = false` - nodes deleted only; the job record is retained (it holds the result file pointer and will be managed by the ring buffer).
+- Constructor: `DependencyNodeCleanupBatch(String jobId, CleanupMode mode)` where `CleanupMode` is an inner enum: `public enum CleanupMode { NODES_ONLY, NODES_AND_JOB }`. The enum replaces the previous `Boolean deleteJob` parameter to prevent accidental argument swaps (a boolean `true`/`false` swap is silent; an enum mismatch is a compile error). Two distinct calling paths:
+  - **Nightly cleanup path** (`DependencyCleanupBatch.finish()`): `CleanupMode.NODES_AND_JOB` - nodes deleted, then job record deleted.
+  - **Serializer path** (`ResultSerializerQueueable`): `CleanupMode.NODES_ONLY` - nodes deleted only; the job record is retained (it holds the result file pointer and will be managed by the ring buffer).
 - `start()`: `SELECT Id FROM Metadata_Dependency__c WHERE Metadata_Scan_Job__c = :jobId`
 - `execute(scope)`: `delete scope;` - scope is already `<= Cleanup_Chunk_Size__c`
 - `finish()`: if `deleteJob` is true: `delete [SELECT Id FROM Metadata_Scan_Job__c WHERE Id = :jobId];` - otherwise: no-op.
@@ -273,10 +277,12 @@ Master-Detail cascade deletion counts child record deletes against the 10,000 DM
 | `Components_Analyzed__c` | Number | Running counter for progress bar |
 | `Result_Summary__c` | Long Text 32768 | JSON map of `{MetadataType: count}` - populated on Completed |
 | `Status_Closed_At__c` | DateTime | Stamped when Status transitions to Completed, Failed, or Cancelled. Not set on Paused - Paused is a resumable checkpoint, not a terminal state. Cleanup batch uses this field - never CreatedDate - to avoid deleting in-progress jobs. |
-| `Engine_Execution_Count__c` | Number | Number of times the async engine has processed a batch for this scan. Incremented on every Queueable execution. Used together with `Last_Progress_Execution_Count__c` for stall detection. |
-| `Last_Progress_Execution_Count__c` | Number | The value of `Engine_Execution_Count__c` at the last execution that made measurable progress (i.e., `Components_Analyzed__c` increased). Persisted on the job record so it survives across Queueable self-chain boundaries (transient variables are reset on each new Queueable instance). Stall condition: `Engine_Execution_Count__c - Last_Progress_Execution_Count__c >= Stall_Detection_Threshold__c`. Reset to `Engine_Execution_Count__c` whenever `Components_Analyzed__c` increases. |
+| `Total_Processing_Cycles__c` | Number | Number of times the async engine has processed a batch for this scan. Incremented on every Queueable execution. Used together with `Last_Successful_Cycle__c` for stall detection. |
+| `Last_Successful_Cycle__c` | Number | The value of `Total_Processing_Cycles__c` at the last execution that made measurable progress (i.e., `Components_Analyzed__c` increased). Persisted on the job record so it survives across Queueable self-chain boundaries (transient variables are reset on each new Queueable instance). Stall condition: `Total_Processing_Cycles__c - Last_Successful_Cycle__c >= Stall_Detection_Threshold__c`. Reset to `Total_Processing_Cycles__c` whenever `Components_Analyzed__c` increases. |
 | `Scan_Summary_Text__c` | Long Text 32768 | Plain-English summary populated after job Completed by `ScanSummaryQueueable`. Derived from `Result_Summary__c`. Example: "This scan found 42 dependencies, including 3 active Flows and 5 Apex classes." Enables Agentforce Actions to consume job results without parsing JSON. Null until Completed. Populated asynchronously - LWC should poll `getJobStatus()` until this field is non-null before rendering the Summary Card. |
 | `Result_File_Id__c` | Text 18 | ContentDocumentId of the Salesforce File containing the complete scan result JSON. Populated when Status transitions to Completed, after all `Metadata_Dependency__c` records have been serialized to the file and deleted. Null during active scans and for Failed/Cancelled jobs. Used by `getNodeHierarchy()` to serve results for completed jobs without querying the (already-deleted) node records. |
+| `Batch_Size_Override__c` | Number | Transient-safe batch size override set by `resumeJob()` when the user chooses "Resume at a slower speed". `DependencyQueueable.execute()` reads this field at startup and uses it instead of `Scan_Batch_Size__c` if non-null. The field is NOT reset after use - it persists for the job lifetime, keeping the slower speed in effect for subsequent self-chains until the admin resets it to null. Does NOT write back to CMDT (CMDT is org-wide; this is job-specific state). |
+| `Last_Result_Count__c` | Number | The number of rows returned by the most recent Tooling API callout. Updated after each callout: `job.Last_Result_Count__c = results.size()`. Used by the guardrail to determine `queryMorePossible`: `queryMorePossible = (job.Last_Result_Count__c != null && job.Last_Result_Count__c >= 1900)`. If the previous callout returned >= 1,900 rows, QueryMore is likely for the next batch. Initialized to 0 on job creation. |
 
 > **Visited_IDs__c removed.** A Long Text 131072 field caps at ~5,957 IDs (22 chars/ID with JSON formatting). Enterprise orgs can easily exceed this, causing `StringException` and crashing the Queueable chain. Cycle detection is instead performed via two-tier logic (see Cycle Detection below).
 
@@ -295,16 +301,16 @@ Master-Detail cascade deletion counts child record deletes against the 10,000 DM
 | `Dependencies_Fetched__c` | Checkbox | Engine flag: false = this node's child dependencies have not yet been fetched from the Tooling API |
 | `Is_Circular__c` | Checkbox | True only when this node's `Metadata_Id__c` appears in its own `Ancestor_Path__c` (true ancestry cycle) |
 | `Is_Dynamic_Reference__c` | Checkbox | True if reference cannot be statically analyzed (e.g. dynamic Apex string) - flagged in UI |
-| `Dependency_Context__c` | Long Text 32768 | JSON "pills" - contextual metadata per type (see below) |
+| `Component_Attributes__c` | Long Text 32768 | JSON "pills" - contextual metadata per type (see below) |
 | `Discovery_Source__c` | Picklist | `ToolingAPI` or `Supplemental` - tracks how the node was discovered |
 | `Ancestor_Path__c` | Long Text 32768 | Pipe-delimited ancestor `Metadata_Id__c` chain from root to this node's **parent** (excludes self). The path-building formula appends `parent.Metadata_Id__c` to the child's path, so a child's `Ancestor_Path__c` contains all ancestors above it but not its own ID. Used for true cycle detection. |
 | `Supplemental_Confidence__c` | Number (3,0) | 0-100 confidence score for supplemental nodes only. Regex/XML matches are inherently fuzzy; score reflects match certainty. Nodes below 70 display a warning badge in the UI. Null for ToolingAPI nodes. |
-| `Deduplication_Key__c` | Text 80 (External ID, Unique) | Composite key: `JobId + ':' + Metadata_Id__c`. Used for upsert to prevent duplicate nodes from race conditions in concurrent Queueable chains. Text 80 provides headroom for future scoping additions beyond the current 37-char minimum. |
-| `Cycle_Detection_Index__c` | Long Text 32768 | Stores a pipe-delimited set of 6-character prefixes of each ancestor `Metadata_Id__c` (e.g. `"abc123|def456|..."`). Used as a fast bloom-filter-style pre-screen: before performing the full delimiter-safe `Ancestor_Path__c` containment check, the engine checks whether the new node's 6-char prefix appears in this index. If no match, skip the expensive full-string check. If a match is found, confirm conclusively against `Ancestor_Path__c` before marking the node circular. **Long Text 32768 is required** - at 7 chars per prefix entry (6 + delimiter), a 1,500-depth tree yields ~10,500 chars. Text 255 overflows at depth >36. The 6-char prefix has a negligible false-positive probability; the `Ancestor_Path__c` confirmation step resolves all false positives. |
+| `Node_Uniqueness_Key__c` | Text 80 (External ID, Unique) | Composite key: `JobId + ':' + Metadata_Id__c`. Used for upsert to prevent duplicate nodes from race conditions in concurrent Queueable chains. Text 80 provides headroom for future scoping additions beyond the current 37-char minimum. |
+| `Cycle_Prefix_Index__c` | Long Text 32768 | Stores a pipe-delimited set of 6-character prefixes of each ancestor `Metadata_Id__c` (e.g. `"abc123|def456|..."`). Used as a fast bloom-filter-style pre-screen: before performing the full delimiter-safe `Ancestor_Path__c` containment check, the engine checks whether the new node's 6-char prefix appears in this index. If no match, skip the expensive full-string check. If a match is found, confirm conclusively against `Ancestor_Path__c` before marking the node circular. **Long Text 32768 is required** - at 7 chars per prefix entry (6 + delimiter), a 1,500-depth tree yields ~10,500 chars. Text 255 overflows at depth >36. The 6-char prefix has a negligible false-positive probability; the `Ancestor_Path__c` confirmation step resolves all false positives. |
 
-### Dependency_Context__c (Pills) by Metadata Type
+### Component_Attributes__c (Pills) by Metadata Type
 
-All `Dependency_Context__c` payloads include a root `"v": 1` version key. The LWC renders unknown keys as plain text with a fallback label rather than failing. Handlers must increment `"v"` when the payload schema changes - the LWC version check gate is the only compatibility contract.
+All `Component_Attributes__c` payloads include a root `"v": 1` version key. The LWC renders unknown keys as plain text with a fallback label rather than failing. Handlers must increment `"v"` when the payload schema changes - the LWC version check gate is the only compatibility contract.
 
 | Type | JSON shape |
 |---|---|
@@ -327,7 +333,7 @@ All `Dependency_Context__c` payloads include a root `"v": 1` version key. The LW
 | `IMetadataDependencyService` | `fetchDependencies(List<String> ids, DependencyOptions opts)`, `buildContextData(Metadata_Dependency__c node)`, `computeScore(String handlerType, String matchBasis)` |
 | `IDependencyTypeHandler` | `List<Metadata_Dependency__c> findSupplemental(Id jobId, List<Metadata_Dependency__c> nodes)` |
 | `INotificationService` | `publishProgress(String jobId, String status, Integer count, String msg)`, `sendCompletion(String jobId, String userId)` |
-| `ISettingsProvider` | `MetaMapper_Settings__mdt getSettings()` - read once per transaction, cached in a `static` variable. The cache must be `static` (not instance-level) so that supplemental handlers calling `getSettings()` independently within the same Apex transaction reuse the same record and do not each burn a SOQL query. |
+| `IMetaMapperSettingsProvider` | `MetaMapper_Settings__mdt getSettings()` - read once per transaction, cached in a `static` variable. The cache must be `static` (not instance-level) so that supplemental handlers calling `getSettings()` independently within the same Apex transaction reuse the same record and do not each burn a SOQL query. |
 
 **Selectors (all SOQL centralized here):**
 
@@ -346,12 +352,12 @@ All `Dependency_Context__c` payloads include a root `"v": 1` version key. The LW
 | `CustomFieldHandler` | Supplemental: WorkflowFieldUpdate (95), ValidationRule regex (65), FlexiPage XML (60), CMT lookups (85), Lookup relationships (95). **Regex safety rule:** all regex patterns must be non-backtracking (no nested quantifiers). Before each regex call, check `Limits.getCpuTime() / Limits.getLimitCpuTime() >= 0.60` - if true, skip the field, log a diagnostic notice to `Error_Status_Message__c`, and continue. ValidationRule formula fields in complex orgs can be 10,000+ characters; unbounded backtracking patterns will hit the CPU limit and fail the Queueable. |
 | `ApexClassHandler` | Supplemental: CMT references (85); flags `Is_Dynamic_Reference__c` |
 | `FlowHandler` | Supplemental: QuickActionDefinition, subflows, WebLink URLs |
-| `DependencyQueueable` | Async engine. Constructor: `DependencyQueueable(String jobId, Boolean activeFlowsOnly, Integer overrideBatchSize)`. **Node cap check:** at the start of each execution, if `Components_Analyzed__c >= Max_Nodes__c` (and `Max_Nodes__c > 0`), transition job to `Status__c = 'Paused'`, set `Error_Status_Message__c` with: "Scan paused: node limit of [N] reached. This protects your org's data storage. Raise Max_Nodes__c in MetaMapper Settings to continue." Do not self-chain. The LWC pause banner surfaces the resume option. Note: the cap is a soft ceiling - the final batch before the limit is reached may push `Components_Analyzed__c` up to `Max_Nodes__c + Scan_Batch_Size__c - 1`; the check fires at the start of the next execution. - `overrideBatchSize` is null for normal execution; set to half of `Scan_Batch_Size__c` when `resumeJob()` triggers after a hot-loop pause. Savepoint/catch; cancel check; CMDT read via `ISettingsProvider`; hot-loop detection; pre-batch + mid-loop seven-limit guardrail; scoped dedup + upsert by `Deduplication_Key__c`; two-tier cycle detection; callouts; HTTP 414/431 reactive split-and-retry (halves batch, retries both halves as separate callouts, does not fail job - logs restart to `Error_Status_Message__c`); handlers; one PE event per execution (suppressed if `Disable_Platform_Events__c`); self-chain. **On completion:** when no unprocessed nodes remain, instead of directly transitioning to Completed, enqueues `ResultSerializerQueueable` - this separates the concern of engine traversal (this class) from result persistence (serializer). The engine does not transition Status itself; `ResultSerializerQueueable` owns the Completed transition. **DML bulkification rule (critical):** child nodes discovered during the result-processing loop are accumulated in a `List<Metadata_Dependency__c>` and upserted in a single bulk statement after the loop completes (or before a mid-loop self-chain fires). Never upsert per-node inside the loop. |
+| `DependencyQueueable` | Async engine. Constructor: `DependencyQueueable(String jobId, Boolean activeFlowsOnly, Integer overrideBatchSize)`. **Node cap check:** at the start of each execution, if `Components_Analyzed__c >= Max_Nodes__c` (and `Max_Nodes__c > 0`), transition job to `Status__c = 'Paused'`, set `Error_Status_Message__c` with: "Scan paused: node limit of [N] reached. This protects your org's data storage. Raise Max_Nodes__c in MetaMapper Settings to continue." Do not self-chain. The LWC pause banner surfaces the resume option. Note: the cap is a soft ceiling - the final batch before the limit is reached may push `Components_Analyzed__c` up to `Max_Nodes__c + Scan_Batch_Size__c - 1`; the check fires at the start of the next execution. - `overrideBatchSize` is null for normal execution; set to half of `Scan_Batch_Size__c` when `resumeJob()` triggers after a hot-loop pause. Savepoint/catch; cancel check; CMDT read via `IMetaMapperSettingsProvider`; hot-loop detection; pre-batch + mid-loop seven-limit guardrail; scoped dedup + upsert by `Node_Uniqueness_Key__c`; two-tier cycle detection; callouts; HTTP 414/431 reactive split-and-retry (halves batch, retries both halves as separate callouts, does not fail job - logs restart to `Error_Status_Message__c`); handlers; one PE event per execution (suppressed if `Disable_Platform_Events__c`); self-chain. **On completion:** when no unprocessed nodes remain, instead of directly transitioning to Completed, enqueues `ResultSerializerQueueable` - this separates the concern of engine traversal (this class) from result persistence (serializer). The engine does not transition Status itself; `ResultSerializerQueueable` owns the Completed transition. **DML bulkification rule (critical):** child nodes discovered during the result-processing loop are accumulated in a `List<Metadata_Dependency__c>` and upserted in a single bulk statement after the loop completes (or before a mid-loop self-chain fires). Never upsert per-node inside the loop. |
 | `DependencyNotificationService` (implements `INotificationService`) | `publishProgress()` - one event per execution; checks org daily PE allocation via `OrgLimits` before publishing (auto-suppresses and flips `Disable_Platform_Events__c` if >80% consumed - appends suppression notice to `Error_Status_Message__c` for admin visibility); `sendCompletionNotification()`. Does NOT enqueue `ScanSummaryQueueable` - that is the responsibility of `ResultSerializerQueueable` after the Completed transition. |
 | `ScanSummaryQueueable` | Lightweight one-shot Queueable enqueued by `ResultSerializerQueueable` after the Completed transition. Reads `Result_Summary__c`, builds the plain-English `Scan_Summary_Text__c` string, and updates the Job record. Offloaded because string templating on a large `Result_Summary__c` JSON payload competes with the serializer's own CPU/heap budget, and chaining keeps each unit of work within a predictable governor envelope. |
-| `ResultSerializerQueueable` | One-shot Queueable enqueued by the final `DependencyQueueable` execution when no unprocessed nodes remain. **Must use the Savepoint/rollback pattern** (same as `DependencyQueueable`): `Database.setSavepoint()` before all work; on any exception `Database.rollback(sp)` then `updateJobFailed()` in a fresh DML scope - without this, an uncaught exception rolls back the ContentVersion creation AND the job update, leaving the job stuck in `Processing` permanently with no recovery path. **Heap guard (critical):** before calling `JSON.serialize()` on the full node list, estimate the payload: if `Components_Analyzed__c * avgBytesPerNode > heapThreshold`, fail the job immediately via `updateJobFailed()` with message: "Scan completed but results could not be saved - result set too large for available heap. Reduce Max_Nodes__c and run again." Default safety assumption: ~2KB per node; at 5,000 nodes that is ~10MB against a 12MB async heap limit, leaving ~2MB headroom. **Terminal on failure:** `Failed` jobs from this class are not retryable - the admin must start a new scan. Steps: heap-check before serializing; serialize all `Metadata_Dependency__c` to JSON; create `ContentVersion` with `FirstPublishLocationId = jobId` (no library link); requery `ContentDocumentId` from the inserted `ContentVersion`; update `Result_File_Id__c`; **compute and update `Result_Summary__c`** (JSON map of `{MetadataType: count}` derived from the serialized nodes - must be populated before transitioning to Completed so `ScanSummaryQueueable` has data to work with); bulk-delete all node records via `DependencyNodeCleanupBatch(jobId, false)` (nodes only - keep job); transition to Completed; enforce ring buffer; enqueue `ScanSummaryQueueable`. Offloaded from the engine Queueable because serializing thousands of node records consumes significant heap and CPU that would compete with the final batch of Tooling API work. |
+| `ResultSerializerQueueable` | One-shot Queueable enqueued by the final `DependencyQueueable` execution when no unprocessed nodes remain. **Must use the Savepoint/rollback pattern** (same as `DependencyQueueable`): `Database.setSavepoint()` before all work; on any exception `Database.rollback(sp)` then `updateJobFailed()` in a fresh DML scope - without this, an uncaught exception rolls back the ContentVersion creation AND the job update, leaving the job stuck in `Processing` permanently with no recovery path. **Heap guard (critical):** before calling `JSON.serialize()` on the full node list, estimate the payload: if `Components_Analyzed__c * avgBytesPerNode > heapThreshold`, fail the job immediately via `updateJobFailed()` with message: "Scan completed but results could not be saved - result set too large for available heap. Reduce Max_Nodes__c and run again." Default safety assumption: ~4-6KB per node for deep trees (Ancestor_Path__c and Component_Attributes__c add significant size beyond the base record); at 5,000 nodes that is ~20-30MB against a 12MB async heap limit. This means the practical safe ceiling is ~2,000-3,000 nodes for enterprise orgs with deeply nested metadata. Admins raising `Max_Nodes__c` above 3,000 should be aware the serializer will likely hit the heap failure path. **Terminal on failure:** `Failed` jobs from this class are not retryable - the admin must start a new scan. Steps: heap-check before serializing; serialize all `Metadata_Dependency__c` to JSON; create `ContentVersion` with `FirstPublishLocationId = jobId` (no library link); requery `ContentDocumentId` from the inserted `ContentVersion`; update `Result_File_Id__c`; **compute and update `Result_Summary__c`** (JSON map of `{MetadataType: count}` derived from the serialized nodes - must be populated before transitioning to Completed so `ScanSummaryQueueable` has data to work with); bulk-delete all node records via `DependencyNodeCleanupBatch(jobId, false)` (nodes only - keep job); transition to Completed; enforce ring buffer; enqueue `ScanSummaryQueueable`. Offloaded from the engine Queueable because serializing thousands of node records consumes significant heap and CPU that would compete with the final batch of Tooling API work. |
 | `DependencyCleanupBatch` | Job discovery batch. **Must implement `Database.Stateful`** - the class accumulates job IDs across multiple `execute()` chunks and passes them to `finish()`. Without `Database.Stateful`, Apex discards all instance state between chunk invocations and `finish()` receives an empty list, firing zero child batches. `start()` = Failed/Cancelled jobs past `Retention_Hours__c` threshold (Completed jobs are managed by the ring buffer, not time-based deletion). `execute()` = no DML - accumulates job IDs into a `List<Id>` instance variable. `finish()` = fires one `DependencyNodeCleanupBatch` per accumulated job ID. Batch size 10. |
-| `DependencyNodeCleanupBatch` | Node deletion batch with optional job deletion. Constructor: `DependencyNodeCleanupBatch(String jobId, Boolean deleteJob)`. `start()` = QueryLocator for child nodes. `execute()` = `delete scope`. `finish()` = deletes parent job record only when `deleteJob = true` (nightly cleanup path); no-op when `deleteJob = false` (serializer path - job is retained). Batch size = `Cleanup_Chunk_Size__c` (default 2,000). No inner loops - each transaction is one chunk only. |
+| `DependencyNodeCleanupBatch` | Node deletion batch with optional job deletion. Constructor: `DependencyNodeCleanupBatch(String jobId, CleanupMode mode)` where `CleanupMode` enum values are `NODES_ONLY` (serializer path - retain job) and `NODES_AND_JOB` (nightly cleanup path - delete job after nodes). Using an enum prevents the silent argument-swap bug that a boolean `deleteJob` parameter would allow. `start()` = QueryLocator for child nodes. `execute()` = `delete scope`. `finish()` = deletes parent job record only when `mode = NODES_AND_JOB`; no-op when `mode = NODES_ONLY`. Batch size = `Cleanup_Chunk_Size__c` (default 2,000). No inner loops - each transaction is one chunk only. |
 | `DependencyCleanupScheduler` | Schedules cleanup at 02:00 |
 | `ToolingApiHealthCheck` | Setup-only Apex class: verifies Tooling API reachability via Named Credential. Called by pre-flight LWC check on page load. |
 
@@ -369,13 +375,13 @@ Every `IDependencyTypeHandler` implementation follows the same contract:
 If `DependencyQueueable` self-chains repeatedly without processing any new nodes (e.g. a single pathological node saturates every guardrail before children can be inserted), the engine must detect and break the loop.
 
 **Detection logic:**
-- On each execution, increment `Engine_Execution_Count__c` on the Job.
-- If `Components_Analyzed__c` increased since the last execution, reset `Last_Progress_Execution_Count__c = Engine_Execution_Count__c`.
-- If `Engine_Execution_Count__c - Last_Progress_Execution_Count__c >= Stall_Detection_Threshold__c` (default 5), transition Job to `Status__c = 'Paused'`, set `Error_Status_Message__c` with diagnostic context, and publish a `Dependency_Scan_Status__e` warning event.
-- **Why persisted field, not transient variable:** each Queueable self-chain creates a new instance - transient variables are discarded. `Last_Progress_Execution_Count__c` on the job record is the only state that survives across Queueable chain boundaries.
+- On each execution, increment `Total_Processing_Cycles__c` on the Job.
+- If `Components_Analyzed__c` increased since the last execution, reset `Last_Successful_Cycle__c = Total_Processing_Cycles__c`.
+- If `Total_Processing_Cycles__c - Last_Successful_Cycle__c >= Stall_Detection_Threshold__c` (default 5), transition Job to `Status__c = 'Paused'`, set `Error_Status_Message__c` with diagnostic context, and publish a `Dependency_Scan_Status__e` warning event.
+- **Why persisted field, not transient variable:** each Queueable self-chain creates a new instance - transient variables are discarded. `Last_Successful_Cycle__c` on the job record is the only state that survives across Queueable chain boundaries.
 - The LWC surfaces this as a user-visible warning: "MetaMapper paused because it encountered a component with extremely deep or wide dependencies. You can resume at a slower speed or with current settings."
 
-> `Status__c` gains a `Paused` value. `DependencyJobController` exposes a `resumeJob(String jobId, Integer overrideBatchSize)` method. When the LWC calls `resumeJob`, it passes a suggested batch size (half of the current `Scan_Batch_Size__c` CMDT value). The Queueable uses this transient override for the resumed run only - it does NOT write back to CMDT. This eliminates the friction of requiring an admin to manually navigate to CMDT settings before retrying. The LWC pause banner displays: "Scan paused. [Resume at a slower speed] or [Resume with current settings]."
+> `Status__c` gains a `Paused` value. `DependencyJobController` exposes a `resumeJob(String jobId, Integer overrideBatchSize)` method. When the LWC calls `resumeJob`, it passes a suggested batch size (half of the current `Scan_Batch_Size__c` CMDT value). `resumeJob()` sets `Status__c = 'Processing'` and writes the override to `Batch_Size_Override__c` on the job record (persisted, not transient - each new Queueable instance would lose a transient variable). `DependencyQueueable.execute()` reads `Batch_Size_Override__c` at startup and uses it instead of CMDT if non-null. This does NOT write back to CMDT. The LWC pause banner displays: "Scan paused. [Resume at a slower speed] or [Resume with current settings]."
 
 ---
 
@@ -388,8 +394,8 @@ If `DependencyQueueable` self-chains repeatedly without processing any new nodes
 | `metaMapperProgress` | `lightning-progress-bar` + human-readable status label ("Analyzing metadata...", "Paused - limit reached", "Cancelling..."). Subscribes to `Dependency_Scan_Status__e` via `lightning/empApi`; falls back to `getJobStatus()` polling if `Disable_Platform_Events__c = true`. When polling fallback is active, shows persistent info label: "Live updates paused - refreshing every few seconds." Displays elapsed time. Cancel button transitions to disabled "Cancelling..." spinner on click; shows confirmation modal before cancelling. |
 | `metaMapperResults` | Tab container: "Tree View" and "Graph View" sharing filter state. **AI Summary card** at top (visible when `Status__c = Completed`): displays `Scan_Summary_Text__c` with "Copy" button and "Ask Copilot" quick action. Stats tile (type counts from `Result_Summary__c`). Hosts export controls. |
 | `metaMapperTree` | Virtual-rendered SLDS tree with search, type filter, level filter, and confidence filter. Supports collapse/expand per branch. Keyboard navigable. |
-| `metaMapperGraph` | ECharts force-directed graph. Node click: selects node and populates the **Node Details Panel** (sidebar) - does NOT open Setup directly. Right-click: "Copy API Name". Hover: tooltip with `Dependency_Context__c` pills in plain English. "Expand All" guard: shows modal warning if node count > 1,000. Persistent sidebar legend. "Focus path to root". Graph toolbar search (quick-find: highlights matching nodes without affecting Tree). "?" keyboard shortcut legend. Type filter + level slider. ECharts theme registered for Salesforce dark mode (`slds-theme_inverse`). |
-| `metaMapperNodeDetail` | Sidebar panel (right side of results screen). Renders full node data when a node is selected in either Tree or Graph: `Metadata_Name__c`, `Metadata_Type__c`, `Dependency_Depth__c`, `Discovery_Source__c`, `Supplemental_Confidence__c`, all `Dependency_Context__c` pills in plain English, `Ancestor_Path__c` rendered as breadcrumb, `Is_Circular__c` / `Is_Dynamic_Reference__c` flags with explanations. "Open in Setup" button (primary action). "Copy Link" button generates a deep-link URL (`[current URL]?jobId=[jobId]&nodeId=[Metadata_Id__c]`) and copies to clipboard. Closes when selection is cleared. |
+| `metaMapperGraph` | ECharts force-directed graph. Node click: selects node and populates the **Node Details Panel** (sidebar) - does NOT open Setup directly. Right-click: "Copy API Name". Hover: tooltip with `Component_Attributes__c` pills in plain English. "Expand All" guard: shows modal warning if node count > 1,000. Persistent sidebar legend. "Focus path to root". Graph toolbar search (quick-find: highlights matching nodes without affecting Tree). "?" keyboard shortcut legend. Type filter + level slider. ECharts theme registered for Salesforce dark mode (`slds-theme_inverse`). |
+| `metaMapperNodeDetailsPanel` | Sidebar panel (right side of results screen). Renders full node data when a node is selected in either Tree or Graph: `Metadata_Name__c`, `Metadata_Type__c`, `Dependency_Depth__c`, `Discovery_Source__c`, `Supplemental_Confidence__c`, all `Component_Attributes__c` pills in plain English, `Ancestor_Path__c` rendered as breadcrumb, `Is_Circular__c` / `Is_Dynamic_Reference__c` flags with explanations. "Open in Setup" button (primary action). "Copy Link" button generates a deep-link URL (`[current URL]?jobId=[jobId]&nodeId=[Metadata_Id__c]`) and copies to clipboard. Closes when selection is cleared. |
 | `metaMapperExport` | Primary export: CSV ("Download as CSV") and JSON ("Download Complete Hierarchy (for developers)"). Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD]_[HHmm]`. Advanced export (collapsible): package.xml ("Download Deployment Manifest"). No server round-trip. |
 
 ---
@@ -412,11 +418,11 @@ On `metaMapperApp` mount, call `ToolingApiHealthCheck.verify()` via `@AuraEnable
 Do not collapse all three into a single "setup required" message - each requires a different user action and a different responsible party (admin vs user vs wait).
 
 **First-time guided tour:** After the Named Credential health check passes for the first time (detected via a `localStorage` flag `metaMapper_tourSeen_v1`), show a one-time `lightning-modal` walkthrough with three slides:
-1. "Reading the graph" - explains the legend, node colors, and border shapes.
-2. "Warning badges" - explains `Is_Dynamic_Reference__c`, `Supplemental_Confidence__c < 70`, and `Is_Circular__c` badges.
-3. "Supplemental results" - explains that some dependencies are found via secondary queries and may require manual verification.
+1. **"Reading the graph"** - Body: "Nodes are color-coded by metadata type. Solid borders show standard dependencies. Dashed borders indicate circular dependencies - these components depend on each other in a loop. Hover over any node to see details."
+2. **"Warning badges"** - Body: "Orange warning badge = dynamic reference (an Apex string we can't fully resolve - verify manually). Red error badge = low confidence match (below 70% - verify before making changes). Dashed border = circular dependency."
+3. **"Supplemental results"** - Body: "Some dependencies are found through secondary analysis, not the standard Salesforce metadata API. These may include false positives. Nodes with a confidence score below 70% should be verified before making any changes."
 
-User can dismiss at any time. "Don't show again" checkbox persists the `localStorage` flag (`metaMapper_tourSeen_v1`). Tour will not reappear on the same browser after dismissal. It will reappear on a different browser or after clearing browser storage - this is acceptable behaviour for a localStorage-based flag. Bump the version suffix (e.g. `_v2`) on major UX changes to force the tour to re-display for all existing users.
+User can dismiss at any time. "Don't show again" checkbox label: **"Don't show again. I understand MetaMapper basics."** Checking this and clicking "Got it" on the final slide, or clicking "X" on any slide, sets `localStorage` flag `metaMapper_tourSeen_v1 = true`. Tour will not reappear on the same browser after dismissal. Bump the version suffix (e.g. `_v2`) on major UX changes to force the tour to re-display for all existing users.
 
 ### Input Screen (`metaMapperInput`)
 
@@ -425,7 +431,7 @@ User can dismiss at any time. "Don't show again" checkbox persists the `localSto
 | Metadata Type picklist | Required; shows supported types only |
 | API Name input | Required; placeholder: "e.g. Account.My_Field__c"; inline validation on blur |
 | Target Object typeahead | Required only when type is `CustomField`; shows validation message if omitted |
-| "Active Flows Only" checkbox | Default checked; tooltip: "When checked, inactive Flow versions are excluded from results. This reduces scan scope but may miss deprecated dependencies." |
+| "Only analyze active Flow versions" checkbox | Label: "Only analyze active Flow versions". Default checked; tooltip: "When checked, inactive and deprecated Flow versions are excluded from results. This reduces scan scope and processing time. Uncheck to include all Flow versions, including inactive ones." |
 | Complexity preview | After API Name is entered, show: "Estimated scan scope: [Small / Medium / Large / Very Large] based on historical averages for this metadata type." (non-blocking, best-effort) |
 | Submit button | Disabled until required fields valid; label "Analyze Dependencies" |
 
@@ -447,6 +453,19 @@ User can dismiss at any time. "Don't show again" checkbox persists the `localSto
 2. On confirm: button transitions to disabled "Cancelling..." with spinner; calls `cancelJob()`
 3. LWC waits for `Dependency_Scan_Status__e` with `Status__c = 'Cancelled'` before re-enabling UI. **PE-disabled fallback:** if `Disable_Platform_Events__c = true` or PE has been auto-suppressed, the event will never arrive. In this case the LWC must fall back to polling `getJobStatus()` (same polling loop used for progress updates) until `Status__c = 'Cancelled'` is returned, then re-enable the UI. The cancel flow must not rely on PE as the sole completion signal.
 
+**Cancel visual state machine (all intermediate states defined):**
+
+| Phase | Cancel button state | Status label |
+|---|---|---|
+| Before confirmation modal | Enabled, label "Cancel" | Current status label |
+| Confirmation modal open | Modal open; Cancel button unchanged | Current status label |
+| Modal dismissed (user chose "Keep running") | Enabled, label "Cancel" | Current status label |
+| Modal confirmed; `cancelJob()` in flight | Disabled, label "Cancelling..." with spinner | "Stopping analysis..." |
+| `cancelJob()` call returned error | Re-enabled, label "Cancel"; toast error shown | Restored to previous label |
+| `Status__c = 'Cancelled'` received (PE or poll) | Button hidden; "Start new scan" shown | "Analysis cancelled. Partial results are available below." |
+
+**Long-running scan notice:** If the scan has been in `Processing` status for more than 15 minutes (tracked client-side from the first `Processing` status received), display a persistent dismissible info banner above the progress bar: "This scan is taking longer than usual. [View partial results so far] - this will not cancel the scan." The "View partial results so far" link calls `getNodeHierarchy()` and opens the results view without changing the job status. The banner is dismissed with a close icon. It reappears if the user navigates away and returns while the scan is still running.
+
 ### Graph View (`metaMapperGraph`)
 
 **Node visual language (SLDS-compliant, not color-only):**
@@ -462,13 +481,13 @@ User can dismiss at any time. "Don't show again" checkbox persists the `localSto
 **Interactions:**
 - **Click:** selects node and populates the Node Details Panel sidebar. Does NOT open Setup directly - "Open in Setup" is a button in the panel. This separates selection (inspect) from navigation (open Setup).
 - **Right-click:** context menu with "Copy API Name", "Focus path to root", "Collapse subtree"
-- **Hover:** SLDS tooltip with this exact template: `[Metadata_Name__c] ([Metadata_Type__c]) | [plain-English pill rendering] | [Confidence: N% - verify manually]` where pill rendering maps `Dependency_Context__c` keys to human sentences (e.g. `isWrite: true` -> "Writes to this field"; `activeVersions: 3` -> "3 active versions"; `cycleClosesAt: X` -> "Cycle closes at X"). Never render raw JSON in the tooltip.
+- **Hover:** SLDS tooltip with this exact template: `[Metadata_Name__c] ([Metadata_Type__c]) | [plain-English pill rendering] | [Confidence: N% - verify manually]` where pill rendering maps `Component_Attributes__c` keys to human sentences (e.g. `isWrite: true` -> "Writes to this field"; `activeVersions: 3` -> "3 active versions"; `cycleClosesAt: X` -> "Cycle closes at X"). Never render raw JSON in the tooltip.
 - **"Expand All" guard:** if `Components_Analyzed__c > 1,000`, clicking "Expand All" shows modal: title "Large Graph", body "This graph contains [N] nodes. Expanding all levels may slow or freeze your browser. Consider using the Level Filter or exporting to CSV instead." Buttons: "Expand Anyway" (destructive-style, right) and "Keep Collapsed" (left, default focus).
 - **"Focus path to root":** highlights the direct ancestor chain from selected node to root; dims all other nodes. A **"Clear Focus"** button appears in the graph toolbar while focus is active - do not rely on "click anywhere" alone as the only dismissal affordance.
 - **Persistent legend:** always-visible sidebar listing all node types with color swatch + icon + label
 - **Graph toolbar search:** lightweight search box on the graph toolbar (Ctrl+K shortcut). Placeholder text: "Search nodes in this graph..." Inline note below the input: "(Search applies to Graph view only)". Highlights matching nodes in the graph canvas without filtering them out. Does not affect Tree View (Tree-local search remains separate). Clears with Esc.
 - **"?" keyboard shortcut legend:** small "?" icon button in graph toolbar. Opens a popover listing: `Ctrl+K` = Search graph, `Shift+?` = Open keyboard legend (global), `Esc` = Clear focus / search, arrow keys = traverse nodes, `Enter` = Select node (open Node Details Panel), right-click = Context menu. `Shift+?` works even when focus is inside the graph canvas. Rendered as an SLDS popover, not a modal.
-- **Node Details Panel:** selecting a node (single click) populates the `metaMapperNodeDetail` sidebar panel with full node data. "Open in Setup" is the primary action button in the panel, not triggered by the click itself. This separates selection (inspect) from navigation (open Setup).
+- **Node Details Panel:** selecting a node (single click) populates the `metaMapperNodeDetailsPanel` sidebar panel with full node data. "Open in Setup" is the primary action button in the panel, not triggered by the click itself. This separates selection (inspect) from navigation (open Setup).
 - **Spanning tree notice:** a dismissible info badge is shown in the persistent graph legend: "Showing the first-discovered path to each component. A node reachable via multiple paths appears once." Dismissed via a close icon; state persisted in `localStorage` key `metaMapper_spanningTreeNotice_v1`. Does not reappear after dismissal on the same browser.
 - **Large graph performance warning:** when `Components_Analyzed__c > 8,000`, show a persistent banner above the graph canvas: "Large graph detected ([N] components). For best performance, use Tree View or apply filters to reduce scope." Banner includes a "Switch to Tree View" button that activates the Tree tab directly. Banner is dismissible. Does not affect Tree View.
 - **ECharts dark mode:** register a Salesforce-compatible dark theme using `echarts.registerTheme('sfDark', {...})` with SLDS dark background token (`#1B1B1B`) and text token (`#FFFFFF`). Apply theme when `document.body.classList.contains('slds-theme_inverse')`.
@@ -552,7 +571,7 @@ When `Status__c = Completed`, display a prominent card at the top of the Results
 |---|---|
 | Card title | "Scan Summary" |
 | Body | `Scan_Summary_Text__c` text verbatim (e.g. "This scan found 42 dependencies: 3 active Flows, 5 Apex classes...") |
-| "Copy" button | Copies `Scan_Summary_Text__c` to clipboard |
+| "Copy" button | Copies `Scan_Summary_Text__c` to clipboard. On click: (1) copy text to clipboard, (2) button label changes to "Copied!" with `utility:check` icon, (3) after 2 seconds reverts to "Copy". No toast notification needed - the inline label change is the confirmation signal. |
 | "Ask Copilot" button | Opens Einstein Copilot with `Scan_Summary_Text__c` pre-populated. Conditionally rendered: shown only if Copilot is enabled in the org. If Copilot is unavailable, show helper text "Einstein Copilot not available in this org." in place of the button (do not hide silently). Note: the exact LWC API for programmatically opening Einstein Copilot with pre-populated text is platform-dependent and subject to Salesforce Copilot API availability - implementation details TBD. |
 | Card height | Compact by default - collapsed height shows the first two sentences of `Scan_Summary_Text__c` followed by an ellipsis. Full text revealed by a "Show more" inline toggle. Prevents the card from pushing Tree/Graph tabs below the fold on smaller laptops. |
 
@@ -564,7 +583,7 @@ The card is not shown for Failed, Cancelled, or Paused jobs. For Paused jobs, a 
 
 **Primary exports (prominent placement):**
 - "Download as CSV" - flat row-per-node, for analysis in Excel / Sheets. Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD]_[HHmm].csv`
-- "Download Complete Hierarchy (for developers)" - nested tree with all `Dependency_Context__c` pills. Tooltip: "Contains all dependency data including context fields. Useful for scripting, auditing, or custom tooling." Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD]_[HHmm].json`
+- "Download Complete Hierarchy (for developers)" - nested tree with all `Component_Attributes__c` pills. Tooltip: "Contains all dependency data including context fields. Useful for scripting, auditing, or custom tooling." Default filename: `MetaMapper_[Target_API_Name]_[YYYYMMDD]_[HHmm].json`
 
 **Advanced exports (collapsible "Advanced" section):**
 - "Download Deployment Manifest" - package.xml, developer artifact; tooltip: "Use this to deploy or retrieve the components found in this scan using Salesforce CLI or VS Code. Includes only components from this scan (managed packages excluded)."
@@ -577,13 +596,15 @@ When surfacing `MetaMapper_Settings__mdt` fields in any admin UI, use human-read
 |---|---|---|
 | `Retention_Hours__c` | "Keep failed/cancelled jobs for" | "Failed and cancelled scan records older than this are automatically deleted. Does not affect completed scans - those are managed by the 'Keep last N completed scans' setting. Minimum 1 hour. Recommended: 72+ hours for diagnostic use." |
 | `Scan_Batch_Size__c` | "Analysis speed (standard)" | "How many metadata components to analyze per processing step. Lower this if you see timeout errors." |
-| `Flow_Scan_Batch_Size__c` | "Analysis speed (Flow jobs)" | "Lower batch size used when 'Active Flows Only' is enabled, because each Flow requires an extra check." |
+| `Flow_Scan_Batch_Size__c` | "Analysis speed (Flow jobs)" | "Batch size when 'Only analyze active Flow versions' is enabled. Each Flow node requires one extra validation callout - 15 Flow nodes = 15 extra callouts. Lower this if you see 'Too many callouts' errors on Flow-heavy orgs. Default: 15." |
 | `Dml_Reserve_Rows__c` | "Safety margin (DML rows)" | "Advanced: number of database rows to reserve as a safety buffer. Increase for orgs with very connected metadata." |
 | `Disable_Platform_Events__c` | "Disable live progress updates" | "Turn on if your org is hitting real-time event limits. Progress will refresh every few seconds instead." |
 | `Stall_Detection_Threshold__c` | "Pause after N empty processing cycles" | "If the analysis runs this many cycles without finding new components, it pauses and alerts you." |
 | `Max_Concurrent_Jobs__c` | "Max concurrent scans" | "How many MetaMapper scans can run at the same time. Default 2. Raise only for orgs with large async capacity." |
 | `Cleanup_Chunk_Size__c` | "Cleanup chunk size (Advanced)" | "Records deleted per database transaction during cleanup. Default 2,000. Lower this value if you see 'Too many DML statements' errors from other automation during cleanup." |
 | `Max_Stored_Jobs__c` | "Keep last N completed scans" | "How many completed scan results to keep as files in your org. When the limit is reached, the oldest result is deleted automatically. Completed scans use File Storage (not Data Storage). Default 5." |
+| `Max_Nodes__c` | "Maximum components per scan" | "The scan pauses automatically when this many components are found. Default 5,000. Do not raise above 5,000 without testing - the result serializer may hit memory limits on large scans with deeply nested metadata. Set to 0 to disable (not recommended)." |
+| `Storage_Reserve_MB__c` | "Minimum free storage required (MB)" | "MetaMapper checks that your org has at least this much free data storage before starting a new scan. Increase this value if you see storage-related errors during active scans. Default 50MB." |
 
 **Admin-only controls (Settings UI):**
 - "Reset First-Time Tour" button: clears the `metaMapper_tourSeen_v1` localStorage flag for the current browser session. Useful for admins demoing the tour to new team members. Implemented as a client-side JS action - no Apex required.
@@ -595,6 +616,8 @@ When surfacing `MetaMapper_Settings__mdt` fields in any admin UI, use human-read
 ### IN Clause Chunking
 Start with batches of **100 IDs** as a safe default, but split is driven by **estimated query character length**, not a fixed count. The Tooling API REST endpoint embeds SOQL in the URL - URI length depends on the IDs themselves, encoding, and the surrounding SOQL string. If estimated URL length exceeds 8KB, halve the batch before sending. 100 IDs is the starting estimate; the dynamic check is authoritative.
 
+**Exact formula:** `estimatedLength = 80 + (batchIds.size() * 19)` where 80 = base SOQL + callout endpoint overhead, 19 = 18-char ID + comma delimiter. Check: `if (80 + (batchIds.size() * 19) > 8000) { halve batch; }`. At this formula, maximum safe batch size is `(8000 - 80) / 19 = 418 IDs`. Starting at 100 provides comfortable headroom.
+
 ### QueryMore
 Tooling API results exceeding 2,000 rows return a `nextRecordsUrl`. `MetadataDependencyService` must follow `nextRecordsUrl` iteratively until `done = true` before returning results to the Queueable. Each follow-up counts against the callout budget.
 
@@ -602,6 +625,8 @@ Tooling API results exceeding 2,000 rows return a `nextRecordsUrl`. `MetadataDep
 
 ### Reactive HTTP 414 Handling
 If a callout returns HTTP 414 or 431, split the current batch in half and retry both halves. Do not fail the job on this error.
+
+**Depth limit (critical):** The split-and-retry must track recursion depth. Use `Integer splitDepth` passed as a parameter through each retry. Maximum depth: **5 levels** (1 → 2 → 4 → 8 → 16 → 32 batches). At depth 5, if the batch still returns 414: log to `Error_Status_Message__c` ("Component [IDs] returned HTTP 414 after 5 split attempts; skipping this batch. Possible cause: metadata IDs contain non-standard characters."), mark affected nodes as `Dependencies_Fetched__c = true`, and continue. Do NOT fail the job. Without this depth limit, a "poison" component with extremely large IN-clause encoding will recursively consume all callout budget in a single execution.
 
 ### Limit Guardrails (Remaining-Budget Model)
 
@@ -614,10 +639,12 @@ If a callout returns HTTP 414 or 431, split the current batch in half and retry 
 Integer calloutsRemaining = Limits.getLimitCallouts() - Limits.getCallouts();
 // Headroom needed per remaining batch:
 // +1 dependency query
-// +1 if QueryMore may be needed
-// +1 if Active_Flows_Only__c = true and Flow nodes present (status validation callout)
-// +2 buffer for reactive 414/431 retry splits
-Integer headroom = 1 + (queryMorePossible ? 1 : 0) + (needsFlowValidation ? 1 : 0) + 2;
+// +1 if QueryMore may be needed (determined by Last_Result_Count__c from prior execution: true if >= 1,900)
+// +1 per Flow node in current batch if Active_Flows_Only__c = true (1 validation callout per Flow node)
+// +4 buffer for reactive 414/431 retry splits (up to 2 levels: 1 + 2 + 4 = 7; +4 covers most cases)
+// queryMorePossible = (job.Last_Result_Count__c != null && job.Last_Result_Count__c >= 1900)
+// needsFlowValidation = Active_Flows_Only__c AND current batch contains Flow nodes (count, not boolean - 1 callout per node)
+Integer headroom = 1 + (queryMorePossible ? 1 : 0) + flowNodeCount + 4;
 
 // --- DML row budget ---
 // Reserve DML_Reserve_Rows__c rows (default 750) from MetaMapper_Settings__mdt.
@@ -639,7 +666,8 @@ Integer queryRowsRemaining = Limits.getLimitQueryRows() - Limits.getQueryRows();
 // --- SOQL query count budget ---
 Integer queriesRemaining = Limits.getLimitQueries() - Limits.getQueries();
 
-// --- DML statement count budget (150 limit; reserve 10 for handler inserts) ---
+// --- DML statement count budget (150 limit; reserve 40 for handler SOQL + upsert + status update) ---
+// 40 = worst-case 5 supplemental handlers × ~8 statements each. Reserve of 10 is insufficient.
 Integer dmlStmtsRemaining = Limits.getLimitDmlStatements() - Limits.getDmlStatements();
 
 if (calloutsRemaining < headroom
@@ -648,7 +676,7 @@ if (calloutsRemaining < headroom
     || cpuPct >= 0.75
     || queryRowsRemaining < 1000
     || queriesRemaining < 10
-    || dmlStmtsRemaining < 10) {
+    || dmlStmtsRemaining < 40) {          // 40 not 10 - supplemental handlers can consume 8+ DML statements each
     System.enqueueJob(new DependencyQueueable(jobId, activeFlowsOnly, null)); // null = no batch size override; normal continuation
     return;
 }
@@ -678,7 +706,7 @@ Apply `WITH USER_MODE` / `AccessLevel.USER_MODE` **only at the `@AuraEnabled` co
 | Format | Structure |
 |---|---|
 | CSV | Flat: `Level, Metadata_Type, Metadata_Name, Metadata_ID, Parent_Name, Is_Circular, Is_Dynamic` |
-| JSON | Nested tree mirroring `Metadata_Dependency__c` hierarchy with `Dependency_Context__c` pills included |
+| JSON | Nested tree mirroring `Metadata_Dependency__c` hierarchy with `Component_Attributes__c` pills included |
 | package.xml | Valid Salesforce deployment manifest grouped by `<types>`. Excludes managed package components (namespace prefix detected). |
 
 ---
@@ -697,7 +725,7 @@ All tunable runtime parameters are stored in `MetaMapper_Settings__mdt` Custom M
 |---|---|---|---|
 | `Retention_Hours__c` | Number | 72 | Hours before job hard-delete. Min 1, recommended ≥72 for diagnostic use. |
 | `Scan_Batch_Size__c` | Number | 50 | Unprocessed nodes queried per Queueable execution (non-Flow jobs). Tune down for high-DML orgs. |
-| `Flow_Scan_Batch_Size__c` | Number | 30 | Batch size when `Active_Flows_Only__c = true`. Lower because each Flow node may require a second validation callout, reducing effective callout headroom. |
+| `Flow_Scan_Batch_Size__c` | Number | 15 | Batch size when `Active_Flows_Only__c = true`. **Flow validation is 1 callout per Flow node** (not 1 per batch) - each Flow node requires a separate Tooling API callout to validate its version status. A batch of 15 Flow nodes consumes 15 validation callouts. The headroom formula accounts for `flowNodeCount` (the number of Flow nodes in the current batch result), not a single boolean flag. Default lowered from 30 to 15 to stay within callout budget for orgs with dense Flow dependencies. |
 | `Dml_Reserve_Rows__c` | Number | 750 | DML rows to reserve in the guardrail before chaining. Raise for orgs with high-fan-out metadata (e.g. heavily referenced CustomObjects). |
 | `Disable_Platform_Events__c` | Checkbox | false | When true, suppresses `Dependency_Scan_Status__e` publish and falls back to polling via `getJobStatus()`. Use when org is approaching the daily Platform Event delivery limit. |
 | `Stall_Detection_Threshold__c` | Number | 5 | Number of consecutive re-chains with zero `Components_Analyzed__c` progress before the engine pauses the job and surfaces a warning to the UI. |
@@ -717,7 +745,7 @@ MetaMapper is designed to run in both Developer Sandboxes and production orgs. D
 |---|---|---|---|
 | `Retention_Hours__c` | 1 | 72 | Failed/Cancelled jobs with partial nodes still consume Data Storage; shorter retention limits the window of exposure. |
 | `Max_Concurrent_Jobs__c` | 1 | 2 | Concurrent active scans can simultaneously peak Data Storage; serializing one at a time keeps peak bounded. |
-| `Max_Nodes__c` | 5,000 | 5,000 | Bounded by `ResultSerializerQueueable` heap capacity (~2KB/node * 6,000 max = ~12MB async heap). The same ceiling applies in production until a chunked serializer is implemented. Admins may raise cautiously with full awareness of the serializer constraint. |
+| `Max_Nodes__c` | 5,000 | 5,000 | Bounded by `ResultSerializerQueueable` heap capacity. Practical safe ceiling is ~2,000-3,000 nodes for deep/complex metadata trees. Do not raise above 5,000 without testing serializer heap consumption - the serializer will hit the heap failure path at high node counts with deep Ancestor_Path__c values. A chunked serializer is required before this ceiling can be safely raised. |
 | `Storage_Reserve_MB__c` | 50 | 200 | Ensures sufficient free Data Storage for the scan peak before committing to a new job. |
 | `Max_Stored_Jobs__c` | 5 | 10 | Bounds File Storage consumption. Both sandbox and production have 200MB file storage; sandboxes typically have less available headroom. |
 
@@ -745,9 +773,10 @@ public void execute(QueueableContext ctx) {
 ```
 
 `updateJobFailed()` must be a private method that:
-1. Updates `Metadata_Scan_Job__c.Status__c = 'Failed'`, sets `Error_Status_Message__c` to `e.getMessage() + '\n' + e.getStackTraceString()`, and sets `Status_Closed_At__c`.
-2. Publishes a `Dependency_Scan_Status__e` failure event.
-3. Does NOT re-throw the exception (allows the catch block's DML to commit).
+1. **Checks `Status__c = 'Processing'` before updating** - if the job is already Completed or Cancelled (e.g. set by a concurrent Queueable instance), skip the Failed update entirely. This prevents a losing race from overwriting a Completed status with Failed.
+2. Updates `Metadata_Scan_Job__c.Status__c = 'Failed'`, sets `Error_Status_Message__c` to `e.getMessage() + '\n' + e.getStackTraceString()`, and sets `Status_Closed_At__c`.
+3. Publishes a `Dependency_Scan_Status__e` failure event.
+4. Does NOT re-throw the exception (allows the catch block's DML to commit).
 
 > **Why stack trace?** `e.getMessage()` alone is insufficient for async debugging - the stack trace identifies the exact line and call chain where the failure occurred, which is critical for diagnosing limit errors and callout failures in production without debug logs.
 
@@ -779,8 +808,8 @@ Every component must carry a description in its metadata XML. Descriptions must 
 | `Components_Analyzed__c` | Running count of metadata components discovered so far. Updated after each processing cycle. Used to drive the progress bar in the UI. Do not edit manually. |
 | `Result_Summary__c` | JSON object mapping each metadata type to the count of components found (e.g. {"ApexClass": 5, "Flow": 3}). Populated only when Status = Completed. Used to build the stats tile and plain-English summary. Do not edit manually. |
 | `Status_Closed_At__c` | Timestamp set the moment Status transitions to Completed, Failed, or Cancelled. Used by the cleanup batch to calculate retention age. Never set for jobs that are still running. The cleanup batch uses this field, not CreatedDate, to avoid deleting in-progress scans. Do not edit manually. |
-| `Engine_Execution_Count__c` | Number of times the async engine has processed a batch for this scan. Incremented on every execution. Compared against Last_Progress_Execution_Count__c to detect stall loops. Do not edit manually. |
-| `Last_Progress_Execution_Count__c` | The value of Engine_Execution_Count__c at the last execution that made progress (Components_Analyzed__c increased). Reset when new components are found. If the gap between Engine_Execution_Count__c and this field reaches the Stall Detection Threshold, the scan is automatically paused. Do not edit manually. |
+| `Total_Processing_Cycles__c` | Number of times the async engine has processed a batch for this scan. Incremented on every execution. Compared against Last_Successful_Cycle__c to detect stall loops. Do not edit manually. |
+| `Last_Successful_Cycle__c` | The value of Total_Processing_Cycles__c at the last execution that made progress (Components_Analyzed__c increased). Reset when new components are found. If the gap between Total_Processing_Cycles__c and this field reaches the Stall Detection Threshold, the scan is automatically paused. Do not edit manually. |
 | `Scan_Summary_Text__c` | Plain-English summary of scan results, generated after the scan completes (e.g. "This scan found 42 dependencies: 5 Apex classes, 3 active Flows"). Displayed in the Scan Summary card. Populated asynchronously by a background process after Status = Completed - it may appear a few seconds after the scan finishes. |
 | `Result_File_Id__c` | The ID of the Salesforce File (ContentDocument) that stores the complete scan result as JSON. This field is populated after the scan completes and all dependency records have been serialized and deleted. It is the pointer the app uses to load results for completed jobs - instead of querying thousands of individual records, it reads a single file. Null for active, failed, or cancelled scans. Do not edit manually. |
 
@@ -797,12 +826,12 @@ Every component must carry a description in its metadata XML. Descriptions must 
 | `Dependencies_Fetched__c` | Internal engine flag. False = this component's dependencies have not yet been fetched from the Tooling API. True = fetching complete, or intentionally skipped because the node is circular or a dynamic reference that cannot be resolved. Do not edit manually. |
 | `Is_Circular__c` | True if this component appears in its own ancestor chain (a real dependency cycle, e.g. A depends on B which depends on A). Displayed with a dashed border in the graph. The scan does not traverse further from circular nodes to prevent infinite loops. |
 | `Is_Dynamic_Reference__c` | True if this dependency was detected as a dynamic Apex string reference that cannot be statically resolved. Displayed with a warning badge. These nodes represent potential dependencies that require manual investigation. |
-| `Dependency_Context__c` | JSON object containing type-specific contextual information about this dependency (e.g. whether an Apex class writes to a field, how many active Flow versions reference it). Rendered as plain-English badges in the UI. Never displayed as raw JSON. |
+| `Component_Attributes__c` | JSON object containing type-specific contextual information about this dependency (e.g. whether an Apex class writes to a field, how many active Flow versions reference it). Rendered as plain-English badges in the UI. Never displayed as raw JSON. |
 | `Discovery_Source__c` | How this dependency was discovered. ToolingAPI = found by the standard MetadataComponentDependency query. Supplemental = found by a secondary handler query that fills a known Tooling API gap. Supplemental results carry a confidence score. |
 | `Ancestor_Path__c` | Pipe-delimited chain of Metadata_Id__c values from the root component down to this node's parent (e.g. "id1|id2|id3"). Used to detect true ancestry cycles. Preserved on circular nodes for debugging and export. Do not edit manually. |
 | `Supplemental_Confidence__c` | Confidence score (0-100) for supplemental dependencies only. Reflects how certain the match is: exact field matches score 95, regex formula matches score 65. Nodes below 70 display a warning badge prompting manual verification. Null for Tooling API nodes. |
-| `Deduplication_Key__c` | Composite key used to prevent duplicate records: format is "JobId:Metadata_Id__c". Used as an External ID for upsert operations in the scan engine. Prevents race conditions when multiple async cycles discover the same component simultaneously. Do not edit manually. |
-| `Cycle_Detection_Index__c` | Internal engine field. Stores pipe-delimited 6-character prefixes of each ancestor ID as a fast pre-screen index. The engine checks this index before running the expensive full Ancestor_Path__c string search. A match here triggers the conclusive full-string confirmation; no match skips it entirely. Only consulted by the cycle detection engine. Do not edit manually. |
+| `Node_Uniqueness_Key__c` | Composite key used to prevent duplicate records: format is "JobId:Metadata_Id__c". Used as an External ID for upsert operations in the scan engine. Prevents race conditions when multiple async cycles discover the same component simultaneously. Do not edit manually. |
+| `Cycle_Prefix_Index__c` | Internal engine field. Stores pipe-delimited 6-character prefixes of each ancestor ID as a fast pre-screen index. The engine checks this index before running the expensive full Ancestor_Path__c string search. A match here triggers the conclusive full-string confirmation; no match skips it entirely. Only consulted by the cycle detection engine. Do not edit manually. |
 
 ### Permission Set - MetaMapper_Admin
 
@@ -824,7 +853,7 @@ Every component must carry a description in its metadata XML. Descriptions must 
 | Field | Description |
 |---|---|
 | `Scan_Batch_Size__c` | Number of unprocessed dependency records fetched and analyzed per scan processing cycle (non-Flow scans). Lower this value if scans pause due to complexity or if you see governor limit errors. Default: 50. |
-| `Max_Nodes__c` | Maximum number of dependency records this scan is allowed to create. When reached, the scan pauses automatically and prompts the user to raise the limit or accept partial results. Default: 5,000 (safe for Developer Sandbox). Set to 0 to disable the cap. Raise to 50,000+ for production orgs with ample storage. |
+| `Max_Nodes__c` | Maximum number of dependency records this scan is allowed to create. When reached, the scan pauses automatically and prompts the user to raise the limit or accept partial results. Default: 5,000. Set to 0 to disable the cap (not recommended - the serializer will fail at high node counts). Do not raise above 5,000 without validating serializer heap capacity for your org's typical metadata depth. |
 | `Storage_Reserve_MB__c` | Minimum free data storage in megabytes required before a new scan is accepted. Checked at scan submission using org storage limits. If free storage is below this value, the scan is rejected with a clear message. Default: 50MB. Lower this value only if you are certain the org has sufficient storage headroom. |
 | `Flow_Scan_Batch_Size__c` | Batch size used specifically for scans where Active Flows Only is enabled. Lower than the standard setting because each Flow requires an additional Tooling API callout to validate version status. Default: 30. |
 | `Dml_Reserve_Rows__c` | Number of DML rows the engine reserves as a safety margin before chaining to the next processing cycle. Increase this value for orgs with highly connected metadata where a single component can have thousands of dependencies. Default: 750. |
@@ -849,7 +878,7 @@ Every component must carry a description in its metadata XML. Descriptions must 
 - Cancellation is cooperative. A Queueable already in the flex queue will check `Status__c` on entry and exit cleanly - it cannot be force-killed immediately.
 - `createJob()` must be called from a synchronous Lightning context only. Invocation from Batch, Future, or Queueable contexts is blocked by an async-context guard. See `setup/SETUP.md` for integration constraints.
 - Concurrent scans are limited by `Max_Concurrent_Jobs__c` (default 2). A new job submission is rejected if the active Queueable count is at the limit. This is a deliberate safety constraint, not a bug.
-- `Cycle_Detection_Index__c` hash shortcut has a negligible probability of false-positive cycle detection (hash collision on the 6-char prefix); the full `Ancestor_Path__c` string is always used to confirm before setting `Is_Circular__c = true`.
+- `Cycle_Prefix_Index__c` hash shortcut has a negligible probability of false-positive cycle detection (hash collision on the 6-char prefix); the full `Ancestor_Path__c` string is always used to confirm before setting `Is_Circular__c = true`.
 - `Scan_Summary_Text__c` is populated only on job Completed. Failed, Cancelled, and Paused jobs do not have an AI summary. Agentforce Actions should check `Status__c = 'Completed'` before reading this field.
 - **Storage model and sandbox safety:** MetaMapper uses a hybrid model - `Metadata_Dependency__c` records exist only during the active scan (engine state), then are serialized to a Salesforce File (`ContentVersion`) and deleted when the job completes. Data Storage impact for a completed job is ~5KB (job record only). File Storage impact is ~1-3MB per completed job. A ring buffer of `Max_Stored_Jobs__c` completed results bounds total file storage consumption to ~5-15MB. **During an active scan, nodes do temporarily occupy Data Storage** - a 5,000-node scan (the sandbox default cap) consumes ~25MB of Data Storage at peak. Developer Sandbox has 200MB of both Data Storage and File Storage. Conservative sandbox defaults (`Max_Nodes__c = 5,000`, `Storage_Reserve_MB__c = 50`) ensure the transient peak stays within safe limits even when the sandbox is already partially used. Failed and Cancelled jobs may retain partial node records until the nightly cleanup batch removes them; `Retention_Hours__c = 1` in sandboxes limits this window.
 - **Result serialization is terminal on failure:** if `ResultSerializerQueueable` fails (e.g. heap limit during serialization), the job transitions to `Failed` and cannot be resumed. The admin must start a new scan. Node records **may** remain in the org and are available for export until the nightly cleanup batch removes them (`Retention_Hours__c`) - but only if the failure occurred before the bulk-delete step (step 5). If failure occurs during or after node deletion, records are partially or fully gone. The UI surfaces the export option in this state; the LWC detects it via `Status__c = 'Failed'` AND `Components_Analyzed__c > 0` AND `Result_File_Id__c` is null.
