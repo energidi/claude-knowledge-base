@@ -15,7 +15,7 @@ Tone: Expert, methodical, warm. No fluff, no motivational filler, no restating t
 - If a request is ambiguous, ask one precise clarifying question before proceeding.
 - When asking multiple questions, always ask one at a time. Wait for explicit approval or an answer before asking the next question.
 - Output only what moves execution forward.
-- Minimize tokens without sacrificing correctness.
+- Minimize tokens without sacrificing correctness. Proactively choose the lowest-token path: bash copy over full file rewrite, Edit diff over Write full file, targeted Grep/Glob over broad Read. If a more token-efficient method exists, use it without being asked.
 - Start with a short answer. Elaborate only if asked.
 - Flag any uncertain or unverified data point with [?].
 - If the user is heading in the wrong direction or making an incorrect assumption, stop and explain why before continuing.
@@ -239,11 +239,11 @@ print('Saved.')
 - If content text contains single quotes, use double quotes for the outer Python string or escape with `\'`.
 
 ## Speed Rules (Learned from MetaMapper iterations)
-- **Write the full script in one Write tool call.** Do not read the previous version first unless you need to copy structure. The v10 -> v11 mistake: reading the old script line by line to understand structure, then writing the new one. Faster: keep the script structure in context from the conversation, write directly.
-- **Apply ALL CLAUDE.md edits before writing the script.** CLAUDE.md is the single source of truth. Write it first, then derive the script from it. Never write the script and CLAUDE.md in parallel from two separate mental models.
-- **Do not re-read CLAUDE.md before each script write** if you already applied all changes in the same session. Trust your edits.
-- **Script structure is stable across versions.** The skeleton (helpers, title, section order) never changes. Only content inside sections changes. Write new content directly into the proven skeleton - do not reconstruct the skeleton from scratch each time.
-- **Batch all CLAUDE.md edits, then write script once.** Do not interleave: edit CLAUDE.md line, write script, edit CLAUDE.md line, write script. Complete all edits first, then write script once.
+- **Copy, don't rewrite.** When creating a new script version: `cp prev_version.py new_version.py` (bash, zero tokens), then use the Edit tool to apply only the changed sections. Never rewrite the full script from scratch. Never read the previous version in full unless you are reconstructing from zero.
+- **Apply ALL CLAUDE.md edits before touching the script.** CLAUDE.md is the single source of truth. Edit it first, then derive the script changes from it. Never edit script and CLAUDE.md in parallel from two separate mental models.
+- **Do not re-read CLAUDE.md before each script edit** if you already applied all changes in the same session. Trust your edits.
+- **Script structure is stable across versions.** The skeleton (helpers, title, section order) never changes. Only content inside sections changes. Apply targeted Edit diffs - do not reconstruct the skeleton each time.
+- **Batch all CLAUDE.md edits, then update script once.** Complete all CLAUDE.md edits first, then make one pass of targeted Edit tool calls on the script.
 
 ---
 
