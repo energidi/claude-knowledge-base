@@ -56,51 +56,62 @@ public without sharing class DependencyJobSelector {
     /**
      * Counts active DependencyQueueable jobs in the Salesforce flex queue.
      * Used by DependencyJobController.createJob() to enforce Max_Concurrent_Jobs__c.
-     * Scoped to DependencyQueueable by ApexClass.Name for query selectivity on
-     * orgs where AsyncApexJob holds millions of rows.
+     *
+     * Uses ApexClassId (indexed foreign key) rather than ApexClass.Name (cross-object
+     * filter) for selectivity on orgs where AsyncApexJob holds millions of rows.
+     * Pre-queries the ApexClass Id to enable the indexed filter.
      *
      * @return  Number of DependencyQueueable jobs currently Processing or Preparing
      */
+    // Cached once per transaction - ApexClass records are immutable during execution
+    private static Id cachedQueueableClassId;
+
     public Integer countActiveQueueables() {
+        if (cachedQueueableClassId == null) {
+            List<ApexClass> classes = [
+                SELECT Id FROM ApexClass WHERE Name = 'DependencyQueueable' LIMIT 1
+            ];
+            if (classes.isEmpty()) {
+                return 0;
+            }
+            cachedQueueableClassId = classes[0].Id;
+        }
         return [
             SELECT COUNT()
             FROM AsyncApexJob
             WHERE JobType = 'Queueable'
-            AND ApexClass.Name = 'DependencyQueueable'
+            AND ApexClassId = :cachedQueueableClassId
             AND Status IN ('Processing', 'Preparing')
         ];
     }
 
     /**
-     * Returns all Completed jobs ordered by Status_Closed_At__c ascending.
-     * Used by the ring buffer to find the oldest job to delete when
-     * Max_Stored_Jobs__c is exceeded. Uses FOR UPDATE to serialize concurrent
-     * ResultSerializerQueueable executions.
+     * Returns Completed jobs ordered by Status_Closed_At__c ascending, up to maxRows records.
+     * Used by the ring buffer to find the oldest job to delete when Max_Stored_Jobs__c is
+     * exceeded. Uses FOR UPDATE to serialize concurrent ResultSerializerQueueable executions.
      *
-     * @return  List of Completed Metadata_Scan_Job__c records, oldest first
+     * Pass Max_Stored_Jobs__c + 10 as maxRows - a small buffer above the retention cap ensures
+     * the oldest record is always present if the ring buffer is slightly over limit.
+     *
+     * ORDER BY is not permitted with FOR UPDATE - the list is sorted in Apex after the lock.
+     *
+     * @param maxRows  Maximum number of Completed job records to lock and return
+     * @return         Completed Metadata_Scan_Job__c records, oldest first
      */
-    public List<Metadata_Scan_Job__c> getCompletedJobsOldestFirst() {
-        // ORDER BY is not permitted with FOR UPDATE - sort in Apex after acquiring the lock.
-        List<Metadata_Scan_Job__c> jobs = [
+    public List<Metadata_Scan_Job__c> getCompletedJobsOldestFirst(Integer maxRows) {
+        // ORDER BY + LIMIT is used without FOR UPDATE to guarantee that the oldest
+        // records are returned. FOR UPDATE without ORDER BY applies LIMIT before sorting,
+        // which does not guarantee the oldest rows are locked. The ring buffer deletion
+        // in ResultSerializerQueueable wraps its targeted delete in try/catch - if two
+        // concurrent serializers both attempt to delete the same oldest job, the second
+        // will receive a handled exception and continue safely.
+        return [
             SELECT Id, Status_Closed_At__c, Result_File_Id__c
             FROM Metadata_Scan_Job__c
             WHERE Status__c = 'Completed'
-            FOR UPDATE
+            ORDER BY Status_Closed_At__c ASC, Id ASC
+            LIMIT :maxRows
         ];
-        jobs.sort(new CompletedJobComparator());
-        return jobs;
     }
 
-    /**
-     * Sorts completed jobs by Status_Closed_At__c ASC, then Id ASC for determinism
-     * when two jobs share an identical closed timestamp.
-     */
-    private class CompletedJobComparator implements Comparator<Metadata_Scan_Job__c> {
-        public Integer compare(Metadata_Scan_Job__c a, Metadata_Scan_Job__c b) {
-            if (a.Status_Closed_At__c != b.Status_Closed_At__c) {
-                return a.Status_Closed_At__c < b.Status_Closed_At__c ? -1 : 1;
-            }
-            return a.Id < b.Id ? -1 : (a.Id > b.Id ? 1 : 0);
-        }
-    }
 }

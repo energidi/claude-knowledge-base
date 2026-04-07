@@ -32,7 +32,7 @@ public without sharing class DependencyNodeSelector {
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :jobId
             AND Dependencies_Fetched__c = false
-            ORDER BY CreatedDate ASC
+            ORDER BY CreatedDate ASC, Id ASC
             LIMIT :lim
         ];
     }
@@ -65,14 +65,49 @@ public without sharing class DependencyNodeSelector {
     }
 
     /**
-     * Returns all Metadata_Dependency__c records for a job.
-     * Used by ResultSerializerQueueable to serialize the full node tree to JSON
-     * before bulk-deleting the records.
+     * Returns all Metadata_Dependency__c records for a job, up to MAX_NODE_QUERY_LIMIT rows.
+     * Used by ResultSerializerQueueable to serialize the full node tree to JSON before
+     * bulk-deleting the records.
+     *
+     * Heap note: at ~4-6KB per node (due to Ancestor_Path__c and Component_Attributes__c),
+     * fetching 5,000 nodes consumes ~20-30MB - exceeding the 12MB async heap. The serializer
+     * must perform a heap pre-check (Components_Analyzed__c * avgBytesPerNode) before calling
+     * this method and fail gracefully if the estimated payload is too large.
+     *
+     * MAX_NODE_QUERY_LIMIT is set above the default Max_Nodes__c ceiling (5,000) to ensure
+     * all nodes are captured for jobs approaching the cap. Chunked streaming is not supported
+     * in this method - a redesign of ResultSerializerQueueable is required to safely handle
+     * node counts above this limit.
      *
      * @param jobId  ID of the parent Metadata_Scan_Job__c
-     * @return       All dependency records for the job
+     * @return       All dependency records for the job, depth-ordered ASC
      */
-    public List<Metadata_Dependency__c> listByJob(String jobId) {
+    // Absolute ceiling on listByJob results. Exceeding this indicates the serializer
+    // will likely breach the 12MB async heap limit (at ~4-6KB per node, 10k nodes = ~40-60MB).
+    // ResultSerializerQueueable must perform a heap pre-check before calling this method
+    // and fail the job gracefully if the estimated payload exceeds the safe ceiling.
+    // Callers should pass Max_Nodes__c (from MetaMapper_Settings__mdt) as limitRows.
+    // Chunked streaming serialization would remove this ceiling; deferred to a future release.
+    private static final Integer MAX_NODE_QUERY_LIMIT = 10000;
+
+    /**
+     * Returns all Metadata_Dependency__c records for a job up to limitRows.
+     * limitRows should be Max_Nodes__c from MetaMapper_Settings__mdt. The absolute
+     * ceiling MAX_NODE_QUERY_LIMIT is enforced regardless of limitRows to protect
+     * against heap overflow in ResultSerializerQueueable.
+     *
+     * If the result set hits the limit exactly, the caller should append a notice to
+     * Error_Status_Message__c: "Node list may be truncated; result exceeds Max_Nodes__c."
+     *
+     * @param jobId     ID of the parent Metadata_Scan_Job__c
+     * @param limitRows Caller-provided limit (typically Max_Nodes__c); capped at MAX_NODE_QUERY_LIMIT
+     * @return          All dependency records for the job, depth-ordered ASC
+     */
+    public List<Metadata_Dependency__c> listByJob(String jobId, Integer limitRows) {
+        Integer effectiveLimit = Math.min(
+            MAX_NODE_QUERY_LIMIT,
+            Math.max(1, limitRows != null ? limitRows : MAX_NODE_QUERY_LIMIT)
+        );
         return [
             SELECT Id,
                    Metadata_Id__c,
@@ -91,18 +126,36 @@ public without sharing class DependencyNodeSelector {
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :jobId
             ORDER BY Dependency_Depth__c ASC, CreatedDate ASC
+            LIMIT :effectiveLimit
         ];
     }
 
     /**
-     * Retrieves the VersionData blob from a ContentVersion record by ContentDocumentId.
-     * Used by DependencyJobController.getNodeHierarchy() to serve completed job results
-     * without querying the (already-deleted) Metadata_Dependency__c records.
+     * Retrieves the VersionData blob from a ContentVersion record by ContentDocumentId,
+     * verifying that the file is linked to the specified job record.
      *
+     * The jobId ownership check ensures that even if an incorrect ContentDocumentId is
+     * passed (e.g. from a stale or tampered record), the method only returns content that
+     * is explicitly linked to the expected job. This prevents accidental cross-job data
+     * leakage in orgs where ContentVersion records may be accessible via shared libraries.
+     *
+     * @param jobId              The Metadata_Scan_Job__c Id the file must be linked to
      * @param contentDocumentId  The ContentDocumentId stored in Result_File_Id__c
      * @return                   The ContentVersion record with VersionData, or null if not found
+     *                           or if the file is not linked to the specified job
      */
-    public ContentVersion getResultFile(String contentDocumentId) {
+    public ContentVersion getResultFile(String jobId, String contentDocumentId) {
+        // Verify the file is linked to the expected job record before returning VersionData
+        List<ContentDocumentLink> links = [
+            SELECT ContentDocumentId
+            FROM ContentDocumentLink
+            WHERE ContentDocumentId = :contentDocumentId
+            AND LinkedEntityId = :jobId
+            LIMIT 1
+        ];
+        if (links.isEmpty()) {
+            return null;
+        }
         List<ContentVersion> versions = [
             SELECT Id, VersionData
             FROM ContentVersion
