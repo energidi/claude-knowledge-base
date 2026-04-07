@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Cleanup_Chunk_Size__c</fullName>
+    <description>Number of dependency records deleted per database transaction during the nightly cleanup process. Keep at 2000 or lower to leave sufficient DML row headroom for other automation in the org. Default: 2000. Ref: ISP-6072</description>
+    <label>Cleanup Chunk Size</label>
+    <precision>10</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

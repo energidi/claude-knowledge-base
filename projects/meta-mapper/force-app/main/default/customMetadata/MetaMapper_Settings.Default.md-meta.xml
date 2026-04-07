@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>Default</label>
+    <protected>false</protected>
+    <values>
+        <field>Cleanup_Chunk_Size__c</field>
+        <value xsi:type="xsd:double">2000</value>
+    </values>
+    <values>
+        <field>Disable_Platform_Events__c</field>
+        <value xsi:type="xsd:boolean">false</value>
+    </values>
+    <values>
+        <field>Dml_Reserve_Rows__c</field>
+        <value xsi:type="xsd:double">750</value>
+    </values>
+    <values>
+        <field>Flow_Scan_Batch_Size__c</field>
+        <value xsi:type="xsd:double">15</value>
+    </values>
+    <values>
+        <field>Max_Concurrent_Jobs__c</field>
+        <value xsi:type="xsd:double">2</value>
+    </values>
+    <values>
+        <field>Max_Nodes__c</field>
+        <value xsi:type="xsd:double">5000</value>
+    </values>
+    <values>
+        <field>Max_Stored_Jobs__c</field>
+        <value xsi:type="xsd:double">5</value>
+    </values>
+    <values>
+        <field>Retention_Hours__c</field>
+        <value xsi:type="xsd:double">72</value>
+    </values>
+    <values>
+        <field>Scan_Batch_Size__c</field>
+        <value xsi:type="xsd:double">50</value>
+    </values>
+    <values>
+        <field>Stall_Detection_Threshold__c</field>
+        <value xsi:type="xsd:double">5</value>
+    </values>
+    <values>
+        <field>Storage_Reserve_MB__c</field>
+        <value xsi:type="xsd:double">50</value>
+    </values>
+</CustomMetadata>

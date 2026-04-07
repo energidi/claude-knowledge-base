@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Dml_Reserve_Rows__c</fullName>
+    <description>Number of DML rows the engine reserves as a safety margin before chaining to the next processing cycle. Increase for orgs with highly connected metadata where a single component can have thousands of dependencies. Default: 750. Ref: ISP-6072</description>
+    <label>DML Reserve Rows</label>
+    <precision>10</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

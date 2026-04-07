@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Metadata_Name__c</fullName>
+    <description>The human-readable API name of the metadata component (e.g. AccountTrigger, My_Custom_Field__c). Displayed as the node label in the tree and graph views. Ref: ISP-6072</description>
+    <label>Metadata Name</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

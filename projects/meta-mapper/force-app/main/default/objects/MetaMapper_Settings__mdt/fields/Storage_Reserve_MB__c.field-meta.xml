@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Storage_Reserve_MB__c</fullName>
+    <description>Minimum free data storage in megabytes required before a new scan is accepted. Checked at scan submission using org storage limits. If free storage is below this value the scan is rejected with a clear message. Default: 50MB. Ref: ISP-6072</description>
+    <label>Storage Reserve MB</label>
+    <precision>10</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

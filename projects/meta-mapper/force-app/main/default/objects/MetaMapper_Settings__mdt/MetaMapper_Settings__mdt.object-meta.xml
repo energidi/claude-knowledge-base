@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Custom Metadata Type holding all tunable runtime parameters for MetaMapper. A single record named Default is read at the start of each Queueable execution. Admins can adjust these settings without a code deploy. Do not delete the Default record. Ref: ISP-6072</description>
+    <label>MetaMapper Settings</label>
+    <pluralLabel>MetaMapper Settings</pluralLabel>
+</CustomObject>

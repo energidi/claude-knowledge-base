@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Parent_Dependency__c</fullName>
+    <description>Reference to the parent dependency in the spanning tree. Null for the root component (the scan target itself). Self-referential bulk DML constraint: the root node must be committed before children can reference it - insert root first, commit, then bulk-upsert children. Used to reconstruct the dependency tree in the UI. Ref: ISP-6072</description>
+    <label>Parent Dependency</label>
+    <referenceTo>Metadata_Dependency__c</referenceTo>
+    <relationshipLabel>Child Dependencies</relationshipLabel>
+    <relationshipName>Child_Dependencies</relationshipName>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Lookup</type>
+</CustomField>

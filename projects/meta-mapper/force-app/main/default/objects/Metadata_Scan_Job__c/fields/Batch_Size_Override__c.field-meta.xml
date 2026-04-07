@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Batch_Size_Override__c</fullName>
+    <description>Transient-safe batch size override set by resumeJob() when the user resumes after a hot-loop pause. DependencyQueueable reads this field at the start of the resumed execution and uses it instead of Scan_Batch_Size__c. Persisted on the job record so it survives across Queueable self-chain boundaries. Null during normal execution. Do not edit manually. Ref: ISP-6072</description>
+    <label>Batch Size Override</label>
+    <precision>18</precision>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Stall_Detection_Threshold__c</fullName>
+    <description>Number of consecutive processing cycles with zero new components before the engine pauses the scan and alerts the user. Prevents infinite loops caused by pathological metadata structures. Default: 5. Ref: ISP-6072</description>
+    <label>Stall Detection Threshold</label>
+    <precision>10</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

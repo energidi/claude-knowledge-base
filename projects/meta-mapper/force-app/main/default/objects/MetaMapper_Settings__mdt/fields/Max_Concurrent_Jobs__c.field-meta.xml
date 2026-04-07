@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Max_Concurrent_Jobs__c</fullName>
+    <description>Maximum number of MetaMapper scans that can run simultaneously in this org. New scan requests are rejected when this limit is reached. Raise only for orgs with large async processing capacity. Default: 2. Ref: ISP-6072</description>
+    <label>Max Concurrent Jobs</label>
+    <precision>10</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

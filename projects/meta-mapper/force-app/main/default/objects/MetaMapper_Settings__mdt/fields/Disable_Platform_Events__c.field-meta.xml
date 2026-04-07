@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Disable_Platform_Events__c</fullName>
+    <description>When enabled, suppresses Dependency_Scan_Status__e publish and the LWC falls back to polling every few seconds. Use when the org is approaching the daily Platform Event delivery limit. Can also be set automatically by the engine if the org exceeds 80% of the daily limit. Default: false. Ref: ISP-6072</description>
+    <label>Disable Platform Events</label>
+    <type>Checkbox</type>
+    <defaultValue>false</defaultValue>
+</CustomField>

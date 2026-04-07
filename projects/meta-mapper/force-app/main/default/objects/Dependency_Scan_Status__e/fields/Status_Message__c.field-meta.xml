@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Status_Message__c</fullName>
+    <description>Human-readable description of what the scan engine was doing when this event was published (e.g. "Analyzing Flow dependencies..."). Displayed below the progress bar in the metaMapperProgress LWC. Ref: ISP-6072</description>
+    <label>Status Message</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

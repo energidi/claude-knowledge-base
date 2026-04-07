@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Components_Analyzed__c</fullName>
+    <description>Number of components analyzed at the time this event was published. Used to update the progress bar in the LWC without a server round-trip. Ref: ISP-6072</description>
+    <label>Components Analyzed</label>
+    <precision>10</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

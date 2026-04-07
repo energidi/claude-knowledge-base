@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Max_Stored_Jobs__c</fullName>
+    <description>Maximum number of completed scan results retained as Salesforce Files org-wide. When a scan completes and this limit is exceeded, the oldest completed job and its result file are deleted automatically. Completed results use File Storage, not Data Storage. Default: 5. Ref: ISP-6072</description>
+    <label>Max Stored Jobs</label>
+    <precision>10</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Result_File_Id__c</fullName>
+    <description>The ID of the Salesforce File (ContentDocument) that stores the complete scan result as JSON. Populated after the scan completes and all Metadata_Dependency__c records have been serialized and deleted. The app uses this pointer to load results for completed jobs without querying the deleted node records. Null for active, failed, or cancelled scans. Do not edit manually. Ref: ISP-6072</description>
+    <label>Result File ID</label>
+    <length>18</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

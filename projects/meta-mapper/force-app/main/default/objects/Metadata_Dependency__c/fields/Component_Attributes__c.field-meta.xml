@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Component_Attributes__c</fullName>
+    <description>JSON object containing type-specific contextual information about this dependency (e.g. whether an Apex class writes to a field, how many active Flow versions reference it). Rendered as plain-English badges in the UI. Never displayed as raw JSON. All payloads include a root "v": 1 version key. Ref: ISP-6072</description>
+    <label>Component Attributes</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

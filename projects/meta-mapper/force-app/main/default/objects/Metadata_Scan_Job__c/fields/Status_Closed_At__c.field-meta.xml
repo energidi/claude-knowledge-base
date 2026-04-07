@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Status_Closed_At__c</fullName>
+    <description>Timestamp set the moment Status transitions to Completed, Failed, or Cancelled. Used by the cleanup batch to calculate retention age. Never set for jobs that are still running or Paused. The cleanup batch uses this field, not CreatedDate, to avoid deleting in-progress scans. Do not edit manually. Ref: ISP-6072</description>
+    <label>Status Closed At</label>
+    <required>false</required>
+    <type>DateTime</type>
+</CustomField>

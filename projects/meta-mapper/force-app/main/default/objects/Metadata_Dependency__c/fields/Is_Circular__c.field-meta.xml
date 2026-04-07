@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Circular__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>True if this component appears in its own ancestor chain (a real dependency cycle, e.g. A depends on B which depends on A). Displayed with a dashed border in the graph. The scan does not traverse further from circular nodes to prevent infinite loops. Ref: ISP-6072</description>
+    <label>Is Circular</label>
+    <type>Checkbox</type>
+</CustomField>

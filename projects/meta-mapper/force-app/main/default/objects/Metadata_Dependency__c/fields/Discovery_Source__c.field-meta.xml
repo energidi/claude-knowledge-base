@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Discovery_Source__c</fullName>
+    <description>How this dependency was discovered. ToolingAPI = found by the standard MetadataComponentDependency query. Supplemental = found by a secondary handler query that fills a known Tooling API gap. Supplemental results carry a confidence score. Ref: ISP-6072</description>
+    <label>Discovery Source</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>ToolingAPI</fullName>
+                <default>false</default>
+                <label>ToolingAPI</label>
+            </value>
+            <value>
+                <fullName>Supplemental</fullName>
+                <default>false</default>
+                <label>Supplemental</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

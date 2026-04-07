@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Metadata_Scan_Job__c</fullName>
+    <description>Reference to the parent scan job. All dependency records for a scan are deleted when the job is deleted via Master-Detail cascade. Required. Ref: ISP-6072</description>
+    <label>Metadata Scan Job</label>
+    <referenceTo>Metadata_Scan_Job__c</referenceTo>
+    <relationshipLabel>Metadata Dependencies</relationshipLabel>
+    <relationshipName>Metadata_Dependencies</relationshipName>
+    <relationshipOrder>0</relationshipOrder>
+    <reparentableMasterDetail>false</reparentableMasterDetail>
+    <trackTrending>false</trackTrending>
+    <type>MasterDetail</type>
+    <writeRequiresMasterRead>false</writeRequiresMasterRead>
+</CustomField>

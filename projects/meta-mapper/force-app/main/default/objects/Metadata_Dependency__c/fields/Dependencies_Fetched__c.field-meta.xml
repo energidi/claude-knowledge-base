@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Dependencies_Fetched__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Internal engine flag. False = this component's dependencies have not yet been fetched from the Tooling API. True = fetching complete, or intentionally skipped because the node is circular or a dynamic reference that cannot be resolved. Do not edit manually. Ref: ISP-6072</description>
+    <label>Dependencies Fetched</label>
+    <type>Checkbox</type>
+</CustomField>

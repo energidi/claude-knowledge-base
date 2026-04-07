@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Dynamic_Reference__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>True if this dependency was detected as a dynamic Apex string reference that cannot be statically resolved. Displayed with a warning badge. These nodes represent potential dependencies that require manual investigation. Ref: ISP-6072</description>
+    <label>Is Dynamic Reference</label>
+    <type>Checkbox</type>
+</CustomField>

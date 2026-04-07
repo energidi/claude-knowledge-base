@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Scan_Summary_Text__c</fullName>
+    <description>Plain-English summary of scan results, generated after the scan completes by ScanSummaryQueueable (e.g. "This scan found 42 dependencies: 5 Apex classes, 3 active Flows"). Displayed in the Scan Summary card. Populated asynchronously after Status = Completed - may appear a few seconds after the scan finishes. Null for Failed, Cancelled, and Paused jobs. Ref: ISP-6072</description>
+    <label>Scan Summary Text</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

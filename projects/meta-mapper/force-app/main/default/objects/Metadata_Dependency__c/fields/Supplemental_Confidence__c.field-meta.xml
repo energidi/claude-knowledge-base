@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Supplemental_Confidence__c</fullName>
+    <description>Confidence score (0-100) for supplemental dependencies only. Reflects how certain the match is: exact field matches score 95, regex formula matches score 65. Nodes below 70 display a warning badge prompting manual verification. Null for Tooling API nodes. Ref: ISP-6072</description>
+    <label>Supplemental Confidence</label>
+    <precision>3</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

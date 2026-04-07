@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Result_Summary__c</fullName>
+    <description>JSON object mapping each metadata type to the count of components found (e.g. {"v": 1, "ApexClass": 5, "Flow": 3}). Populated only when Status = Completed. Used to build the stats tile and plain-English summary. Do not edit manually. Ref: ISP-6072</description>
+    <label>Result Summary</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

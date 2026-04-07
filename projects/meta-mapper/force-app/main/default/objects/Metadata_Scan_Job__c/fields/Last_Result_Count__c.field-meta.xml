@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Last_Result_Count__c</fullName>
+    <description>Number of rows returned by the most recent Tooling API callout. Updated after each callout: job.Last_Result_Count__c = results.size(). Used by the guardrail to determine queryMorePossible: value >= 1900 means QueryMore is likely for the next batch. Initialized to 0 on job creation. Do not edit manually. Ref: ISP-6072</description>
+    <defaultValue>0</defaultValue>
+    <label>Last Result Count</label>
+    <precision>18</precision>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>
