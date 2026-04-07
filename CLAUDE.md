@@ -107,12 +107,13 @@ Do not re-ask unless context changes.
 A project is Salesforce if it contains `sfdx-project.json` at the root. When detected, all rules below apply automatically.
 
 ## After Completing Any Salesforce Component
-1. Run the `code-review:code-review` skill on the changes.
-2. If issues are found - fix them before proceeding.
-3. Run `sf org display` to detect the default connected org.
-4. If a default org is found: ask "Would you like me to deploy this to **[alias]** ([instance URL])?"
-5. If no default org is found: ask which org to deploy to.
-6. Never deploy without explicit confirmation.
+1. Perform an internal code review (governor limits, security, bulk safety, naming, architecture).
+2. Fix all issues found before proceeding.
+3. Generate a Word document containing: project background, and for each class a 1-2 sentence purpose statement + full code.
+4. Wait for the user to run external AI review tools against the document and provide findings.
+5. Apply fixes. Repeat steps 3-4 until the user explicitly approves the code.
+6. Only after explicit user approval: deploy to the Salesforce org and push to GitHub.
+7. Never deploy based on "proceed" or "do it" alone - those mean write code, not deploy.
 
 ## LWC File Structure (Required for Deployment)
 Each LWC component must live in its own subfolder matching the component name:
