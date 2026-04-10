@@ -67,14 +67,24 @@ public class SupplementalResult {
         // Use List<String> + String.join() instead of += in a loop.
         // Apex strings are immutable: each += allocates a new string and abandons the old one,
         // producing O(N^2) heap consumption if the error list is large. List + join is O(N).
-        List<String> parts   = new List<String>();
-        Integer safeLimit    = maxLength - safeThreshold;
-        Integer currentLen   = existing != null ? existing.length() : 0;
-        Boolean truncated    = false;
+        Integer safeLimit = maxLength - safeThreshold;
+        List<String> parts = new List<String>();
+        Boolean truncated  = false;
 
+        // Guard: existing log may already exceed maxLength (possible after many prior Queueable
+        // appends or a very long stack trace). Truncate it first so appending the notice does not
+        // produce a string longer than maxLength, which would cause STRING_TOO_LONG on DML update.
+        String safeExisting;
         if (String.isNotBlank(existing)) {
-            parts.add(existing);
+            safeExisting = existing.length() > safeLimit
+                ? existing.substring(0, safeLimit) + '\n[PRE-TRUNCATED]'
+                : existing;
+        } else {
+            safeExisting = '';
         }
+        parts.add(safeExisting);
+        Integer currentLen = safeExisting.length();
+
         for (String msg : errors) {
             String line = '\n' + msg;
             if (currentLen + line.length() > safeLimit) {

@@ -40,9 +40,10 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
     private static final Integer QUERY_ROW_RESERVE = 500;
     private static final Decimal CPU_THRESHOLD     = 0.75;
 
-    private static final Set<String> CMT_FIELD_SUFFIXES = new Set<String>{
-        'class__c', 'handler__c', 'type__c', 'instance__c'
-    };
+    // Single source of truth for class-reference suffixes - defined in MetaMapperDescribeCache
+    // so CustomFieldHandler (field-reference suffixes) and any future handler share definitions.
+    private static final Set<String> CMT_FIELD_SUFFIXES =
+        MetaMapperDescribeCache.CMT_CLASS_REF_SUFFIXES;
 
     // Describe data is served from MetaMapperDescribeCache to avoid duplicate
     // getGlobalDescribe() and EntityDefinition queries when both ApexClassHandler
@@ -226,14 +227,15 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
                     }
                     usedKeys.add(uniqueKey);
 
-                    for (Metadata_Dependency__c parentNode : parentNodes) {
-                        // Delegate to shared builder - keeps node field population in one place.
-                        result.addNode(CustomFieldHandler.buildNode(
-                            jobId, parentNode,
-                            record.Id, 'CustomMetadata', entityName + '.' + recordName,
-                            CONFIDENCE_CMT, true, record.Id + ':' + field
-                        ));
-                    }
+                    // Spanning tree: one node per (job, CMT record, field). Take first parent.
+                    // Multiple parentNodes for the same class name share the same uniqueKey -
+                    // emitting a node for each would produce duplicate Node_Uniqueness_Key__c
+                    // values in the upsert list, causing a fatal DML crash.
+                    result.addNode(CustomFieldHandler.buildNode(
+                        jobId, parentNodes.get(0),
+                        record.Id, 'CustomMetadata', entityName + '.' + recordName,
+                        CONFIDENCE_CMT, true, record.Id + ':' + field
+                    ));
                 }
             }
         } catch (Exception e) {

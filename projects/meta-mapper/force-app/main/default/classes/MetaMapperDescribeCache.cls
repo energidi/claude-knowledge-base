@@ -26,6 +26,24 @@
  */
 public without sharing class MetaMapperDescribeCache {
 
+    /**
+     * CMT field name suffixes conventionally used to store custom field API name references.
+     * Centralised here so CustomFieldHandler and any future field-scanning handler share
+     * one definition - a suffix added here is automatically picked up by all consumers.
+     */
+    public static final Set<String> CMT_FIELD_REF_SUFFIXES = new Set<String>{
+        'field__c', 'lookup__c', 'field_api_name__c', 'field_name__c'
+    };
+
+    /**
+     * CMT field name suffixes conventionally used to store Apex class name references.
+     * Used by ApexClassHandler; separated from CMT_FIELD_REF_SUFFIXES because the two
+     * sets scan for different dependency types and must not be mixed.
+     */
+    public static final Set<String> CMT_CLASS_REF_SUFFIXES = new Set<String>{
+        'class__c', 'handler__c', 'type__c', 'instance__c'
+    };
+
     private static List<EntityDefinition>                    cachedCmtEntities;
     private static Map<String, Map<String, Schema.SObjectField>> cachedFieldMaps;
 

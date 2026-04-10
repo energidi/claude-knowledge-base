@@ -34,11 +34,19 @@
  */
 public without sharing class FlowHandler implements IDependencyTypeHandler {
 
-    // Guards the subflow-gap diagnostic notice to one emission per job per handler instance.
-    // Instance field (not static) so it does not leak across test methods or concurrent jobs.
-    // DependencyTypeHandlerFactory caches one FlowHandler instance per transaction, so
-    // instance-level dedup is equivalent to transaction-level dedup in production.
-    private Set<Id> notifiedJobs = new Set<Id>();
+    // Guards the subflow-gap diagnostic notice to one emission per job per Queueable execution.
+    // Static so it persists for the full transaction (cross-invocation dedup within one execution).
+    // Reset between Queueable executions (new transaction = fresh static state) - this is
+    // intentional: each execution appends its own notice, which appendErrorsSafe will deduplicate
+    // against the existing Error_Status_Message__c at the DependencyQueueable level.
+    // @TestVisible clear method allows test methods to reset state without @SeeAllData pollution.
+    @TestVisible
+    private static Set<Id> notifiedJobs = new Set<Id>();
+
+    @TestVisible
+    private static void clearNotifiedJobsForTest() {
+        notifiedJobs = new Set<Id>();
+    }
 
     public SupplementalResult findSupplemental(
         Id jobId,
@@ -53,7 +61,7 @@ public without sharing class FlowHandler implements IDependencyTypeHandler {
         // which is not yet implemented. Emitted once per job per transaction to avoid
         // polluting Error_Status_Message__c with repeated identical strings.
         if (!notifiedJobs.contains(jobId)) {
-            notifiedJobs.add(jobId);
+            notifiedJobs.add(jobId);  // static: persists for this transaction
             result.addError(
                 'FlowHandler: subflow parent detection (SubFlow XML elements) is not implemented. '
                 + 'Active-version subflow edges are covered by MetadataComponentDependency. '

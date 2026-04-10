@@ -61,7 +61,7 @@ public without sharing class DependencyJobSelector {
      * filter) for selectivity on orgs where AsyncApexJob holds millions of rows.
      * Pre-queries the ApexClass Id to enable the indexed filter.
      *
-     * @return  Number of DependencyQueueable jobs currently Processing or Preparing
+     * @return  Number of DependencyQueueable jobs currently Queued, Processing, or Preparing
      */
     // Cached once per transaction - ApexClass records are immutable during execution
     private static Id cachedQueueableClassId;
@@ -81,37 +81,67 @@ public without sharing class DependencyJobSelector {
             FROM AsyncApexJob
             WHERE JobType = 'Queueable'
             AND ApexClassId = :cachedQueueableClassId
-            AND Status IN ('Processing', 'Preparing')
+            // 'Holding' is included: when the flex queue is full, newly enqueued Queueable jobs
+            // enter Holding status. Omitting it allows createJob() to bypass Max_Concurrent_Jobs__c
+            // when the org is under heavy async load, potentially exceeding the 100 Holding limit.
+            AND Status IN ('Processing', 'Preparing', 'Queued', 'Holding')
         ];
     }
 
     /**
      * Returns Completed jobs ordered by Status_Closed_At__c ascending, up to maxRows records.
-     * Used by the ring buffer to find the oldest job to delete when Max_Stored_Jobs__c is
-     * exceeded. Uses FOR UPDATE to serialize concurrent ResultSerializerQueueable executions.
+     * Used by the ring buffer to find the oldest job to delete when Max_Stored_Jobs__c is exceeded.
      *
-     * Pass Max_Stored_Jobs__c + 10 as maxRows - a small buffer above the retention cap ensures
-     * the oldest record is always present if the ring buffer is slightly over limit.
+     * Two-step lock pattern:
+     *   Step 1 - ORDER BY query to get the correct oldest IDs (ORDER BY is incompatible with FOR UPDATE).
+     *   Step 2 - Re-query those IDs WITH FOR UPDATE to serialize concurrent ResultSerializerQueueable
+     *            executions. This prevents two concurrent serializers from independently selecting and
+     *            deleting the same oldest job.
      *
-     * ORDER BY is not permitted with FOR UPDATE - the list is sorted in Apex after the lock.
+     * Pass Max_Stored_Jobs__c + 10 as maxRows to ensure the oldest record is always captured when
+     * the ring buffer is slightly over limit.
      *
      * @param maxRows  Maximum number of Completed job records to lock and return
-     * @return         Completed Metadata_Scan_Job__c records, oldest first
+     * @return         Completed Metadata_Scan_Job__c records, oldest first, locked FOR UPDATE
      */
     public List<Metadata_Scan_Job__c> getCompletedJobsOldestFirst(Integer maxRows) {
-        // ORDER BY + LIMIT is used without FOR UPDATE to guarantee that the oldest
-        // records are returned. FOR UPDATE without ORDER BY applies LIMIT before sorting,
-        // which does not guarantee the oldest rows are locked. The ring buffer deletion
-        // in ResultSerializerQueueable wraps its targeted delete in try/catch - if two
-        // concurrent serializers both attempt to delete the same oldest job, the second
-        // will receive a handled exception and continue safely.
-        return [
-            SELECT Id, Status_Closed_At__c, Result_File_Id__c
+        // Step 1: ORDER BY to identify the correct oldest IDs
+        List<Metadata_Scan_Job__c> ordered = [
+            SELECT Id
             FROM Metadata_Scan_Job__c
             WHERE Status__c = 'Completed'
             ORDER BY Status_Closed_At__c ASC, Id ASC
             LIMIT :maxRows
         ];
+        if (ordered.isEmpty()) {
+            return new List<Metadata_Scan_Job__c>();
+        }
+        Set<Id> orderedIds = new Map<Id, Metadata_Scan_Job__c>(ordered).keySet();
+        // Step 2: Lock the identified records to serialize concurrent ring-buffer deletions.
+        // ORDER BY is omitted here - SOQL does not guarantee order when both ORDER BY and
+        // FOR UPDATE are combined, and the IN :orderedIds set does not preserve insertion order.
+        // Sort in Apex after the lock to ensure deterministic oldest-first ordering.
+        List<Metadata_Scan_Job__c> locked = [
+            SELECT Id, Status_Closed_At__c, Result_File_Id__c
+            FROM Metadata_Scan_Job__c
+            WHERE Id IN :orderedIds
+            FOR UPDATE
+        ];
+        locked.sort(new StatusClosedAtComparator());
+        return locked;
     }
 
+    /**
+     * Comparator for ascending Status_Closed_At__c order with Id as tiebreaker.
+     * Applied to the FOR UPDATE result set to restore deterministic oldest-first ordering
+     * after the database lock (SOQL ORDER BY + FOR UPDATE ordering is unreliable).
+     */
+    private class StatusClosedAtComparator implements Comparator<Metadata_Scan_Job__c> {
+        public Integer compare(Metadata_Scan_Job__c a, Metadata_Scan_Job__c b) {
+            if (a.Status_Closed_At__c == b.Status_Closed_At__c) {
+                return a.Id < b.Id ? -1 : (a.Id > b.Id ? 1 : 0);
+            }
+            return a.Status_Closed_At__c < b.Status_Closed_At__c ? -1 : 1;
+        }
+    }
 }
