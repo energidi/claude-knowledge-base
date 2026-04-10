@@ -47,7 +47,6 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
     private static final Integer SOQL_RESERVE         = 10;
     private static final Integer QUERY_ROW_RESERVE    = 500;
     private static final Integer MIN_FIELD_LENGTH     = 6;
-    private static final Integer MAX_CMT_RECORDS      = 500;
     private static final Decimal CPU_THRESHOLD        = 0.60;
 
     // CMT field name suffixes conventionally used to store custom field API name references
@@ -55,19 +54,17 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
         'field__c', 'lookup__c', 'field_api_name__c', 'field_name__c'
     };
 
-    // Transaction-level static cache - populated once per transaction on first invocation.
-    // Avoids repeated EntityDefinition queries and getGlobalDescribe() calls when
-    // findSupplemental is invoked multiple times within the same Queueable execution.
-    private static Map<String, Schema.SObjectType> cachedGlobalDescribe;
-    private static List<EntityDefinition>          cachedCmtEntities;
+    // Describe data is served from MetaMapperDescribeCache to avoid duplicate
+    // getGlobalDescribe() and EntityDefinition queries when both CustomFieldHandler
+    // and ApexClassHandler run in the same Queueable execution.
 
-    public List<Metadata_Dependency__c> findSupplemental(
+    public SupplementalResult findSupplemental(
         Id jobId,
         List<Metadata_Dependency__c> nodesOfType
     ) {
-        List<Metadata_Dependency__c> results = new List<Metadata_Dependency__c>();
+        SupplementalResult result = new SupplementalResult();
         if (nodesOfType == null || nodesOfType.isEmpty()) {
-            return results;
+            return result;
         }
 
         Set<String> fieldApiNames  = new Set<String>();
@@ -82,45 +79,68 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
         }
 
         if (fieldApiNames.isEmpty()) {
-            return results;
+            return result;
         }
 
-        results.addAll(findWorkflowFieldUpdates(jobId, nodesOfType, fieldApiNames));
-        results.addAll(findValidationRuleReferences(jobId, nodesOfType, fieldApiNames, objectApiNames));
-        results.addAll(findCmtRecordReferences(jobId, nodesOfType));
+        SupplementalResult wfuResult  = findWorkflowFieldUpdates(jobId, nodesOfType, fieldApiNames, objectApiNames);
+        SupplementalResult vrResult   = findValidationRuleReferences(jobId, nodesOfType, fieldApiNames, objectApiNames);
+        SupplementalResult cmtResult  = findCmtRecordReferences(jobId, nodesOfType);
 
-        return results;
+        result.addNodes(wfuResult.nodes);
+        result.addNodes(vrResult.nodes);
+        result.addNodes(cmtResult.nodes);
+        for (String e : wfuResult.errors)  { result.addError(e); }
+        for (String e : vrResult.errors)   { result.addError(e); }
+        for (String e : cmtResult.errors)  { result.addError(e); }
+
+        return result;
     }
 
     // --- WorkflowFieldUpdate ---
 
-    private List<Metadata_Dependency__c> findWorkflowFieldUpdates(
+    private SupplementalResult findWorkflowFieldUpdates(
         Id jobId,
         List<Metadata_Dependency__c> nodes,
-        Set<String> fieldApiNames
+        Set<String> fieldApiNames,
+        Set<String> objectApiNames
     ) {
-        List<Metadata_Dependency__c> results = new List<Metadata_Dependency__c>();
+        SupplementalResult result = new SupplementalResult();
+
+        // Pre-query CPU guard - consistent with other sub-scans in this handler
+        if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
+            System.debug(LoggingLevel.WARN,
+                'CustomFieldHandler: CPU budget exceeded before WorkflowFieldUpdate scan; skipping.');
+            return result;
+        }
+        if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
+            System.debug(LoggingLevel.WARN,
+                'CustomFieldHandler: SOQL budget exhausted before WorkflowFieldUpdate scan; skipping.');
+            return result;
+        }
+
         Map<String, List<Metadata_Dependency__c>> nodeByFullName = buildNodeByFullName(nodes);
 
         try {
+            // SobjectType filter prevents cross-object false positives when two objects share
+            // a field developer name (e.g. Account.Status__c vs Case.Status__c).
             List<WorkflowFieldUpdate> updates = [
                 SELECT Id, Name, Field, SobjectType
                 FROM WorkflowFieldUpdate
                 WHERE Field IN :fieldApiNames
+                AND SobjectType IN :objectApiNames
             ];
             for (WorkflowFieldUpdate wfu : updates) {
-                // Full qualified name match to prevent false positives when two objects
-                // share a field with the same developer name (e.g. Account.Status__c vs Case.Status__c)
                 String fullName = (wfu.SobjectType + '.' + wfu.Field).toLowerCase();
                 List<Metadata_Dependency__c> parents = nodeByFullName.get(fullName);
                 if (parents == null) {
                     continue;
                 }
                 for (Metadata_Dependency__c parent : parents) {
-                    results.add(buildNode(
+                    // Spanning tree model: one node per WFU Id. Diamond dedup at Tier 1.
+                    result.addNode(buildNode(
                         jobId, parent,
                         wfu.Id, 'WorkflowFieldUpdate', wfu.SobjectType + '.' + wfu.Name,
-                        CONFIDENCE_EXACT, false
+                        CONFIDENCE_EXACT, false, wfu.Id
                     ));
                 }
             }
@@ -128,26 +148,26 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
             System.debug(LoggingLevel.WARN,
                 'CustomFieldHandler.findWorkflowFieldUpdates failed: '
                 + e.getMessage() + '\n' + e.getStackTraceString());
-            appendJobError(jobId, 'CustomFieldHandler.findWorkflowFieldUpdates: ' + e.getMessage());
+            result.addError('CustomFieldHandler.findWorkflowFieldUpdates: ' + e.getMessage());
         }
-        return results;
+        return result;
     }
 
     // --- ValidationRule tokenized match ---
 
-    private List<Metadata_Dependency__c> findValidationRuleReferences(
+    private SupplementalResult findValidationRuleReferences(
         Id jobId,
         List<Metadata_Dependency__c> nodes,
         Set<String> fieldApiNames,
         Set<String> objectApiNames
     ) {
-        List<Metadata_Dependency__c> results = new List<Metadata_Dependency__c>();
+        SupplementalResult result = new SupplementalResult();
 
         // Pre-query CPU guard
         if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
             System.debug(LoggingLevel.WARN,
                 'CustomFieldHandler: CPU budget exceeded before ValidationRule scan; skipping.');
-            return results;
+            return result;
         }
 
         Map<String, List<Metadata_Dependency__c>> nodeByFieldName = buildNodeByFieldName(nodes);
@@ -163,7 +183,7 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
             }
         }
         if (fieldApiNamesLower.isEmpty()) {
-            return results;
+            return result;
         }
 
         try {
@@ -186,25 +206,37 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                     continue;
                 }
 
-                // Tokenize the formula once per rule - O(formula_length) instead of
-                // O(formula_length x n_fields) from nested containsIgnoreCase calls.
+                // Primary: tokenize the formula - O(formula_length) per rule.
+                // Catches the common case: field name appears as a bare token.
                 // Split pattern is non-backtracking (character class with +).
                 Set<String> formulaTokens = new Set<String>(
                     rule.ErrorConditionFormula.toLowerCase().split('[^a-zA-Z0-9_]+')
                 );
+                String formulaLower = rule.ErrorConditionFormula.toLowerCase();
 
                 for (String lowerField : fieldApiNamesLower) {
-                    if (formulaTokens.contains(lowerField)) {
+                    // Primary: token match (exact word boundary)
+                    Boolean matched = formulaTokens.contains(lowerField);
+                    // Fallback: normalized substring pass for fields embedded in expressions,
+                    // concatenations, or quoted text that tokenization would split (e.g.
+                    // CONTAINS(field__c, "x") where field__c appears inside string arguments).
+                    // Only performed if token match fails to keep CPU cost bounded.
+                    if (!matched) {
+                        matched = formulaLower.contains(lowerField);
+                    }
+                    if (matched) {
                         List<Metadata_Dependency__c> parents = nodeByFieldName.get(lowerField);
                         if (parents != null) {
                             for (Metadata_Dependency__c parent : parents) {
-                                results.add(buildNode(
+                                // Key = ruleId:fieldName - one node per (rule, field) pair.
+                                // Spanning tree dedup handled at Tier 1; parent.Id excluded.
+                                result.addNode(buildNode(
                                     jobId, parent,
                                     rule.Id, 'ValidationRule', rule.ValidationName,
-                                    CONFIDENCE_REGEX, false
+                                    CONFIDENCE_REGEX, false,
+                                    rule.Id + ':' + lowerField
                                 ));
                             }
-                            break; // one match per rule is sufficient
                         }
                     }
                 }
@@ -213,18 +245,18 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
             System.debug(LoggingLevel.WARN,
                 'CustomFieldHandler.findValidationRuleReferences failed: '
                 + e.getMessage() + '\n' + e.getStackTraceString());
-            appendJobError(jobId, 'CustomFieldHandler.findValidationRuleReferences: ' + e.getMessage());
+            result.addError('CustomFieldHandler.findValidationRuleReferences: ' + e.getMessage());
         }
-        return results;
+        return result;
     }
 
     // --- Custom Metadata Type record field value scan ---
 
-    private List<Metadata_Dependency__c> findCmtRecordReferences(
+    private SupplementalResult findCmtRecordReferences(
         Id jobId,
         List<Metadata_Dependency__c> nodes
     ) {
-        List<Metadata_Dependency__c> results = new List<Metadata_Dependency__c>();
+        SupplementalResult result = new SupplementalResult();
 
         // Build combined lookup map: supports both full qualified name and field-only matches.
         // A CMT record may store "Account.My_Field__c" or just "My_Field__c".
@@ -238,23 +270,12 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
             }
         }
         if (nodeByLowerValue.isEmpty()) {
-            return results;
+            return result;
         }
 
-        // Populate static caches on first invocation per transaction
-        if (cachedCmtEntities == null) {
-            cachedCmtEntities = [
-                SELECT QualifiedApiName
-                FROM EntityDefinition
-                WHERE IsCustomizable = true
-                AND QualifiedApiName LIKE '%__mdt'
-            ];
-        }
-        if (cachedGlobalDescribe == null) {
-            cachedGlobalDescribe = Schema.getGlobalDescribe();
-        }
+        List<EntityDefinition> cmtEntities = MetaMapperDescribeCache.getCmtEntities();
 
-        for (EntityDefinition entity : cachedCmtEntities) {
+        for (EntityDefinition entity : cmtEntities) {
             if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
                 System.debug(LoggingLevel.WARN,
                     'CustomFieldHandler.findCmtRecordReferences: SOQL budget exhausted; stopping.');
@@ -268,7 +289,7 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
 
             String entityName = entity.QualifiedApiName;
             Map<String, Schema.SObjectField> fieldMap =
-                cachedGlobalDescribe.get(entityName)?.getDescribe().fields.getMap();
+                MetaMapperDescribeCache.getFieldMap(entityName);
             if (fieldMap == null) {
                 continue;
             }
@@ -295,13 +316,29 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                 break;
             }
 
-            Integer safeLimit = Math.min(MAX_CMT_RECORDS,
-                Math.max(1, Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE));
-            String fieldList = 'Id, DeveloperName, ' + String.join(relevantFields, ', ');
-            String query = 'SELECT ' + fieldList + ' FROM ' + entityName + ' LIMIT :safeLimit';
+            // safeLimit is driven solely by remaining query row budget.
+            // No arbitrary record cap: any cap below the budget would silently miss matches
+            // in large CMT types that return many qualifying rows.
+            Integer safeLimit = Math.max(1,
+                Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE);
 
+            // Build WHERE clause using match values to filter at DB level (fix #2).
+            // Avoids loading every CMT record into heap and silently missing matches beyond
+            // the LIMIT. SOQL IN is case-insensitive for text fields, so lowercase keys match.
+            Set<String> matchValues = nodeByLowerValue.keySet();
+            List<String> conditions = new List<String>();
+            for (String field : relevantFields) {
+                conditions.add(field + ' IN :matchValues');
+            }
+            String fieldList = 'Id, DeveloperName, ' + String.join(relevantFields, ', ');
+            String query = 'SELECT ' + fieldList + ' FROM ' + entityName
+                + ' WHERE ' + String.join(conditions, ' OR ')
+                + ' LIMIT :safeLimit';
+
+            Boolean truncated = false;
             try {
                 List<SObject> records = Database.query(query);
+                truncated = (records.size() == safeLimit);
                 Set<String> usedKeys = new Set<String>();
 
                 for (SObject record : records) {
@@ -315,6 +352,8 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                         if (parents == null) {
                             continue;
                         }
+                        // Fix #3: include field name in key to prevent duplicate-key collisions
+                        // when the same CMT record matches via more than one relevant field.
                         String uniqueKey = jobId + ':' + record.Id + ':' + field;
                         if (usedKeys.contains(uniqueKey)) {
                             continue;
@@ -323,10 +362,10 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
 
                         String recordName = (String) record.get('DeveloperName');
                         for (Metadata_Dependency__c parent : parents) {
-                            results.add(buildNode(
+                            result.addNode(buildNode(
                                 jobId, parent,
                                 record.Id, 'CustomMetadata', entityName + '.' + recordName,
-                                CONFIDENCE_CMT_FIELD, true
+                                CONFIDENCE_CMT_FIELD, true, record.Id + ':' + field
                             ));
                         }
                     }
@@ -336,8 +375,18 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                     'CustomFieldHandler.findCmtRecordReferences failed for ' + entityName
                     + ': ' + e.getMessage() + '\n' + e.getStackTraceString());
             }
+
+            // Fix #7: surface truncation so the caller (DependencyQueueable) can append a
+            // diagnostic notice to Error_Status_Message__c if the CMT scan hit the limit.
+            if (truncated) {
+                String msg = 'CustomFieldHandler.findCmtRecordReferences: result capped at '
+                    + safeLimit + ' records for ' + entityName
+                    + '; CMT dependencies beyond this limit may be missing.';
+                System.debug(LoggingLevel.WARN, msg);
+                result.addError(msg);
+            }
         }
-        return results;
+        return result;
     }
 
     // --- Helpers ---
@@ -386,6 +435,14 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
         return result;
     }
 
+    /**
+     * Builds a supplemental Metadata_Dependency__c node.
+     *
+     * @param uniqueKeySuffix  Optional suffix appended to the Node_Uniqueness_Key__c after
+     *                         the metadataId segment. Use when the same Metadata_Id__c can
+     *                         produce multiple distinct nodes (e.g. one per matching CMT field).
+     *                         Pass null for types where one node per Metadata_Id__c is correct.
+     */
     private Metadata_Dependency__c buildNode(
         Id jobId,
         Metadata_Dependency__c parent,
@@ -393,11 +450,16 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
         String metadataType,
         String metadataName,
         Integer confidence,
-        Boolean isDynamicReference
+        Boolean isDynamicReference,
+        String uniqueKeySuffix
     ) {
         String ancestorPath = String.isBlank(parent.Ancestor_Path__c)
             ? parent.Metadata_Id__c
             : parent.Ancestor_Path__c + '|' + parent.Metadata_Id__c;
+
+        String uniquenessKey = String.isNotBlank(uniqueKeySuffix)
+            ? jobId + ':' + uniqueKeySuffix
+            : jobId + ':' + metadataId;
 
         return new Metadata_Dependency__c(
             Metadata_Scan_Job__c        = jobId,
@@ -414,35 +476,7 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
             Discovery_Source__c         = 'Supplemental',
             Supplemental_Confidence__c  = confidence,
             Ancestor_Path__c            = ancestorPath,
-            Node_Uniqueness_Key__c      = jobId + ':' + metadataId
+            Node_Uniqueness_Key__c      = uniquenessKey
         );
-    }
-
-    /**
-     * Appends a diagnostic notice to Metadata_Scan_Job__c.Error_Status_Message__c.
-     * Called from catch blocks to surface handler-level failures on the job record
-     * without failing the job. Uses read-then-write to preserve existing messages.
-     */
-    private void appendJobError(Id jobId, String message) {
-        try {
-            List<Metadata_Scan_Job__c> jobs = [
-                SELECT Error_Status_Message__c
-                FROM Metadata_Scan_Job__c
-                WHERE Id = :jobId
-                LIMIT 1
-            ];
-            if (!jobs.isEmpty()) {
-                String existing = jobs[0].Error_Status_Message__c;
-                String notice = '[' + System.now().format() + '] [Supplemental] ' + message;
-                update new Metadata_Scan_Job__c(
-                    Id = jobId,
-                    Error_Status_Message__c = String.isBlank(existing)
-                        ? notice : existing + '\n' + notice
-                );
-            }
-        } catch (Exception ex) {
-            System.debug(LoggingLevel.ERROR,
-                'CustomFieldHandler.appendJobError failed: ' + ex.getMessage());
-        }
     }
 }

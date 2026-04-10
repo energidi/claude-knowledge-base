@@ -38,86 +38,86 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
     private static final Integer CONFIDENCE_CMT    = 85;
     private static final Integer SOQL_RESERVE      = 10;
     private static final Integer QUERY_ROW_RESERVE = 500;
-    private static final Integer MAX_CMT_RECORDS   = 500;
     private static final Decimal CPU_THRESHOLD     = 0.75;
 
     private static final Set<String> CMT_FIELD_SUFFIXES = new Set<String>{
         'class__c', 'handler__c', 'type__c', 'instance__c'
     };
 
-    // Transaction-level static cache (C3): populated once per transaction on first invocation.
-    private static Map<String, Schema.SObjectType> cachedGlobalDescribe;
-    private static List<EntityDefinition>          cachedCmtEntities;
+    // Describe data is served from MetaMapperDescribeCache to avoid duplicate
+    // getGlobalDescribe() and EntityDefinition queries when both ApexClassHandler
+    // and CustomFieldHandler run in the same Queueable execution.
 
-    public List<Metadata_Dependency__c> findSupplemental(
+    public SupplementalResult findSupplemental(
         Id jobId,
         List<Metadata_Dependency__c> nodesOfType
     ) {
-        List<Metadata_Dependency__c> results = new List<Metadata_Dependency__c>();
+        SupplementalResult result = new SupplementalResult();
         if (nodesOfType == null || nodesOfType.isEmpty()) {
-            return results;
+            return result;
         }
 
-        Map<String, Metadata_Dependency__c> nodeByClassName =
-            new Map<String, Metadata_Dependency__c>();
+        // Map to List to support diamond dependencies: the same Apex class may appear
+        // at multiple depths in the current batch (e.g. via two different parent paths).
+        // A plain Map<String, Metadata_Dependency__c> would overwrite earlier entries,
+        // causing only one parent branch to receive supplemental nodes.
+        Map<String, List<Metadata_Dependency__c>> nodeByClassName =
+            new Map<String, List<Metadata_Dependency__c>>();
         for (Metadata_Dependency__c node : nodesOfType) {
             if (String.isNotBlank(node.Metadata_Name__c)) {
-                nodeByClassName.put(node.Metadata_Name__c.toLowerCase(), node);
+                String key = node.Metadata_Name__c.toLowerCase();
+                if (!nodeByClassName.containsKey(key)) {
+                    nodeByClassName.put(key, new List<Metadata_Dependency__c>());
+                }
+                nodeByClassName.get(key).add(node);
             }
         }
 
-        // C3: Populate static caches on first invocation per transaction
-        if (cachedCmtEntities == null) {
-            cachedCmtEntities = [
-                SELECT QualifiedApiName
-                FROM EntityDefinition
-                WHERE IsCustomizable = true
-                AND QualifiedApiName LIKE '%__mdt'
-            ];
-        }
-        if (cachedGlobalDescribe == null) {
-            cachedGlobalDescribe = Schema.getGlobalDescribe();
+        // C3: Describe data served from MetaMapperDescribeCache to avoid duplicate
+        // getGlobalDescribe() and EntityDefinition queries per transaction.
+        List<EntityDefinition> cmtEntities = MetaMapperDescribeCache.getCmtEntities();
+
+        if (cmtEntities.isEmpty()) {
+            return result;
         }
 
-        if (cachedCmtEntities.isEmpty()) {
-            return results;
-        }
-
-        for (EntityDefinition entity : cachedCmtEntities) {
+        for (EntityDefinition entity : cmtEntities) {
             // SOQL budget guard
             if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
-                System.debug(LoggingLevel.WARN,
-                    'ApexClassHandler: SOQL budget exhausted; skipping remaining CMT entities.');
-                appendJobError(jobId, 'ApexClassHandler: SOQL budget exhausted; CMT scan incomplete.');
+                String msg = 'ApexClassHandler: SOQL budget exhausted; CMT scan incomplete.';
+                System.debug(LoggingLevel.WARN, msg);
+                result.addError(msg);
                 break;
             }
             // CPU guard
             if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
-                System.debug(LoggingLevel.WARN,
-                    'ApexClassHandler: CPU budget exceeded; skipping remaining CMT entities.');
-                appendJobError(jobId, 'ApexClassHandler: CPU budget exceeded; CMT scan incomplete.');
+                String msg = 'ApexClassHandler: CPU budget exceeded; CMT scan incomplete.';
+                System.debug(LoggingLevel.WARN, msg);
+                result.addError(msg);
                 break;
             }
             String entityName = entity.QualifiedApiName;
-            results.addAll(scanCmtEntity(jobId, entityName, nodeByClassName));
+            SupplementalResult entityResult = scanCmtEntity(jobId, entityName, nodeByClassName); // nodeByClassName is Map<String, List>
+            result.addNodes(entityResult.nodes);
+            for (String e : entityResult.errors) { result.addError(e); }
         }
 
-        return results;
+        return result;
     }
 
-    private List<Metadata_Dependency__c> scanCmtEntity(
+    private SupplementalResult scanCmtEntity(
         Id jobId,
         String entityName,
-        Map<String, Metadata_Dependency__c> nodeByClassName
+        Map<String, List<Metadata_Dependency__c>> nodeByClassName
     ) {
-        List<Metadata_Dependency__c> results = new List<Metadata_Dependency__c>();
+        SupplementalResult result = new SupplementalResult();
 
         List<String> relevantFields = new List<String>();
         Map<String, Schema.SObjectField> fieldMap =
-            cachedGlobalDescribe.get(entityName)?.getDescribe().fields.getMap();
+            MetaMapperDescribeCache.getFieldMap(entityName);
 
         if (fieldMap == null) {
-            return results;
+            return result;
         }
 
         for (String fieldName : fieldMap.keySet()) {
@@ -131,17 +131,17 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
         }
 
         if (relevantFields.isEmpty()) {
-            return results;
+            return result;
         }
 
         // H1: Pre-query guards before Database.query()
         if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
-            return results;
+            return result;
         }
         if (Limits.getQueryRows() >= Limits.getLimitQueryRows() - QUERY_ROW_RESERVE) {
             System.debug(LoggingLevel.WARN,
                 'ApexClassHandler: query row budget exhausted before scanning ' + entityName + '; skipping.');
-            return results;
+            return result;
         }
 
         // H2: Build WHERE clause to pre-filter records by known class names.
@@ -152,16 +152,21 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
             conditions.add(field + ' IN :classNames');
         }
 
-        Integer safeLimit = Math.min(MAX_CMT_RECORDS,
-            Math.max(1, Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE));
+        // safeLimit driven by remaining query row budget only.
+        // No arbitrary cap: any fixed ceiling below the budget silently misses matches
+        // in large CMT types that return many qualifying rows.
+        Integer safeLimit = Math.max(1,
+            Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE);
 
         String fieldList = 'Id, DeveloperName, ' + String.join(relevantFields, ', ');
         String query = 'SELECT ' + fieldList + ' FROM ' + entityName
             + ' WHERE ' + String.join(conditions, ' OR ')
             + ' LIMIT :safeLimit';
 
+        Boolean truncated = false;
         try {
             List<SObject> records = Database.query(query);
+            truncated = (records.size() == safeLimit);
 
             // H3: In-method dedup set prevents duplicate results when the same CMT record
             // matches via two different fields (e.g. handler__c AND type__c both reference
@@ -181,76 +186,64 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
                     if (String.isBlank(value)) {
                         continue;
                     }
-                    Metadata_Dependency__c parentNode = nodeByClassName.get(value.toLowerCase());
-                    if (parentNode == null) {
+                    // Fix #6 (Round 4): lookup returns a List so all occurrences of this
+                    // class in the current batch receive supplemental nodes (diamond support).
+                    List<Metadata_Dependency__c> parentNodes = nodeByClassName.get(value.toLowerCase());
+                    if (parentNodes == null) {
                         continue;
                     }
 
-                    // Field name appended to key: same CMT record via two fields = two distinct nodes
-                    String uniqueKey = jobId + ':' + record.Id + ':' + field;
-                    if (usedKeys.contains(uniqueKey)) {
-                        continue;
+                    String recordName = (String) record.get('DeveloperName');
+
+                    for (Metadata_Dependency__c parentNode : parentNodes) {
+                        // Spanning tree model: one node per (job, CMT record Id, field).
+                        // Parent.Id is excluded - diamond dedup is handled at Tier 1.
+                        String uniqueKey = jobId + ':' + record.Id + ':' + field;
+                        if (usedKeys.contains(uniqueKey)) {
+                            continue;
+                        }
+                        usedKeys.add(uniqueKey);
+
+                        String ancestorPath = String.isBlank(parentNode.Ancestor_Path__c)
+                            ? parentNode.Metadata_Id__c
+                            : parentNode.Ancestor_Path__c + '|' + parentNode.Metadata_Id__c;
+
+                        result.addNode(new Metadata_Dependency__c(
+                            Metadata_Scan_Job__c        = jobId,
+                            Parent_Dependency__c        = parentNode.Id,
+                            Metadata_Id__c              = record.Id,
+                            Metadata_Type__c            = 'CustomMetadata',
+                            Metadata_Name__c            = entityName + '.' + recordName,
+                            Dependency_Depth__c         = (parentNode.Dependency_Depth__c != null
+                                                            ? parentNode.Dependency_Depth__c + 1 : 1),
+                            // false so the engine traverses transitive dependencies
+                            Dependencies_Fetched__c     = false,
+                            Is_Dynamic_Reference__c     = true,
+                            Discovery_Source__c         = 'Supplemental',
+                            Supplemental_Confidence__c  = CONFIDENCE_CMT,
+                            Ancestor_Path__c            = ancestorPath,
+                            Node_Uniqueness_Key__c      = uniqueKey
+                        ));
                     }
-                    usedKeys.add(uniqueKey);
-
-                    String recordName   = (String) record.get('DeveloperName');
-                    String ancestorPath = String.isBlank(parentNode.Ancestor_Path__c)
-                        ? parentNode.Metadata_Id__c
-                        : parentNode.Ancestor_Path__c + '|' + parentNode.Metadata_Id__c;
-
-                    results.add(new Metadata_Dependency__c(
-                        Metadata_Scan_Job__c        = jobId,
-                        Parent_Dependency__c        = parentNode.Id,
-                        Metadata_Id__c              = record.Id,
-                        Metadata_Type__c            = 'CustomMetadata',
-                        Metadata_Name__c            = entityName + '.' + recordName,
-                        Dependency_Depth__c         = (parentNode.Dependency_Depth__c != null
-                                                        ? parentNode.Dependency_Depth__c + 1 : 1),
-                        // C2: false so the engine traverses transitive dependencies
-                        Dependencies_Fetched__c     = false,
-                        Is_Dynamic_Reference__c     = true,
-                        Discovery_Source__c         = 'Supplemental',
-                        Supplemental_Confidence__c  = CONFIDENCE_CMT,
-                        Ancestor_Path__c            = ancestorPath,
-                        Node_Uniqueness_Key__c      = uniqueKey
-                    ));
                 }
             }
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN,
                 'ApexClassHandler.scanCmtEntity failed for entity ' + entityName
                 + ': ' + e.getMessage() + '\n' + e.getStackTraceString());
-            appendJobError(jobId, 'ApexClassHandler.scanCmtEntity[' + entityName + ']: ' + e.getMessage());
+            result.addError('ApexClassHandler.scanCmtEntity[' + entityName + ']: ' + e.getMessage());
         }
 
-        return results;
-    }
-
-    /**
-     * Appends a diagnostic notice to Metadata_Scan_Job__c.Error_Status_Message__c.
-     * Called from budget-exhaustion and catch blocks. Uses read-then-write to preserve
-     * existing messages.
-     */
-    private void appendJobError(Id jobId, String message) {
-        try {
-            List<Metadata_Scan_Job__c> jobs = [
-                SELECT Error_Status_Message__c
-                FROM Metadata_Scan_Job__c
-                WHERE Id = :jobId
-                LIMIT 1
-            ];
-            if (!jobs.isEmpty()) {
-                String existing = jobs[0].Error_Status_Message__c;
-                String notice = '[' + System.now().format() + '] [Supplemental] ' + message;
-                update new Metadata_Scan_Job__c(
-                    Id = jobId,
-                    Error_Status_Message__c = String.isBlank(existing)
-                        ? notice : existing + '\n' + notice
-                );
-            }
-        } catch (Exception ex) {
-            System.debug(LoggingLevel.ERROR,
-                'ApexClassHandler.appendJobError failed: ' + ex.getMessage());
+        // Fix #9 (Round 4): surface truncation so the caller can append a diagnostic
+        // notice to Error_Status_Message__c when the query row budget was the binding limit.
+        if (truncated) {
+            String msg = 'ApexClassHandler.scanCmtEntity: result capped at '
+                + safeLimit + ' records for ' + entityName
+                + '; CMT dependencies beyond this limit may be missing.';
+            System.debug(LoggingLevel.WARN, msg);
+            result.addError(msg);
         }
+
+        return result;
     }
 }
