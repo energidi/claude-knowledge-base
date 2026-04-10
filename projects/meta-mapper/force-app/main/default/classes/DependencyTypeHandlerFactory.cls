@@ -40,35 +40,43 @@ public without sharing class DependencyTypeHandlerFactory {
      * @return              IDependencyTypeHandler - never null
      */
     public IDependencyTypeHandler getHandler(String metadataType) {
-        if (HANDLER_CACHE.containsKey(metadataType)) {
-            return HANDLER_CACHE.get(metadataType);
+        // Normalize to lowercase so 'CustomField' and 'customfield' resolve to the same handler.
+        // The Tooling API returns type names in PascalCase, but defensive normalization prevents
+        // duplicate cache entries if callers pass inconsistently-cased type strings.
+        String normalizedType = metadataType != null ? metadataType.toLowerCase() : '';
+        if (HANDLER_CACHE.containsKey(normalizedType)) {
+            return HANDLER_CACHE.get(normalizedType);
         }
-        IDependencyTypeHandler handler = instantiate(metadataType);
+        IDependencyTypeHandler handler = instantiate(normalizedType);
         if (handler != null) {
-            HANDLER_CACHE.put(metadataType, handler);
+            HANDLER_CACHE.put(normalizedType, handler);
             return handler;
         }
+        // Cache NO_OP for this type to avoid re-evaluating on every future call
+        HANDLER_CACHE.put(normalizedType, NO_OP);
         return NO_OP;
     }
 
-    private IDependencyTypeHandler instantiate(String metadataType) {
-        if (metadataType == 'CustomField')  return new CustomFieldHandler();
-        if (metadataType == 'ApexClass')    return new ApexClassHandler();
-        if (metadataType == 'ApexTrigger')  return new ApexClassHandler();
-        if (metadataType == 'Flow')         return new FlowHandler();
+    private IDependencyTypeHandler instantiate(String normalizedType) {
+        if (normalizedType == 'customfield')  return new CustomFieldHandler();
+        if (normalizedType == 'apexclass')    return new ApexClassHandler();
+        if (normalizedType == 'apextrigger')  return new ApexClassHandler();
+        if (normalizedType == 'flow')         return new FlowHandler();
         return null;
     }
 
     /**
      * No-op handler returned for metadata types with no registered supplemental logic.
-     * Returns an empty list - the engine treats this as "no supplemental dependencies found".
+     * Returns an empty SupplementalResult - the engine treats this as "no supplemental
+     * dependencies found". Cached after first miss so instantiation is not repeated
+     * for every unregistered type encountered in the same Queueable execution.
      */
     private class NoOpHandler implements IDependencyTypeHandler {
-        public List<Metadata_Dependency__c> findSupplemental(
+        public SupplementalResult findSupplemental(
             Id jobId,
             List<Metadata_Dependency__c> nodesOfType
         ) {
-            return new List<Metadata_Dependency__c>();
+            return new SupplementalResult();
         }
     }
 }

@@ -49,12 +49,73 @@ public without sharing class MetaMapperDescribeCache {
     }
 
     /**
+     * Batch-warms the field map cache for a list of CMT entity names.
+     * Calls Schema.describeSObjects() in chunks of 100 (platform limit per call)
+     * so that the N handler-loop iterations that follow only hit the in-memory cache.
+     *
+     * Without this, each iteration calls getFieldMap() which issues one describeSObjects()
+     * per entity - O(N) expensive describe calls in the hot Queueable path. Calling this
+     * once before the loop converts N describes into ceil(N/100) batched calls.
+     *
+     * Already-cached entities are skipped. Safe to call multiple times.
+     *
+     * @param entityNames  QualifiedApiName list from getCmtEntities()
+     */
+    public static void preloadFieldMaps(List<String> entityNames) {
+        if (entityNames == null || entityNames.isEmpty()) {
+            return;
+        }
+        if (cachedFieldMaps == null) {
+            cachedFieldMaps = new Map<String, Map<String, Schema.SObjectField>>();
+        }
+        List<String> toDescribe = new List<String>();
+        for (String name : entityNames) {
+            if (!cachedFieldMaps.containsKey(name)) {
+                toDescribe.add(name);
+            }
+        }
+        if (toDescribe.isEmpty()) {
+            return;
+        }
+        // Schema.describeSObjects accepts up to 100 types per call.
+        // Process in 100-name chunks and cache each result immediately.
+        Integer batchSize = 100;
+        for (Integer i = 0; i < toDescribe.size(); i += batchSize) {
+            List<String> chunk = new List<String>();
+            for (Integer j = i; j < Math.min(i + batchSize, toDescribe.size()); j++) {
+                chunk.add(toDescribe[j]);
+            }
+            try {
+                Schema.DescribeSObjectResult[] results = Schema.describeSObjects(chunk);
+                for (Integer k = 0; k < results.size(); k++) {
+                    cachedFieldMaps.put(chunk[k], results[k].fields.getMap());
+                }
+            } catch (Exception e) {
+                // Batch failed (e.g. one namespace-protected type in chunk).
+                // Fall back to per-entity describe so one bad type doesn't block the rest.
+                System.debug(LoggingLevel.WARN,
+                    'MetaMapperDescribeCache.preloadFieldMaps batch describe failed; '
+                    + 'falling back to per-entity: ' + e.getMessage());
+                for (String name : chunk) {
+                    if (!cachedFieldMaps.containsKey(name)) {
+                        getFieldMap(name);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Returns the field map for a single CMT SObject type, using Schema.describeSObjects()
      * scoped only to the requested type. Results are cached per entity name.
      *
      * Replaces the former getGlobalDescribe() approach which loaded every object in the org.
      * Schema.describeSObjects(List<String>) describes only the specified types, keeping
      * CPU and heap consumption proportional to the number of CMT types actually scanned.
+     *
+     * Prefer calling preloadFieldMaps() once before iterating over many entities rather
+     * than calling this method in a loop - that batches the describe cost into ceil(N/100)
+     * calls instead of N individual calls.
      *
      * @param entityName  QualifiedApiName of the CMT type (e.g. 'MyConfig__mdt')
      * @return            Map of field API name (lowercase) to SObjectField, or null if

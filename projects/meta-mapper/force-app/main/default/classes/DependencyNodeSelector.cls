@@ -96,14 +96,34 @@ public without sharing class DependencyNodeSelector {
      * ceiling MAX_NODE_QUERY_LIMIT is enforced regardless of limitRows to protect
      * against heap overflow in ResultSerializerQueueable.
      *
-     * If the result set hits the limit exactly, the caller should append a notice to
-     * Error_Status_Message__c: "Node list may be truncated; result exceeds Max_Nodes__c."
+     * Truncation detection (fix #13): the caller MUST check whether the result was
+     * truncated by comparing result.size() to the requested limit. Use the helper:
+     *
+     *   Integer cap = Math.min(MAX_NODE_QUERY_LIMIT, limitRows);
+     *   List<Metadata_Dependency__c> nodes = selector.listByJob(jobId, limitRows);
+     *   if (nodes.size() == cap) {
+     *       // result is at the cap - may be truncated; append notice to Error_Status_Message__c
+     *   }
+     *
+     * ResultSerializerQueueable performs this check and appends:
+     *   "Node list may be truncated; result size hit the query cap of [N]. Some nodes may be missing."
      *
      * @param jobId     ID of the parent Metadata_Scan_Job__c
      * @param limitRows Caller-provided limit (typically Max_Nodes__c); capped at MAX_NODE_QUERY_LIMIT
      * @return          All dependency records for the job, depth-ordered ASC
      */
     public List<Metadata_Dependency__c> listByJob(String jobId, Integer limitRows) {
+        // Guard against misconfigured Max_Nodes__c values that exceed the safe heap ceiling.
+        // A caller passing limitRows > MAX_NODE_QUERY_LIMIT would produce a silently truncated
+        // result - the serializer would write incomplete JSON with no diagnostic. Throwing here
+        // surfaces the configuration error explicitly so the admin can correct Max_Nodes__c.
+        if (limitRows != null && limitRows > MAX_NODE_QUERY_LIMIT) {
+            throw new DependencyJobException(
+                'listByJob: requested limit ' + limitRows
+                + ' exceeds MAX_NODE_QUERY_LIMIT ' + MAX_NODE_QUERY_LIMIT
+                + '. Reduce Max_Nodes__c in MetaMapper Settings to ' + MAX_NODE_QUERY_LIMIT + ' or lower.'
+            );
+        }
         Integer effectiveLimit = Math.min(
             MAX_NODE_QUERY_LIMIT,
             Math.max(1, limitRows != null ? limitRows : MAX_NODE_QUERY_LIMIT)

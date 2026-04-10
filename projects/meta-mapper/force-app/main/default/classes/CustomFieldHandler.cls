@@ -275,7 +275,30 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
 
         List<EntityDefinition> cmtEntities = MetaMapperDescribeCache.getCmtEntities();
 
+        // Warm the field map cache for ALL CMT entities in one batched describe call
+        // (ceil(N/100) calls instead of N individual calls). Must run before the entity
+        // loop so getFieldMap() never hits the platform during iteration.
+        List<String> entityApiNames = new List<String>();
+        for (EntityDefinition e : cmtEntities) {
+            entityApiNames.add(e.QualifiedApiName);
+        }
+        MetaMapperDescribeCache.preloadFieldMaps(entityApiNames);
+
+        // Pre-scan SOQL cap: each entity uses 1 query. Calculate max safe entities upfront
+        // and emit a single diagnostic if the budget forces early termination.
+        Integer soqlBudgetForCmt = Limits.getLimitQueries() - Limits.getQueries() - SOQL_RESERVE;
+        Integer scannedEntities  = 0;
+
         for (EntityDefinition entity : cmtEntities) {
+            if (scannedEntities >= soqlBudgetForCmt) {
+                String msg = 'CustomFieldHandler.findCmtRecordReferences: SOQL budget allows '
+                    + soqlBudgetForCmt + ' CMT entities per execution; '
+                    + (cmtEntities.size() - scannedEntities)
+                    + ' entities were not scanned. Some CMT field dependencies may be missing.';
+                System.debug(LoggingLevel.WARN, msg);
+                result.addError(msg);
+                break;
+            }
             if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
                 System.debug(LoggingLevel.WARN,
                     'CustomFieldHandler.findCmtRecordReferences: SOQL budget exhausted; stopping.');
@@ -385,6 +408,7 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                 System.debug(LoggingLevel.WARN, msg);
                 result.addError(msg);
             }
+            scannedEntities++;
         }
         return result;
     }
@@ -437,13 +461,15 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
 
     /**
      * Builds a supplemental Metadata_Dependency__c node.
+     * Public static so ApexClassHandler (and any future handler) can reuse the same
+     * construction logic without duplicating field population code.
      *
      * @param uniqueKeySuffix  Optional suffix appended to the Node_Uniqueness_Key__c after
      *                         the metadataId segment. Use when the same Metadata_Id__c can
      *                         produce multiple distinct nodes (e.g. one per matching CMT field).
      *                         Pass null for types where one node per Metadata_Id__c is correct.
      */
-    private Metadata_Dependency__c buildNode(
+    public static Metadata_Dependency__c buildNode(
         Id jobId,
         Metadata_Dependency__c parent,
         String metadataId,
