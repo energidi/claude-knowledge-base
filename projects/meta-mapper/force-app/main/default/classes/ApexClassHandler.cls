@@ -181,8 +181,10 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
             return result;
         }
         if (Limits.getQueryRows() >= Limits.getLimitQueryRows() - QUERY_ROW_RESERVE) {
-            System.debug(LoggingLevel.WARN,
-                'ApexClassHandler: query row budget exhausted before scanning ' + entityName + '; skipping.');
+            String rowMsg = 'ApexClassHandler.scanCmtEntity: query row budget exhausted before '
+                + 'scanning ' + entityName + '; skipping. Some CMT class dependencies may be missing.';
+            System.debug(LoggingLevel.WARN, rowMsg);
+            result.addError(rowMsg);
             return result;
         }
 
@@ -210,11 +212,6 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
             List<SObject> records = Database.query(query);
             truncated = (records.size() == safeLimit);
 
-            // H3: In-method dedup set prevents duplicate results when the same CMT record
-            // matches via two different fields (e.g. handler__c AND type__c both reference
-            // the same class). Each field match produces a distinct uniqueness key.
-            Set<String> usedKeys = new Set<String>();
-
             for (SObject record : records) {
                 // CPU check inside loop - String.contains() on large class-name sets
                 // can spike CPU for deeply populated CMT types.
@@ -239,14 +236,6 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
                     }
 
                     String recordName = (String) record.get('DeveloperName');
-                    // Spanning tree model: one node per (job, CMT record Id, field).
-                    // Parent.Id is excluded - diamond dedup is handled at Tier 1.
-                    String uniqueKey = jobId + ':' + record.Id + ':' + field;
-                    if (usedKeys.contains(uniqueKey)) {
-                        continue;
-                    }
-                    usedKeys.add(uniqueKey);
-
                     // Spanning tree: one node per (job, CMT record, field). Take first parent.
                     // Multiple parentNodes for the same class name share the same uniqueKey -
                     // emitting a node for each would produce duplicate Component_Uniqueness_Key__c

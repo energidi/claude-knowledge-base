@@ -67,7 +67,10 @@ public class SupplementalResult {
         // Use List<String> + String.join() instead of += in a loop.
         // Apex strings are immutable: each += allocates a new string and abandons the old one,
         // producing O(N^2) heap consumption if the error list is large. List + join is O(N).
-        Integer safeLimit = maxLength - safeThreshold;
+        // Floor: the truncation notice '\n[TRUNCATED: MAX LOG SIZE REACHED]' is 34 chars.
+        // If safeThreshold < 34, appending the notice itself overflows maxLength, causing the
+        // exact STRING_TOO_LONG this method was designed to prevent. 40 provides 6-char margin.
+        Integer safeLimit = maxLength - Math.max(safeThreshold, 40);
         List<String> parts = new List<String>();
         Boolean truncated  = false;
 

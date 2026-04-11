@@ -54,10 +54,6 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
     private static final Set<String> CMT_FIELD_SUFFIXES =
         MetaMapperDescribeCache.CMT_FIELD_REF_SUFFIXES;
 
-    // One-time-per-job guard for deferred scan type diagnostics.
-    // Prevents the same notice from being appended on every Queueable chain execution.
-    private static Set<Id> notifiedDeferredGaps = new Set<Id>();
-
     // Describe data is served from MetaMapperDescribeCache to avoid duplicate
     // getGlobalDescribe() and EntityDefinition queries when both CustomFieldHandler
     // and ApexClassHandler run in the same Queueable execution.
@@ -86,20 +82,18 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
             return result;
         }
 
-        // One-time-per-job notice for deferred scan types.
+        // Notice for deferred scan types - emitted once per findSupplemental call.
         // FlexiPage XML and Lookup relationship scanning are deferred (see class header).
-        // Admins receive a visible signal that these reference types are not covered,
-        // preventing a false sense of completeness for CustomField dependency trees.
-        if (!notifiedDeferredGaps.contains(jobId)) {
-            notifiedDeferredGaps.add(jobId);
-            result.addError(
-                'CustomFieldHandler: FlexiPage XML visibility rule scanning and Lookup '
-                + 'relationship scanning are deferred in this version. Dependencies from '
-                + 'FlexiPage visibility rules and Lookup field relationships are not '
-                + 'included in this scan result. Verify these reference types manually '
-                + 'for CustomField components.'
-            );
-        }
+        // appendErrorsSafe deduplicates base messages across Queueable chain executions,
+        // so admins see this notice once in Error_Status_Message__c regardless of how
+        // many times the Queueable self-chains during a long scan.
+        result.addError(
+            'CustomFieldHandler: FlexiPage XML visibility rule scanning and Lookup '
+            + 'relationship scanning are deferred in this version. Dependencies from '
+            + 'FlexiPage visibility rules and Lookup field relationships are not '
+            + 'included in this scan result. Verify these reference types manually '
+            + 'for CustomField components.'
+        );
 
         SupplementalResult wfuResult  = findWorkflowFieldUpdates(jobId, nodesOfType, fieldApiNames, objectApiNames);
         SupplementalResult vrResult   = findValidationRuleReferences(jobId, nodesOfType, fieldApiNames, objectApiNames);
@@ -125,15 +119,21 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
     ) {
         SupplementalResult result = new SupplementalResult();
 
-        // Pre-query CPU guard - consistent with other sub-scans in this handler
+        // Pre-query guards - consistent with other sub-scans in this handler.
+        // All three guards call result.addError so admins can see skipped scans in
+        // Error_Status_Message__c rather than silently receiving incomplete results.
         if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
-            System.debug(LoggingLevel.WARN,
-                'CustomFieldHandler: CPU budget exceeded before WorkflowFieldUpdate scan; skipping.');
+            String msg = 'CustomFieldHandler.findWorkflowFieldUpdates: CPU budget exceeded; skipping. '
+                + 'WorkflowFieldUpdate dependencies may be missing.';
+            System.debug(LoggingLevel.WARN, msg);
+            result.addError(msg);
             return result;
         }
         if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
-            System.debug(LoggingLevel.WARN,
-                'CustomFieldHandler: SOQL budget exhausted before WorkflowFieldUpdate scan; skipping.');
+            String msg = 'CustomFieldHandler.findWorkflowFieldUpdates: SOQL budget exhausted; skipping. '
+                + 'WorkflowFieldUpdate dependencies may be missing.';
+            System.debug(LoggingLevel.WARN, msg);
+            result.addError(msg);
             return result;
         }
 
@@ -141,8 +141,10 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
 
         // Query row guard - WorkflowFieldUpdate can be numerous in large orgs
         if (Limits.getQueryRows() >= Limits.getLimitQueryRows() - QUERY_ROW_RESERVE) {
-            System.debug(LoggingLevel.WARN,
-                'CustomFieldHandler: query row budget exhausted before WorkflowFieldUpdate scan; skipping.');
+            String msg = 'CustomFieldHandler.findWorkflowFieldUpdates: query row budget exhausted; skipping. '
+                + 'WorkflowFieldUpdate dependencies may be missing.';
+            System.debug(LoggingLevel.WARN, msg);
+            result.addError(msg);
             return result;
         }
         Integer wfuSafeLimit = Math.max(1,
@@ -161,6 +163,12 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                 + ' AND SobjectType IN :objectApiNames'
                 + ' LIMIT :wfuSafeLimit'
             );
+            if (updates.size() == wfuSafeLimit) {
+                String msg = 'CustomFieldHandler.findWorkflowFieldUpdates: result capped at '
+                    + wfuSafeLimit + ' records; some WorkflowFieldUpdate dependencies may be missing.';
+                System.debug(LoggingLevel.WARN, msg);
+                result.addError(msg);
+            }
             for (SObject wfu : updates) {
                 String wfuSobjectType = (String) wfu.get('SobjectType');
                 String wfuField       = (String) wfu.get('Field');
@@ -200,15 +208,19 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
     ) {
         SupplementalResult result = new SupplementalResult();
 
-        // Pre-query CPU + SOQL guard
+        // Pre-query guards - all call result.addError for admin visibility.
         if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
-            System.debug(LoggingLevel.WARN,
-                'CustomFieldHandler: CPU budget exceeded before ValidationRule scan; skipping.');
+            String msg = 'CustomFieldHandler.findValidationRuleReferences: CPU budget exceeded; skipping. '
+                + 'ValidationRule dependencies may be missing.';
+            System.debug(LoggingLevel.WARN, msg);
+            result.addError(msg);
             return result;
         }
         if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
-            System.debug(LoggingLevel.WARN,
-                'CustomFieldHandler: SOQL budget exhausted before ValidationRule scan; skipping.');
+            String msg = 'CustomFieldHandler.findValidationRuleReferences: SOQL budget exhausted; skipping. '
+                + 'ValidationRule dependencies may be missing.';
+            System.debug(LoggingLevel.WARN, msg);
+            result.addError(msg);
             return result;
         }
 
@@ -246,8 +258,10 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
 
         // Query row guard - ValidationRule can be numerous in large orgs
         if (Limits.getQueryRows() >= Limits.getLimitQueryRows() - QUERY_ROW_RESERVE) {
-            System.debug(LoggingLevel.WARN,
-                'CustomFieldHandler: query row budget exhausted before ValidationRule scan; skipping.');
+            String msg = 'CustomFieldHandler.findValidationRuleReferences: query row budget exhausted; skipping. '
+                + 'ValidationRule dependencies may be missing.';
+            System.debug(LoggingLevel.WARN, msg);
+            result.addError(msg);
             return result;
         }
         Integer vrSafeLimit = Math.max(1,
@@ -264,6 +278,12 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                 + ' AND EntityDefinition.QualifiedApiName IN :objectApiNames'
                 + ' LIMIT :vrSafeLimit'
             );
+            if (rules.size() == vrSafeLimit) {
+                String truncMsg = 'CustomFieldHandler.findValidationRuleReferences: result capped at '
+                    + vrSafeLimit + ' records; some ValidationRule dependencies may be missing.';
+                System.debug(LoggingLevel.WARN, truncMsg);
+                result.addError(truncMsg);
+            }
 
             // Tracks emitted (rule, field) pairs to prevent duplicate Component_Uniqueness_Key__c
             // values in the result list. Scenario: nodeByFieldName maps 'status__c' to
@@ -290,33 +310,36 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                     continue;
                 }
 
-                // Primary: tokenize the formula - O(formula_length) per rule.
-                // Catches the common case: field name appears as a bare token.
+                // Tokenize the formula once per rule - O(formula_length).
                 // Split pattern is non-backtracking (character class with +).
                 Set<String> formulaTokens = new Set<String>(
                     ruleFormula.toLowerCase().split('[^a-zA-Z0-9_]+')
                 );
                 String formulaLower = ruleFormula.toLowerCase();
 
-                for (String lowerField : fieldApiNamesLower) {
-                    // Primary: token match. The tokenizer splits on [^a-zA-Z0-9_]+, so
-                    // namespace-prefixed references (pkg__status__c) remain as a single token.
-                    // Check exact match first (O(1)), then check endsWith('__' + field) for
-                    // namespace-prefixed tokens - avoids the linear scan for the common case.
-                    Boolean matched = formulaTokens.contains(lowerField);
-                    if (!matched) {
-                        String namespacedSuffix = '__' + lowerField;
-                        for (String token : formulaTokens) {
-                            if (token.endsWith(namespacedSuffix)) {
-                                matched = true;
-                                break;
-                            }
+                // Inverted token pass: O(tokens) instead of O(fields × tokens).
+                // Round 8 introduced a per-field endsWith scan that was O(fields × tokens),
+                // exceeding CPU_THRESHOLD in orgs with 50+ fields and 100+ tokens per rule.
+                // One pass over tokens: exact match catches bare references (status__c);
+                // substringAfterLast('__') catches namespace-prefixed tokens (pkg__status__c).
+                Set<String> matchedByToken = new Set<String>();
+                for (String token : formulaTokens) {
+                    if (fieldApiNamesLower.contains(token)) {
+                        matchedByToken.add(token);
+                    } else if (token.contains('__')) {
+                        String afterNs = token.substringAfterLast('__');
+                        if (fieldApiNamesLower.contains(afterNs)) {
+                            matchedByToken.add(afterNs);
                         }
                     }
-                    // Fallback: namespace-aware regex for fields embedded in function calls,
-                    // string literals, or other expressions that tokenization splits incorrectly
-                    // (e.g. CONTAINS(field__c, "x")). Uses pre-compiled Pattern to avoid
-                    // per-rule compilation cost.
+                }
+
+                for (String lowerField : fieldApiNamesLower) {
+                    // Primary: O(1) Set lookup from the inverted token pass above.
+                    Boolean matched = matchedByToken.contains(lowerField);
+                    // Fallback: namespace-aware regex for fields embedded in function calls
+                    // or string literals that tokenization splits incorrectly
+                    // (e.g. CONTAINS(field__c, "x")). Uses pre-compiled Pattern.
                     if (!matched) {
                         matched = fieldPatterns.get(lowerField).matcher(formulaLower).find();
                     }
