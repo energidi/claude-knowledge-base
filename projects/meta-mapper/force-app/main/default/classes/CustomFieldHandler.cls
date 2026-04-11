@@ -46,8 +46,17 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
     private static final Integer CONFIDENCE_CMT_FIELD = 75;
     private static final Integer SOQL_RESERVE         = 10;
     private static final Integer QUERY_ROW_RESERVE    = 500;
-    private static final Integer MIN_FIELD_LENGTH     = 6;
+    // Minimum field API name length for ValidationRule tokenization.
+    // 4 = shortest valid custom field (e.g. 'a__c'). Any value above 4 silently drops
+    // legitimate short field names and creates false negatives. Values below 4 cannot
+    // be custom field API names in Salesforce and would only increase false positives.
+    private static final Integer MIN_FIELD_LENGTH     = 4;
     private static final Decimal CPU_THRESHOLD        = 0.60;
+    // Maximum number of CMT field conditions per SOQL query.
+    // SOQL has a 20,000-char query length limit. A wide CMT type with many suffix-matching
+    // fields can exceed it if all fields are OR-ed into a single query. Cap at 20 and run
+    // multiple queries per entity when relevantFields exceeds this value.
+    private static final Integer MAX_CMT_FIELDS_PER_QUERY = 20;
 
     // Single source of truth for field-reference suffixes - defined in MetaMapperDescribeCache
     // so ApexClassHandler (class-reference suffixes) and any future handler share one definition.
@@ -320,15 +329,25 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                 // Inverted token pass: O(tokens) instead of O(fields × tokens).
                 // Round 8 introduced a per-field endsWith scan that was O(fields × tokens),
                 // exceeding CPU_THRESHOLD in orgs with 50+ fields and 100+ tokens per rule.
-                // One pass over tokens: exact match catches bare references (status__c);
-                // substringAfterLast('__') catches namespace-prefixed tokens (pkg__status__c).
+                // One pass over tokens:
+                //   exact match    - catches bare references (status__c)
+                //   namespace strip - catches namespace-prefixed tokens (pkg__status__c).
+                //
+                // Namespace strip: use indexOf('__') + 2 (not substringAfterLast('__')).
+                // substringAfterLast('__') on 'pkg__status__c' returns 'c' (the segment after
+                // the LAST __, which is the __c suffix) - silently missing every namespace-
+                // prefixed field. indexOf strips only the first '__' segment (pkg__), leaving
+                // 'status__c'. The contains('__') guard on the remainder ensures we only act
+                // when the stripped portion is itself a field name (contains its own suffix).
                 Set<String> matchedByToken = new Set<String>();
                 for (String token : formulaTokens) {
                     if (fieldApiNamesLower.contains(token)) {
                         matchedByToken.add(token);
                     } else if (token.contains('__')) {
-                        String afterNs = token.substringAfterLast('__');
-                        if (fieldApiNamesLower.contains(afterNs)) {
+                        // Strip first namespace prefix: 'pkg__status__c' -> 'status__c'
+                        String afterNs = token.substring(token.indexOf('__') + 2);
+                        // Only act if remainder is itself a custom field name (has its own __)
+                        if (afterNs.contains('__') && fieldApiNamesLower.contains(afterNs)) {
                             matchedByToken.add(afterNs);
                         }
                     }
@@ -497,59 +516,83 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
             Integer safeLimit = Math.max(1,
                 Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE);
 
-            // Build WHERE clause using match values to filter at DB level (fix #2).
+            // Build WHERE clause using match values to filter at DB level.
             // Avoids loading every CMT record into heap and silently missing matches beyond
             // the LIMIT. SOQL IN is case-insensitive for text fields, so lowercase keys match.
+            //
+            // Field-list batching: SOQL has a 20,000 char query length limit. A CMT type with
+            // many matching field suffixes can produce an OR clause that blows the limit before
+            // execution. Cap at MAX_CMT_FIELDS_PER_QUERY conditions per query and run multiple
+            // queries when relevantFields exceeds the cap.
             Set<String> matchValues = nodeByLowerValue.keySet();
-            List<String> conditions = new List<String>();
-            for (String field : relevantFields) {
-                conditions.add(field + ' IN :matchValues');
-            }
-            String fieldList = 'Id, DeveloperName, ' + String.join(relevantFields, ', ');
-            String query = 'SELECT ' + fieldList + ' FROM ' + entityName
-                + ' WHERE ' + String.join(conditions, ' OR ')
-                + ' LIMIT :safeLimit';
 
             Boolean truncated = false;
             try {
-                List<SObject> records = Database.query(query);
-                truncated = (records.size() == safeLimit);
-
-                for (SObject record : records) {
-                    // CPU guard inside record loop - large CMT types with many matching rows
-                    // can exhaust the CPU budget before the pre-query guard fires.
-                    if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
-                        String innerCpuMsg = 'CustomFieldHandler.findCmtRecordReferences: CPU budget '
-                            + 'exceeded inside entity ' + entityName
-                            + '; record processing stopped early. Some CMT field dependencies for '
-                            + entityName + ' may be missing.';
-                        System.debug(LoggingLevel.WARN, innerCpuMsg);
-                        result.addError(innerCpuMsg);
+                Integer fieldBatchSize = MAX_CMT_FIELDS_PER_QUERY;
+                for (Integer fi = 0; fi < relevantFields.size(); fi += fieldBatchSize) {
+                    // SOQL budget check before each field-batch query
+                    if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
+                        String soqlMsg2 = 'CustomFieldHandler.findCmtRecordReferences: SOQL budget exhausted '
+                            + 'mid-field-batch for ' + entityName + '; some fields not scanned.';
+                        System.debug(LoggingLevel.WARN, soqlMsg2);
+                        result.addError(soqlMsg2);
                         break;
                     }
-                    for (String field : relevantFields) {
-                        String value = (String) record.get(field);
-                        if (String.isBlank(value)) {
-                            continue;
-                        }
-                        String valueLower = value.toLowerCase();
-                        List<Metadata_Dependency__c> parents = nodeByLowerValue.get(valueLower);
-                        if (parents == null || parents.isEmpty()) {
-                            continue;
-                        }
-
-                        String recordName = (String) record.get('DeveloperName');
-                        // Spanning tree: take first parent. Multiple parents with the same
-                        // lowercased match value (e.g. two fields named 'my_field__c' on
-                        // different objects) would produce duplicate Component_Uniqueness_Key__c
-                        // values in the upsert list - a fatal DML crash. First parent wins.
-                        result.addNode(buildNode(
-                            jobId, parents.get(0),
-                            record.Id, 'CustomMetadata', entityName + '.' + recordName,
-                            CONFIDENCE_CMT_FIELD, true, record.Id + ':' + field
-                        ));
+                    List<String> fieldBatch = new List<String>();
+                    for (Integer fj = fi; fj < Math.min(fi + fieldBatchSize, relevantFields.size()); fj++) {
+                        fieldBatch.add(relevantFields[fj]);
                     }
-                }
+                    List<String> conditions = new List<String>();
+                    for (String field : fieldBatch) {
+                        conditions.add(field + ' IN :matchValues');
+                    }
+                    String fieldList = 'Id, DeveloperName, ' + String.join(fieldBatch, ', ');
+                    String query = 'SELECT ' + fieldList + ' FROM ' + entityName
+                        + ' WHERE ' + String.join(conditions, ' OR ')
+                        + ' LIMIT :safeLimit';
+
+                    List<SObject> records = Database.query(query);
+                    if (records.size() == safeLimit) {
+                        truncated = true;
+                    }
+
+                    for (SObject record : records) {
+                        // CPU guard inside record loop - large CMT types with many matching rows
+                        // can exhaust the CPU budget before the pre-query guard fires.
+                        if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
+                            String innerCpuMsg = 'CustomFieldHandler.findCmtRecordReferences: CPU budget '
+                                + 'exceeded inside entity ' + entityName
+                                + '; record processing stopped early. Some CMT field dependencies for '
+                                + entityName + ' may be missing.';
+                            System.debug(LoggingLevel.WARN, innerCpuMsg);
+                            result.addError(innerCpuMsg);
+                            break;
+                        }
+                        // Iterate only the fields in this batch - the record only has these columns
+                        for (String field : fieldBatch) {
+                            String value = (String) record.get(field);
+                            if (String.isBlank(value)) {
+                                continue;
+                            }
+                            String valueLower = value.toLowerCase();
+                            List<Metadata_Dependency__c> parents = nodeByLowerValue.get(valueLower);
+                            if (parents == null || parents.isEmpty()) {
+                                continue;
+                            }
+
+                            String recordName = (String) record.get('DeveloperName');
+                            // Spanning tree: take first parent. Multiple parents with the same
+                            // lowercased match value (e.g. two fields named 'my_field__c' on
+                            // different objects) would produce duplicate Component_Uniqueness_Key__c
+                            // values in the upsert list - a fatal DML crash. First parent wins.
+                            result.addNode(buildNode(
+                                jobId, parents.get(0),
+                                record.Id, 'CustomMetadata', entityName + '.' + recordName,
+                                CONFIDENCE_CMT_FIELD, true, record.Id + ':' + field
+                            ));
+                        }
+                    }
+                } // end field-batch loop
             } catch (Exception e) {
                 System.debug(LoggingLevel.WARN,
                     'CustomFieldHandler.findCmtRecordReferences failed for ' + entityName
@@ -558,12 +601,11 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                     + entityName + ']: ' + e.getMessage());
             }
 
-            // Fix #7: surface truncation so the caller (DependencyQueueable) can append a
-            // diagnostic notice to Error_Status_Message__c if the CMT scan hit the limit.
+            // Surface truncation so the caller can append a diagnostic notice to
+            // Error_Status_Message__c when the query row budget was the binding constraint.
             if (truncated) {
-                String msg = 'CustomFieldHandler.findCmtRecordReferences: result capped at '
-                    + safeLimit + ' records for ' + entityName
-                    + '; CMT dependencies beyond this limit may be missing.';
+                String msg = 'CustomFieldHandler.findCmtRecordReferences: result capped by row budget for '
+                    + entityName + '; CMT dependencies beyond this limit may be missing.';
                 System.debug(LoggingLevel.WARN, msg);
                 result.addError(msg);
             }

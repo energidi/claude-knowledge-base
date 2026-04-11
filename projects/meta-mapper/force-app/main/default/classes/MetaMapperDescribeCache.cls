@@ -125,8 +125,21 @@ public without sharing class MetaMapperDescribeCache {
                     'MetaMapperDescribeCache.preloadFieldMaps: batch describe failed for '
                     + chunk.size() + ' entities; falling back to per-entity describes. '
                     + 'Cause: ' + e.getMessage());
+                // Track entity names that already have a failure message in describeFailed
+                // to prevent near-identical per-entity messages from the same batch failure
+                // flooding Error_Status_Message__c when many namespace-protected CMTs are present.
+                Set<String> alreadyReported = new Set<String>();
+                for (String descEntry : describeFailed) {
+                    // Entry format: 'MetaMapperDescribeCache: could not describe entity "<name>"...'
+                    // Extract the name between the first '"' pair for dedup keying.
+                    Integer q1 = descEntry.indexOf('"');
+                    Integer q2 = q1 >= 0 ? descEntry.indexOf('"', q1 + 1) : -1;
+                    if (q1 >= 0 && q2 > q1) {
+                        alreadyReported.add(descEntry.substring(q1 + 1, q2));
+                    }
+                }
                 for (String name : chunk) {
-                    if (!cachedFieldMaps.containsKey(name)) {
+                    if (!cachedFieldMaps.containsKey(name) && !alreadyReported.contains(name)) {
                         getFieldMap(name);
                     }
                 }

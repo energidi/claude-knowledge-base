@@ -35,10 +35,12 @@
  */
 public without sharing class ApexClassHandler implements IDependencyTypeHandler {
 
-    private static final Integer CONFIDENCE_CMT    = 85;
-    private static final Integer SOQL_RESERVE      = 10;
-    private static final Integer QUERY_ROW_RESERVE = 500;
-    private static final Decimal CPU_THRESHOLD     = 0.75;
+    private static final Integer CONFIDENCE_CMT          = 85;
+    private static final Integer SOQL_RESERVE            = 10;
+    private static final Integer QUERY_ROW_RESERVE       = 500;
+    private static final Decimal CPU_THRESHOLD           = 0.75;
+    // Maximum CMT field conditions per SOQL query (SOQL 20,000-char limit guard).
+    private static final Integer MAX_CMT_FIELDS_PER_QUERY = 20;
 
     // Single source of truth for class-reference suffixes - defined in MetaMapperDescribeCache
     // so CustomFieldHandler (field-reference suffixes) and any future handler share definitions.
@@ -190,63 +192,82 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
 
         // H2: Build WHERE clause to pre-filter records by known class names.
         // Avoids fetching every record for large CMT types and reduces heap consumption.
+        //
+        // Field-list batching: SOQL has a 20,000-char query length limit. Cap conditions
+        // at MAX_CMT_FIELDS_PER_QUERY per query and run multiple queries when needed.
         Set<String> classNames = nodeByClassName.keySet();
-        List<String> conditions = new List<String>();
-        for (String field : relevantFields) {
-            conditions.add(field + ' IN :classNames');
-        }
 
         // safeLimit driven by remaining query row budget only.
-        // No arbitrary cap: any fixed ceiling below the budget silently misses matches
-        // in large CMT types that return many qualifying rows.
         Integer safeLimit = Math.max(1,
             Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE);
 
-        String fieldList = 'Id, DeveloperName, ' + String.join(relevantFields, ', ');
-        String query = 'SELECT ' + fieldList + ' FROM ' + entityName
-            + ' WHERE ' + String.join(conditions, ' OR ')
-            + ' LIMIT :safeLimit';
-
         Boolean truncated = false;
         try {
-            List<SObject> records = Database.query(query);
-            truncated = (records.size() == safeLimit);
-
-            for (SObject record : records) {
-                // CPU check inside loop - String.contains() on large class-name sets
-                // can spike CPU for deeply populated CMT types.
-                if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
-                    String msg = 'ApexClassHandler: CPU budget exceeded inside entity '
-                        + entityName + '; record processing stopped early. '
-                        + 'Some CMT class dependencies for ' + entityName + ' may be missing.';
-                    System.debug(LoggingLevel.WARN, msg);
-                    result.addError(msg);
+            Integer fieldBatchSize = MAX_CMT_FIELDS_PER_QUERY;
+            for (Integer fi = 0; fi < relevantFields.size(); fi += fieldBatchSize) {
+                // SOQL budget check before each field-batch query
+                if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
+                    String soqlMsg2 = 'ApexClassHandler.scanCmtEntity: SOQL budget exhausted '
+                        + 'mid-field-batch for ' + entityName + '; some fields not scanned.';
+                    System.debug(LoggingLevel.WARN, soqlMsg2);
+                    result.addError(soqlMsg2);
                     break;
                 }
-                for (String field : relevantFields) {
-                    String value = (String) record.get(field);
-                    if (String.isBlank(value)) {
-                        continue;
-                    }
-                    // Lookup returns a List to support diamond dependencies: the same Apex class
-                    // may appear at multiple depths in the current batch.
-                    List<Metadata_Dependency__c> parentNodes = nodeByClassName.get(value.toLowerCase());
-                    if (parentNodes == null) {
-                        continue;
-                    }
-
-                    String recordName = (String) record.get('DeveloperName');
-                    // Spanning tree: one node per (job, CMT record, field). Take first parent.
-                    // Multiple parentNodes for the same class name share the same uniqueKey -
-                    // emitting a node for each would produce duplicate Component_Uniqueness_Key__c
-                    // values in the upsert list, causing a fatal DML crash.
-                    result.addNode(CustomFieldHandler.buildNode(
-                        jobId, parentNodes.get(0),
-                        record.Id, 'CustomMetadata', entityName + '.' + recordName,
-                        CONFIDENCE_CMT, true, record.Id + ':' + field
-                    ));
+                List<String> fieldBatch = new List<String>();
+                for (Integer fj = fi; fj < Math.min(fi + fieldBatchSize, relevantFields.size()); fj++) {
+                    fieldBatch.add(relevantFields[fj]);
                 }
-            }
+                List<String> conditions = new List<String>();
+                for (String field : fieldBatch) {
+                    conditions.add(field + ' IN :classNames');
+                }
+                String fieldList = 'Id, DeveloperName, ' + String.join(fieldBatch, ', ');
+                String query = 'SELECT ' + fieldList + ' FROM ' + entityName
+                    + ' WHERE ' + String.join(conditions, ' OR ')
+                    + ' LIMIT :safeLimit';
+
+                List<SObject> records = Database.query(query);
+                if (records.size() == safeLimit) {
+                    truncated = true;
+                }
+
+                for (SObject record : records) {
+                    // CPU check inside loop - String.contains() on large class-name sets
+                    // can spike CPU for deeply populated CMT types.
+                    if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
+                        String msg = 'ApexClassHandler: CPU budget exceeded inside entity '
+                            + entityName + '; record processing stopped early. '
+                            + 'Some CMT class dependencies for ' + entityName + ' may be missing.';
+                        System.debug(LoggingLevel.WARN, msg);
+                        result.addError(msg);
+                        break;
+                    }
+                    // Iterate only the fields in this batch - the record only has these columns
+                    for (String field : fieldBatch) {
+                        String value = (String) record.get(field);
+                        if (String.isBlank(value)) {
+                            continue;
+                        }
+                        // Lookup returns a List to support diamond dependencies: the same Apex class
+                        // may appear at multiple depths in the current batch.
+                        List<Metadata_Dependency__c> parentNodes = nodeByClassName.get(value.toLowerCase());
+                        if (parentNodes == null) {
+                            continue;
+                        }
+
+                        String recordName = (String) record.get('DeveloperName');
+                        // Spanning tree: one node per (job, CMT record, field). Take first parent.
+                        // Multiple parentNodes for the same class name share the same uniqueKey -
+                        // emitting a node for each would produce duplicate Component_Uniqueness_Key__c
+                        // values in the upsert list, causing a fatal DML crash.
+                        result.addNode(CustomFieldHandler.buildNode(
+                            jobId, parentNodes.get(0),
+                            record.Id, 'CustomMetadata', entityName + '.' + recordName,
+                            CONFIDENCE_CMT, true, record.Id + ':' + field
+                        ));
+                    }
+                }
+            } // end field-batch loop
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN,
                 'ApexClassHandler.scanCmtEntity failed for entity ' + entityName
@@ -254,12 +275,11 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
             result.addError('ApexClassHandler.scanCmtEntity[' + entityName + ']: ' + e.getMessage());
         }
 
-        // Fix #9 (Round 4): surface truncation so the caller can append a diagnostic
-        // notice to Error_Status_Message__c when the query row budget was the binding limit.
+        // Surface truncation so the caller can append a diagnostic notice to
+        // Error_Status_Message__c when the query row budget was the binding limit.
         if (truncated) {
-            String msg = 'ApexClassHandler.scanCmtEntity: result capped at '
-                + safeLimit + ' records for ' + entityName
-                + '; CMT dependencies beyond this limit may be missing.';
+            String msg = 'ApexClassHandler.scanCmtEntity: result capped by row budget for '
+                + entityName + '; CMT dependencies beyond this limit may be missing.';
             System.debug(LoggingLevel.WARN, msg);
             result.addError(msg);
         }
