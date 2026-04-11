@@ -26,9 +26,9 @@ public without sharing class DependencyNodeSelector {
                    Metadata_Name__c,
                    Dependency_Depth__c,
                    Ancestor_Path__c,
-                   Cycle_Prefix_Index__c,
+                   Cycle_Detection_Index__c,
                    Component_Attributes__c,
-                   Node_Uniqueness_Key__c
+                   Component_Uniqueness_Key__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :jobId
             AND Dependencies_Fetched__c = false
@@ -74,7 +74,7 @@ public without sharing class DependencyNodeSelector {
      * must perform a heap pre-check (Components_Analyzed__c * avgBytesPerNode) before calling
      * this method and fail gracefully if the estimated payload is too large.
      *
-     * MAX_NODE_QUERY_LIMIT is set above the default Max_Nodes__c ceiling (5,000) to ensure
+     * MAX_NODE_QUERY_LIMIT is set above the default Max_Components__c ceiling (5,000) to ensure
      * all nodes are captured for jobs approaching the cap. Chunked streaming is not supported
      * in this method - a redesign of ResultSerializerQueueable is required to safely handle
      * node counts above this limit.
@@ -86,13 +86,13 @@ public without sharing class DependencyNodeSelector {
     // will likely breach the 12MB async heap limit (at ~4-6KB per node, 10k nodes = ~40-60MB).
     // ResultSerializerQueueable must perform a heap pre-check before calling this method
     // and fail the job gracefully if the estimated payload exceeds the safe ceiling.
-    // Callers should pass Max_Nodes__c (from MetaMapper_Settings__mdt) as limitRows.
+    // Callers should pass Max_Components__c (from MetaMapper_Settings__mdt) as limitRows.
     // Chunked streaming serialization would remove this ceiling; deferred to a future release.
     private static final Integer MAX_NODE_QUERY_LIMIT = 10000;
 
     /**
      * Returns all Metadata_Dependency__c records for a job up to limitRows.
-     * limitRows should be Max_Nodes__c from MetaMapper_Settings__mdt. The absolute
+     * limitRows should be Max_Components__c from MetaMapper_Settings__mdt. The absolute
      * ceiling MAX_NODE_QUERY_LIMIT is enforced regardless of limitRows to protect
      * against heap overflow in ResultSerializerQueueable.
      *
@@ -109,19 +109,19 @@ public without sharing class DependencyNodeSelector {
      *   "Node list may be truncated; result size hit the query cap of [N]. Some nodes may be missing."
      *
      * @param jobId     ID of the parent Metadata_Scan_Job__c
-     * @param limitRows Caller-provided limit (typically Max_Nodes__c); capped at MAX_NODE_QUERY_LIMIT
+     * @param limitRows Caller-provided limit (typically Max_Components__c); capped at MAX_NODE_QUERY_LIMIT
      * @return          All dependency records for the job, depth-ordered ASC
      */
     public List<Metadata_Dependency__c> listByJob(String jobId, Integer limitRows) {
-        // Guard against misconfigured Max_Nodes__c values that exceed the safe heap ceiling.
+        // Guard against misconfigured Max_Components__c values that exceed the safe heap ceiling.
         // A caller passing limitRows > MAX_NODE_QUERY_LIMIT would produce a silently truncated
         // result - the serializer would write incomplete JSON with no diagnostic. Throwing here
-        // surfaces the configuration error explicitly so the admin can correct Max_Nodes__c.
+        // surfaces the configuration error explicitly so the admin can correct Max_Components__c.
         if (limitRows != null && limitRows > MAX_NODE_QUERY_LIMIT) {
             throw new DependencyJobException(
                 'listByJob: requested limit ' + limitRows
                 + ' exceeds MAX_NODE_QUERY_LIMIT ' + MAX_NODE_QUERY_LIMIT
-                + '. Reduce Max_Nodes__c in MetaMapper Settings to ' + MAX_NODE_QUERY_LIMIT + ' or lower.'
+                + '. Reduce Max_Components__c in MetaMapper Settings to ' + MAX_NODE_QUERY_LIMIT + ' or lower.'
             );
         }
         Integer effectiveLimit = Math.min(
@@ -142,7 +142,7 @@ public without sharing class DependencyNodeSelector {
                    Component_Attributes__c,
                    Ancestor_Path__c,
                    Parent_Dependency__c,
-                   Node_Uniqueness_Key__c
+                   Component_Uniqueness_Key__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :jobId
             ORDER BY Dependency_Depth__c ASC, CreatedDate ASC

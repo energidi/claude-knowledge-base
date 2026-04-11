@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>Cycle_Prefix_Index__c</fullName>
+    <fullName>Cycle_Detection_Index__c</fullName>
     <description>Internal engine field. Stores pipe-delimited 6-character prefixes of each ancestor ID as a fast pre-screen index. The engine checks this index before running the expensive full Ancestor_Path__c string search. A match here triggers the conclusive full-string confirmation; no match skips it entirely. Only consulted by the cycle detection engine. Do not edit manually. Ref: ISP-6072</description>
-    <label>Cycle Prefix Index</label>
+    <label>Cycle Detection Index</label>
     <length>32768</length>
     <type>LongTextArea</type>
     <visibleLines>3</visibleLines>

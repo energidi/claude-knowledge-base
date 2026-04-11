@@ -229,7 +229,7 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
 
                     // Spanning tree: one node per (job, CMT record, field). Take first parent.
                     // Multiple parentNodes for the same class name share the same uniqueKey -
-                    // emitting a node for each would produce duplicate Node_Uniqueness_Key__c
+                    // emitting a node for each would produce duplicate Component_Uniqueness_Key__c
                     // values in the upsert list, causing a fatal DML crash.
                     result.addNode(CustomFieldHandler.buildNode(
                         jobId, parentNodes.get(0),

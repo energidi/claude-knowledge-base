@@ -120,29 +120,47 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
 
         Map<String, List<Metadata_Dependency__c>> nodeByFullName = buildNodeByFullName(nodes);
 
+        // Query row guard - WorkflowFieldUpdate can be numerous in large orgs
+        if (Limits.getQueryRows() >= Limits.getLimitQueryRows() - QUERY_ROW_RESERVE) {
+            System.debug(LoggingLevel.WARN,
+                'CustomFieldHandler: query row budget exhausted before WorkflowFieldUpdate scan; skipping.');
+            return result;
+        }
+        Integer wfuSafeLimit = Math.max(1,
+            Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE);
+
         try {
             // SobjectType filter prevents cross-object false positives when two objects share
             // a field developer name (e.g. Account.Status__c vs Case.Status__c).
-            List<WorkflowFieldUpdate> updates = [
-                SELECT Id, Name, Field, SobjectType
-                FROM WorkflowFieldUpdate
-                WHERE Field IN :fieldApiNames
-                AND SobjectType IN :objectApiNames
-            ];
-            for (WorkflowFieldUpdate wfu : updates) {
-                String fullName = (wfu.SobjectType + '.' + wfu.Field).toLowerCase();
+            // List<SObject> used instead of List<WorkflowFieldUpdate>: WorkflowFieldUpdate is
+            // not available as a compile-time Apex type in all org editions/configurations.
+            // Dynamic SObject access is equivalent and avoids a compile-time dependency on the type.
+            List<SObject> updates = Database.query(
+                'SELECT Id, Name, Field, SobjectType'
+                + ' FROM WorkflowFieldUpdate'
+                + ' WHERE Field IN :fieldApiNames'
+                + ' AND SobjectType IN :objectApiNames'
+                + ' LIMIT :wfuSafeLimit'
+            );
+            for (SObject wfu : updates) {
+                String wfuSobjectType = (String) wfu.get('SobjectType');
+                String wfuField       = (String) wfu.get('Field');
+                String wfuName        = (String) wfu.get('Name');
+                String wfuId          = (String) wfu.get('Id');
+                String fullName = (wfuSobjectType + '.' + wfuField).toLowerCase();
                 List<Metadata_Dependency__c> parents = nodeByFullName.get(fullName);
-                if (parents == null) {
+                if (parents == null || parents.isEmpty()) {
                     continue;
                 }
-                for (Metadata_Dependency__c parent : parents) {
-                    // Spanning tree model: one node per WFU Id. Diamond dedup at Tier 1.
-                    result.addNode(buildNode(
-                        jobId, parent,
-                        wfu.Id, 'WorkflowFieldUpdate', wfu.SobjectType + '.' + wfu.Name,
-                        CONFIDENCE_EXACT, false, wfu.Id
-                    ));
-                }
+                // Spanning tree: one node per WFU Id. Take first parent only.
+                // Multiple parents for the same full name (diamond dependency) share
+                // uniqueKeySuffix = wfu.Id → emitting one per parent produces duplicate
+                // Component_Uniqueness_Key__c values that crash the upsert. First parent wins.
+                result.addNode(buildNode(
+                    jobId, parents.get(0),
+                    wfuId, 'WorkflowFieldUpdate', wfuSobjectType + '.' + wfuName,
+                    CONFIDENCE_EXACT, false, wfuId
+                ));
             }
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN,
@@ -201,30 +219,45 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
             fieldPatterns.put(lf, Pattern.compile('\\b' + lf + '\\b'));
         }
 
-        try {
-            // Scoped to target objects to avoid full-org rule scan
-            List<ValidationRule> rules = [
-                SELECT Id, ValidationName, ErrorConditionFormula
-                FROM ValidationRule
-                WHERE Active = true
-                AND EntityDefinition.QualifiedApiName IN :objectApiNames
-            ];
+        // Query row guard - ValidationRule can be numerous in large orgs
+        if (Limits.getQueryRows() >= Limits.getLimitQueryRows() - QUERY_ROW_RESERVE) {
+            System.debug(LoggingLevel.WARN,
+                'CustomFieldHandler: query row budget exhausted before ValidationRule scan; skipping.');
+            return result;
+        }
+        Integer vrSafeLimit = Math.max(1,
+            Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE);
 
-            // Tracks emitted (rule, field) pairs to prevent duplicate Node_Uniqueness_Key__c
+        try {
+            // Scoped to target objects to avoid full-org rule scan.
+            // List<SObject> used instead of List<ValidationRule>: ValidationRule is not available
+            // as a compile-time Apex type in all org editions/configurations.
+            List<SObject> rules = Database.query(
+                'SELECT Id, ValidationName, ErrorConditionFormula'
+                + ' FROM ValidationRule'
+                + ' WHERE Active = true'
+                + ' AND EntityDefinition.QualifiedApiName IN :objectApiNames'
+                + ' LIMIT :vrSafeLimit'
+            );
+
+            // Tracks emitted (rule, field) pairs to prevent duplicate Component_Uniqueness_Key__c
             // values in the result list. Scenario: nodeByFieldName maps 'status__c' to
             // [Account.Status__c, Case.Status__c]. Without this guard, both parents would
             // produce a node with key jobId:ruleId:status__c - a duplicate external ID that
             // crashes the upsert. Spanning tree: first parent wins.
             Set<String> emittedKeys = new Set<String>();
 
-            for (ValidationRule rule : rules) {
+            for (SObject rule : rules) {
+                String ruleId      = (String) rule.get('Id');
+                String ruleFormula = (String) rule.get('ErrorConditionFormula');
+                String ruleName    = (String) rule.get('ValidationName');
                 // Per-rule CPU check - large org rule sets can spike CPU
                 if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
                     System.debug(LoggingLevel.WARN,
                         'CustomFieldHandler: CPU budget exceeded mid-ValidationRule scan; stopping.');
                     break;
                 }
-                if (String.isBlank(rule.ErrorConditionFormula)) {
+                if (String.isBlank(ruleFormula)) {
                     continue;
                 }
 
@@ -232,9 +265,9 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                 // Catches the common case: field name appears as a bare token.
                 // Split pattern is non-backtracking (character class with +).
                 Set<String> formulaTokens = new Set<String>(
-                    rule.ErrorConditionFormula.toLowerCase().split('[^a-zA-Z0-9_]+')
+                    ruleFormula.toLowerCase().split('[^a-zA-Z0-9_]+')
                 );
-                String formulaLower = rule.ErrorConditionFormula.toLowerCase();
+                String formulaLower = ruleFormula.toLowerCase();
 
                 for (String lowerField : fieldApiNamesLower) {
                     // Primary: token match (exact word boundary via tokenization)
@@ -248,7 +281,7 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                         matched = fieldPatterns.get(lowerField).matcher(formulaLower).find();
                     }
                     if (matched) {
-                        String emitKey = rule.Id + ':' + lowerField;
+                        String emitKey = ruleId + ':' + lowerField;
                         if (emittedKeys.contains(emitKey)) {
                             continue; // Spanning tree: already emitted for a prior parent
                         }
@@ -258,9 +291,9 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                             // Take first parent - spanning tree model (one node per Metadata_Id__c).
                             result.addNode(buildNode(
                                 jobId, parents.get(0),
-                                rule.Id, 'ValidationRule', rule.ValidationName,
+                                ruleId, 'ValidationRule', ruleName,
                                 CONFIDENCE_REGEX, false,
-                                rule.Id + ':' + lowerField
+                                ruleId + ':' + lowerField
                             ));
                         }
                     }
@@ -418,7 +451,7 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
                         String recordName = (String) record.get('DeveloperName');
                         // Spanning tree: take first parent. Multiple parents with the same
                         // lowercased match value (e.g. two fields named 'my_field__c' on
-                        // different objects) would produce duplicate Node_Uniqueness_Key__c
+                        // different objects) would produce duplicate Component_Uniqueness_Key__c
                         // values in the upsert list - a fatal DML crash. First parent wins.
                         result.addNode(buildNode(
                             jobId, parents.get(0),
@@ -500,7 +533,7 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
      * Public static so ApexClassHandler (and any future handler) can reuse the same
      * construction logic without duplicating field population code.
      *
-     * @param uniqueKeySuffix  Optional suffix appended to the Node_Uniqueness_Key__c after
+     * @param uniqueKeySuffix  Optional suffix appended to the Component_Uniqueness_Key__c after
      *                         the metadataId segment. Use when the same Metadata_Id__c can
      *                         produce multiple distinct nodes (e.g. one per matching CMT field).
      *                         Pass null for types where one node per Metadata_Id__c is correct.
@@ -538,7 +571,7 @@ public without sharing class CustomFieldHandler implements IDependencyTypeHandle
             Discovery_Source__c         = 'Supplemental',
             Supplemental_Confidence__c  = confidence,
             Ancestor_Path__c            = ancestorPath,
-            Node_Uniqueness_Key__c      = uniquenessKey
+            Component_Uniqueness_Key__c      = uniquenessKey
         );
     }
 }

@@ -32,7 +32,7 @@ public without sharing class MetaMapperSettingsProvider implements IMetaMapperSe
                        Dml_Reserve_Rows__c,
                        Flow_Scan_Batch_Size__c,
                        Max_Concurrent_Jobs__c,
-                       Max_Nodes__c,
+                       Max_Components__c,
                        Max_Stored_Jobs__c,
                        Retention_Hours__c,
                        Scan_Batch_Size__c,

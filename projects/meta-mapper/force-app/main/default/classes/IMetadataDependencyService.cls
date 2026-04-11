@@ -21,7 +21,7 @@ public interface IMetadataDependencyService {
      * @param opts       Scan options (activeFlowsOnly, jobId, splitDepth)
      * @return           List of new Metadata_Dependency__c records (not yet inserted).
      *                   Each record has Metadata_Id__c, Metadata_Type__c, Metadata_Name__c,
-     *                   Discovery_Source__c = 'ToolingAPI', and Node_Uniqueness_Key__c
+     *                   Discovery_Source__c = 'ToolingAPI', and Component_Uniqueness_Key__c
      *                   pre-populated as "jobId:Metadata_Id__c" for upsert by the caller.
      */
     List<Metadata_Dependency__c> fetchDependencies(List<String> ids, DependencyOptions opts);

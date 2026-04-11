@@ -23,7 +23,7 @@
         <value xsi:type="xsd:double">2</value>
     </values>
     <values>
-        <field>Max_Nodes__c</field>
+        <field>Max_Components__c</field>
         <value xsi:type="xsd:double">5000</value>
     </values>
     <values>

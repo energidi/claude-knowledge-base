@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Max_Components__c</fullName>
+    <description>Maximum number of dependency records this scan is allowed to create. When reached, the scan pauses automatically and prompts the user to raise the limit or accept partial results. Default: 5,000. Set to 0 to disable the cap (not recommended - the serializer will fail at high node counts). Do not raise above 5,000 without validating serializer heap capacity for your org's typical metadata depth. Ref: ISP-6072</description>
+    <label>Maximum Components Per Scan</label>
+    <precision>18</precision>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

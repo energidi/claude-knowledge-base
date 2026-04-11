@@ -111,9 +111,12 @@ public without sharing class MetaMapperDescribeCache {
             } catch (Exception e) {
                 // Batch failed (e.g. one namespace-protected type in chunk).
                 // Fall back to per-entity describe so one bad type doesn't block the rest.
+                // Note: this converts 1 batch call into up to chunk.size() individual calls.
+                // In orgs with many namespace-protected CMT types, this may add CPU pressure.
                 System.debug(LoggingLevel.WARN,
-                    'MetaMapperDescribeCache.preloadFieldMaps batch describe failed; '
-                    + 'falling back to per-entity: ' + e.getMessage());
+                    'MetaMapperDescribeCache.preloadFieldMaps batch describe failed for '
+                    + chunk.size() + ' entities; falling back to per-entity describes. '
+                    + 'Cause: ' + e.getMessage());
                 for (String name : chunk) {
                     if (!cachedFieldMaps.containsKey(name)) {
                         getFieldMap(name);
