@@ -89,6 +89,9 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
             entityApiNames.add(e.QualifiedApiName);
         }
         MetaMapperDescribeCache.preloadFieldMaps(entityApiNames);
+        for (String descErr : MetaMapperDescribeCache.drainDescribeErrors()) {
+            result.addError(descErr);
+        }
 
         // Pre-scan SOQL cap: each entity uses 1 query. Calculate max safe entities upfront
         // and emit a single diagnostic if the budget forces early termination.
@@ -125,6 +128,10 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
             for (String e : entityResult.errors) { result.addError(e); }
             scannedEntities++;
         }
+        // Drain any per-entity describe failures collected during the entity loop.
+        for (String descErr : MetaMapperDescribeCache.drainDescribeErrors()) {
+            result.addError(descErr);
+        }
 
         return result;
     }
@@ -148,7 +155,18 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
             String lower = fieldName.toLowerCase();
             for (String suffix : CMT_FIELD_SUFFIXES) {
                 if (lower.endsWith(suffix)) {
-                    relevantFields.add(fieldName);
+                    // Type safety: only include String-compatible fields.
+                    // Non-String fields (Number, Boolean, etc.) with matching suffixes cause
+                    // ClassCastException when cast to String in the record loop, silently
+                    // killing the entire entity scan via the outer catch block.
+                    Schema.DisplayType fType = fieldMap.get(fieldName).getDescribe().getType();
+                    if (fType == Schema.DisplayType.STRING || fType == Schema.DisplayType.PICKLIST
+                        || fType == Schema.DisplayType.TEXTAREA
+                        || fType == Schema.DisplayType.MULTIPICKLIST
+                        || fType == Schema.DisplayType.EMAIL || fType == Schema.DisplayType.URL
+                        || fType == Schema.DisplayType.PHONE) {
+                        relevantFields.add(fieldName);
+                    }
                     break;
                 }
             }
@@ -201,9 +219,11 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
                 // CPU check inside loop - String.contains() on large class-name sets
                 // can spike CPU for deeply populated CMT types.
                 if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
-                    System.debug(LoggingLevel.WARN,
-                        'ApexClassHandler: CPU budget exceeded inside entity '
-                        + entityName + '; stopping inner loop.');
+                    String msg = 'ApexClassHandler: CPU budget exceeded inside entity '
+                        + entityName + '; record processing stopped early. '
+                        + 'Some CMT class dependencies for ' + entityName + ' may be missing.';
+                    System.debug(LoggingLevel.WARN, msg);
+                    result.addError(msg);
                     break;
                 }
                 for (String field : relevantFields) {

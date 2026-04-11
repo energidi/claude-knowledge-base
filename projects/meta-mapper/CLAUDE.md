@@ -21,19 +21,31 @@ Never deploy code before the user explicitly approves it. "Proceed" or "do it" m
 
 ---
 
-## Word Document Update Method (Token-Efficient)
+## Document Management (Two Documents, Two Triggers)
 
-When updating `MetaMapper_Technical_Design.docx` to a new version:
+### MetaMapper_Technical_Design.docx
+Updated **only when the design changes** (CLAUDE.md, architecture, data model, UX spec, key decisions).
+- Script pattern: `metamapper_doc_gen_vN.py`
+- Output: always saved as `MetaMapper_Technical_Design.docx` (no version suffix on the docx)
+
+### MetaMapper_Code_Review_vN.docx
+Updated **whenever code changes** (Apex classes, LWC, metadata). The version number `N` increments with each new code review or fix round.
+- Script pattern: `metamapper_code_review_vN.py`
+- Output: `MetaMapper_Code_Review_vN.docx` (version suffix IS on the docx - each round produces a new file)
+- Contains: project background + for each class a 1-2 sentence purpose statement + full code
+
+### Word Document Update Method (Token-Efficient)
+
+For either document:
 
 1. **Copy the previous script via bash** (zero token cost - no read, no write):
    ```bash
-   cp "C:/Users/GidiAbramovich/AppData/Local/Temp/metamapper_doc_gen_vN.py" \
-      "C:/Users/GidiAbramovich/AppData/Local/Temp/metamapper_doc_gen_vN+1.py"
+   cp "C:/Users/GidiAbramovich/AppData/Local/Temp/<script>_vN.py" \
+      "C:/Users/GidiAbramovich/AppData/Local/Temp/<script>_vN+1.py"
    ```
 2. **Apply only the changed sections** using the Edit tool (targeted diffs, not full rewrites).
-3. **Update the title line** in the script: `v[N].0` → `v[N+1].0`.
-4. **Run the new script**: `python C:/Users/GidiAbramovich/AppData/Local/Temp/metamapper_doc_gen_vN+1.py`
-5. **Output** always saved to `MetaMapper_Technical_Design.docx` (no version suffix on the docx).
+3. **Update the title/version line** in the script.
+4. **Run the new script**: `python C:/Users/GidiAbramovich/AppData/Local/Temp/<script>_vN+1.py`
 
 Never rewrite the full Python script from scratch. Never use Write tool on the `.py` file - always bash copy + Edit diffs.
 

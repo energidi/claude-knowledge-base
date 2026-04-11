@@ -26,30 +26,17 @@ public without sharing class MetaMapperSettingsProvider implements IMetaMapperSe
 
     public MetaMapper_Settings__mdt getSettings() {
         if (cachedSettings == null) {
-            List<MetaMapper_Settings__mdt> results = [
-                SELECT Cleanup_Chunk_Size__c,
-                       Disable_Platform_Events__c,
-                       Dml_Reserve_Rows__c,
-                       Flow_Scan_Batch_Size__c,
-                       Max_Concurrent_Jobs__c,
-                       Max_Components__c,
-                       Max_Stored_Jobs__c,
-                       Retention_Hours__c,
-                       Scan_Batch_Size__c,
-                       Stall_Detection_Threshold__c,
-                       Storage_Reserve_MB__c
-                FROM MetaMapper_Settings__mdt
-                WHERE DeveloperName = 'Default'
-                LIMIT 1
-            ];
-            if (results.isEmpty()) {
+            // getInstance() uses the platform's built-in CMDT cache - zero SOQL cost.
+            // A dynamic SOQL query for a known DeveloperName bypasses this free cache layer
+            // and unnecessarily consumes a SOQL query on every Queueable execution.
+            cachedSettings = MetaMapper_Settings__mdt.getInstance('Default');
+            if (cachedSettings == null) {
                 throw new DependencyJobException(
                     'MetaMapper configuration is missing. The MetaMapper_Settings__mdt Default record ' +
                     'was not found in this org. Re-deploy the MetaMapper package or create the Default ' +
                     'record manually in Setup > Custom Metadata Types > MetaMapper Settings.'
                 );
             }
-            cachedSettings = results[0];
         }
         return cachedSettings;
     }

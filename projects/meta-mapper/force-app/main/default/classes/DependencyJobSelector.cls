@@ -69,7 +69,14 @@ public without sharing class DependencyJobSelector {
     public Integer countActiveQueueables() {
         if (cachedQueueableClassId == null) {
             List<ApexClass> classes = [
-                SELECT Id FROM ApexClass WHERE Name = 'DependencyQueueable' LIMIT 1
+                SELECT Id FROM ApexClass
+                WHERE Name = 'DependencyQueueable'
+                // NamespacePrefix = null scopes to MetaMapper's own unmanaged class.
+                // Without this, another managed package deploying a class with the same name
+                // would pollute the concurrency count, allowing createJob() to bypass
+                // Max_Concurrent_Jobs__c. MetaMapper is deployed as unmanaged (open-source).
+                AND NamespacePrefix = null
+                LIMIT 1
             ];
             if (classes.isEmpty()) {
                 return 0;

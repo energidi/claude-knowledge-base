@@ -46,6 +46,10 @@ public without sharing class MetaMapperDescribeCache {
 
     private static List<EntityDefinition>                    cachedCmtEntities;
     private static Map<String, Map<String, Schema.SObjectField>> cachedFieldMaps;
+    // Collects describe failure messages from getFieldMap() and preloadFieldMaps() catch blocks.
+    // Callers drain this list after preload/describe calls via drainDescribeErrors() and add
+    // the messages to SupplementalResult.errors so they reach Error_Status_Message__c.
+    private static List<String> describeFailed = new List<String>();
 
     /**
      * Returns all Custom Metadata Type EntityDefinition records, cached for the current
@@ -113,10 +117,11 @@ public without sharing class MetaMapperDescribeCache {
                 // Fall back to per-entity describe so one bad type doesn't block the rest.
                 // Note: this converts 1 batch call into up to chunk.size() individual calls.
                 // In orgs with many namespace-protected CMT types, this may add CPU pressure.
-                System.debug(LoggingLevel.WARN,
-                    'MetaMapperDescribeCache.preloadFieldMaps batch describe failed for '
+                String batchMsg = 'MetaMapperDescribeCache.preloadFieldMaps: batch describe failed for '
                     + chunk.size() + ' entities; falling back to per-entity describes. '
-                    + 'Cause: ' + e.getMessage());
+                    + 'Cause: ' + e.getMessage();
+                System.debug(LoggingLevel.WARN, batchMsg);
+                describeFailed.add(batchMsg);
                 for (String name : chunk) {
                     if (!cachedFieldMaps.containsKey(name)) {
                         getFieldMap(name);
@@ -158,14 +163,31 @@ public without sharing class MetaMapperDescribeCache {
                         : null
                 );
             } catch (Exception e) {
-                // Entity not describable (e.g. namespace-protected); treat as no fields
-                System.debug(LoggingLevel.WARN,
-                    'MetaMapperDescribeCache: could not describe entity "' + entityName
-                    + '": ' + e.getMessage());
+                // Entity not describable (e.g. namespace-protected); treat as no fields.
+                // Failure is recorded in describeFailed so callers can surface it to
+                // Error_Status_Message__c via drainDescribeErrors() - previously silent.
+                String failMsg = 'MetaMapperDescribeCache: could not describe entity "'
+                    + entityName + '": ' + e.getMessage()
+                    + '. CMT fields for this entity will not be scanned.';
+                System.debug(LoggingLevel.WARN, failMsg);
+                describeFailed.add(failMsg);
                 cachedFieldMaps.put(entityName, null);
             }
         }
         return cachedFieldMaps.get(entityName);
+    }
+
+    /**
+     * Returns and clears all describe failure messages accumulated since the last drain.
+     * Call this after preloadFieldMaps() and after the entity loop to retrieve any
+     * describe failures and add them to SupplementalResult.errors for user visibility.
+     *
+     * @return  List of failure messages (may be empty); list is cleared on return.
+     */
+    public static List<String> drainDescribeErrors() {
+        List<String> drained = describeFailed.clone();
+        describeFailed.clear();
+        return drained;
     }
 
     /**
@@ -177,5 +199,6 @@ public without sharing class MetaMapperDescribeCache {
     private static void clearCache() {
         cachedCmtEntities = null;
         cachedFieldMaps   = null;
+        describeFailed    = new List<String>();
     }
 }

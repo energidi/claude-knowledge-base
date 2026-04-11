@@ -86,6 +86,18 @@ public class SupplementalResult {
         Integer currentLen = safeExisting.length();
 
         for (String msg : errors) {
+            // Dedup: skip if the base message content (without timestamp prefix) already appears
+            // in the log. Prevents FlowHandler / supplemental notices from accumulating identically
+            // across Queueable chain executions - each execution re-adds the same notice, and
+            // appendErrorsSafe is called on every execution. Without this guard, a 100-execution
+            // job appends the same diagnostic 100 times, exhausting the 131,072-char field limit
+            // on redundant entries. The timestamp is stripped for comparison so that a message
+            // emitted at a different time (new Queueable instance) is still recognised as a duplicate.
+            String baseMsg = msg.substringAfter('[Supplemental] ');
+            if (String.isNotBlank(baseMsg) && String.isNotBlank(safeExisting)
+                && safeExisting.contains(baseMsg)) {
+                continue;
+            }
             String line = '\n' + msg;
             if (currentLen + line.length() > safeLimit) {
                 truncated = true;
