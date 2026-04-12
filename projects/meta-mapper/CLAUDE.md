@@ -4,6 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Output Rules
+- After applying fixes (code review rounds, bug fixes, any edits): do not explain what was changed. Make the edits and stop. The user can read the diff.
+
+---
+
 ## Code Review and Deployment Protocol (Non-Negotiable)
 
 When writing Apex classes, LWC components, or any other code artifact:
