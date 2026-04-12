@@ -14,10 +14,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 When writing Apex classes, LWC components, or any other code artifact:
 
 1. **Write** all code for the current artifact group (e.g. all Phase 3 classes).
-2. **Generate a Word document** containing:
-   - Project background section (overview, architecture, design decisions)
-   - For each class: a 1-2 sentence purpose statement followed by the full code
-3. **Wait** for the user to run external AI review tools against the document and provide findings.
+2. **Update the Markdown review document** (`MetaMapper_Code_Review_vN.md`) with purpose statements and full code for all changed classes.
+3. **Wait** for the user to upload the file to external AI review tools and provide findings.
 4. **Apply fixes** based on findings.
 5. **Repeat** steps 2-4 until the user explicitly says the code is approved.
 6. **Only then**: deploy to the Salesforce org and push to GitHub.
@@ -28,112 +26,22 @@ Never deploy code before the user explicitly approves it. "Proceed" or "do it" m
 
 ## Document Management (Two Documents, Two Triggers)
 
-### MetaMapper_Technical_Design.docx
+### MetaMapper_Technical_Design.md
 Updated **only when the design changes** (CLAUDE.md, architecture, data model, UX spec, key decisions).
-- Script pattern: `metamapper_doc_gen_vN.py`
-- Output: always saved as `MetaMapper_Technical_Design.docx` (no version suffix on the docx)
+- File: `MetaMapper_Technical_Design.md` in the project root
+- Update method: Edit tool with targeted diffs only - never rewrite from scratch
 
-### MetaMapper_Code_Review_vN.docx
-Updated **whenever code changes** (Apex classes, LWC, metadata). The version number `N` increments with each new code review or fix round.
-- Script pattern: `metamapper_code_review_vN.py`
-- Output: `MetaMapper_Code_Review_vN.docx` (version suffix IS on the docx - each round produces a new file)
+### MetaMapper_Code_Review_vN.md
+Updated **whenever code changes** (Apex classes, LWC, metadata). Version number `N` increments with each new code review or fix round.
+- File: `MetaMapper_Code_Review_vN.md` in the project root (version suffix in filename)
 - Contains: project background + for each class a 1-2 sentence purpose statement + full code
 
-### Word Document Update Method (Token-Efficient)
+### Markdown Update Method (Token-Efficient)
 
 For either document:
-
-1. **Copy the previous script via bash** (zero token cost - no read, no write):
-   ```bash
-   cp "C:/Users/GidiAbramovich/AppData/Local/Temp/<script>_vN.py" \
-      "C:/Users/GidiAbramovich/AppData/Local/Temp/<script>_vN+1.py"
-   ```
-2. **Apply only the changed sections** using the Edit tool (targeted diffs, not full rewrites).
-3. **Update the title/version line** in the script.
-4. **Run the new script**: `python C:/Users/GidiAbramovich/AppData/Local/Temp/<script>_vN+1.py`
-
-Never rewrite the full Python script from scratch. Never use Write tool on the `.py` file - always bash copy + Edit diffs.
-
-### Script Toolchain
-- **python-docx** installed, available via `python` in the shell.
-- Script location: `C:/Users/GidiAbramovich/AppData/Local/Temp/<name>.py`
-- New document: Write tool (file doesn't exist yet - no read needed).
-- Update: `cp prev_vN.py new_vN+1.py` then Edit diffs only. Never rewrite from scratch.
-
-### Script Rules
-- Never use heredoc (`cat << 'EOF'`) - fails on Windows (exit 126).
-- Never Write tool on an existing `.py` without reading first - use a new versioned filename.
-- Single quotes in content: use double quotes for the outer Python string or escape with `\'`.
-
-### Script Skeleton
-```python
-from docx import Document
-from docx.shared import Pt, RGBColor, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
-
-doc = Document()
-for section in doc.sections:
-    section.top_margin=Cm(2.5); section.bottom_margin=Cm(2.5)
-    section.left_margin=Cm(2.8); section.right_margin=Cm(2.8)
-
-DARK=RGBColor(0x03,0x2D,0x60); MID=RGBColor(0x00,0x70,0xD2)
-WHITE=RGBColor(0xFF,0xFF,0xFF); TEXT=RGBColor(0x18,0x18,0x18); GRAY=RGBColor(0x70,0x6E,0x6B)
-
-def shd(cell,hex):
-    tc=cell._tc; p=tc.get_or_add_tcPr(); s=OxmlElement('w:shd')
-    s.set(qn('w:val'),'clear'); s.set(qn('w:color'),'auto'); s.set(qn('w:fill'),hex); p.append(s)
-def h(text,level=1):
-    p=doc.add_heading(text,level=level); r=p.runs[0] if p.runs else p.add_run(text)
-    r.font.color.rgb=DARK if level==1 else MID; r.font.bold=True
-    r.font.size=Pt(18 if level==1 else 14 if level==2 else 11)
-    p.paragraph_format.space_before=Pt(18 if level==1 else 12); p.paragraph_format.space_after=Pt(6)
-def b(text,bold=False,italic=False,size=10.5,color=None):
-    p=doc.add_paragraph(); r=p.add_run(text)
-    r.font.size=Pt(size); r.font.bold=bold; r.font.italic=italic
-    r.font.color.rgb=color if color else TEXT; p.paragraph_format.space_after=Pt(4)
-def note(text,fill='EFF4FB'):
-    p=doc.add_paragraph(); p.paragraph_format.left_indent=Cm(0.5)
-    r=p.add_run(text); r.font.size=Pt(9.5); r.font.italic=True; r.font.color.rgb=DARK
-    pp=p._p.get_or_add_pPr(); s=OxmlElement('w:shd')
-    s.set(qn('w:val'),'clear'); s.set(qn('w:color'),'auto'); s.set(qn('w:fill'),fill); pp.append(s)
-def warn(text): note(text, fill='FDECEA')
-def code(text):
-    p=doc.add_paragraph(); p.paragraph_format.left_indent=Cm(0.8)
-    r=p.add_run(text); r.font.name='Courier New'; r.font.size=Pt(9)
-    r.font.color.rgb=RGBColor(0x1E,0x1E,0x2E)
-    pp=p._p.get_or_add_pPr(); s=OxmlElement('w:shd')
-    s.set(qn('w:val'),'clear'); s.set(qn('w:color'),'auto'); s.set(qn('w:fill'),'EAECF0'); pp.append(s)
-def bul(text):
-    p=doc.add_paragraph(style='List Bullet'); r=p.add_run(text)
-    r.font.size=Pt(10.5); r.font.color.rgb=TEXT
-    p.paragraph_format.left_indent=Cm(0.5); p.paragraph_format.space_after=Pt(2)
-def tbl(headers,rows,hbg='032D60',alt='F2F4F7'):
-    t=doc.add_table(rows=1+len(rows),cols=len(headers))
-    t.style='Table Grid'; t.alignment=WD_TABLE_ALIGNMENT.LEFT
-    hr=t.rows[0]
-    for i,hh in enumerate(headers):
-        c=hr.cells[i]; shd(c,hbg); r=c.paragraphs[0].add_run(hh)
-        r.font.bold=True; r.font.color.rgb=WHITE; r.font.size=Pt(10)
-    for ri,row in enumerate(rows):
-        tr=t.rows[ri+1]; bg=alt if ri%2==0 else 'FFFFFF'
-        for ci,ct in enumerate(row):
-            c=tr.cells[ci]; shd(c,bg); r=c.paragraphs[0].add_run(ct)
-            r.font.size=Pt(10); r.font.color.rgb=TEXT
-    doc.add_paragraph()
-def div():
-    p=doc.add_paragraph()
-    pp=p._p.get_or_add_pPr(); pb=OxmlElement('w:pBdr'); bo=OxmlElement('w:bottom')
-    bo.set(qn('w:val'),'single'); bo.set(qn('w:sz'),'4'); bo.set(qn('w:space'),'1'); bo.set(qn('w:color'),'0070D2')
-    pb.append(bo); pp.append(pb)
-
-# --- content here ---
-
-doc.save(r'C:/path/to/output.docx')
-print('Saved.')
-```
+1. Use the **Edit tool with targeted diffs** - only the changed sections.
+2. For a new code review version, use the **Write tool** to create the new versioned file.
+3. Never rewrite the full document from scratch unless creating a new version.
 
 ---
 
@@ -144,9 +52,9 @@ When the user pastes architecture or UX reviews from external sources:
 1. **Parse all reviews first.** Read every review before producing any output.
 2. **Present an assessment table** - one row per actionable item. Columns: `#`, `Source`, `Issue`, `Action`, `Impact`. Mark items to skip with reason.
 3. **Wait for explicit approval** before applying anything.
-4. **On approval: apply ALL CLAUDE.md edits first**, then write the new versioned Word doc script once.
+4. **On approval: apply ALL CLAUDE.md edits first**, then update the Markdown review file.
 5. **Never name AI tools in technical design documents.** Strip all reviewer names, tool names, and score references - no engineering value.
-6. **Deploy immediately after generation** - push CLAUDE.md + Word doc to GitHub in one commit.
+6. **Deploy immediately after updates** - push CLAUDE.md + Markdown files to GitHub in one commit.
 
 ---
 
