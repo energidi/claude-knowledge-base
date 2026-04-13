@@ -75,6 +75,10 @@ public class SupplementalResult {
         // Floor: safeThreshold must be at least TRUNCATION_NOTICE_LENGTH + 6 so that appending
         // the notice itself never overflows maxLength (the +6 is a safety margin above the exact
         // 34-char notice length, guarding against off-by-one if the notice text ever changes).
+        // M1: null guard - callers that omit safeThreshold (pass null) get the documented default.
+        if (safeThreshold == null) {
+            safeThreshold = 200;
+        }
         Integer safeLimit = maxLength - Math.max(safeThreshold, TRUNCATION_NOTICE_LENGTH + 6);
         List<String> parts = new List<String>();
         Boolean truncated  = false;
@@ -83,15 +87,28 @@ public class SupplementalResult {
         // appends or a very long stack trace). Truncate it first so appending the notice does not
         // produce a string longer than maxLength, which would cause STRING_TOO_LONG on DML update.
         String safeExisting;
+        Integer currentLen;
         if (String.isNotBlank(existing)) {
-            safeExisting = existing.length() > safeLimit
-                ? existing.substring(0, safeLimit) + '\n[PRE-TRUNCATED]'
-                : existing;
+            if (existing.length() > safeLimit) {
+                safeExisting = existing.substring(0, safeLimit) + '\n[PRE-TRUNCATED]';
+                parts.add(safeExisting);
+                // M5: use safeLimit (not safeExisting.length()) so the 15-char PRE-TRUNCATED
+                // notice does not consume headroom reserved for incoming error messages.
+                // Without this, safeExisting.length() = safeLimit + 15 > safeLimit, causing
+                // every new error to be rejected immediately and producing a spurious second
+                // TRUNCATED notice with no new content between the two notices.
+                currentLen = safeLimit;
+            } else {
+                safeExisting = existing;
+                parts.add(safeExisting);
+                currentLen = safeExisting.length();
+            }
         } else {
+            // Do not add an empty string to parts: String.join would produce a leading '\n'
+            // before the first message because each appended line is prefixed with '\n'.
             safeExisting = '';
+            currentLen = 0;
         }
-        parts.add(safeExisting);
-        Integer currentLen = safeExisting.length();
 
         // appended tracks base messages written during THIS call so that duplicate strings
         // within the same errors list are also deduplicated, not just duplicates against
@@ -115,7 +132,9 @@ public class SupplementalResult {
                     continue;
                 }
             }
-            String line = '\n' + msg;
+            // Prefix '\n' only when there is already content (existing log or a prior appended
+            // line). When the log is empty and this is the first message, no leading newline.
+            String line = (currentLen > 0) ? '\n' + msg : msg;
             if (currentLen + line.length() > safeLimit) {
                 truncated = true;
                 break;

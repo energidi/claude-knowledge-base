@@ -95,31 +95,21 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
             result.addError(descErr);
         }
 
-        // Pre-scan SOQL cap: each entity uses 1 query. Calculate max safe entities upfront
-        // and emit a single diagnostic if the budget forces early termination.
-        Integer soqlBudgetForCmt = Limits.getLimitQueries() - Limits.getQueries() - SOQL_RESERVE;
-        Integer scannedEntities  = 0;
-
         for (EntityDefinition entity : cmtEntities) {
-            if (scannedEntities >= soqlBudgetForCmt) {
-                String msg = 'ApexClassHandler: SOQL budget allows ' + soqlBudgetForCmt
-                    + ' CMT entities per execution; '
-                    + (cmtEntities.size() - scannedEntities)
-                    + ' entities were not scanned. Some CMT class dependencies may be missing.';
-                System.debug(LoggingLevel.WARN, msg);
-                result.addError(msg);
-                break;
-            }
-            // SOQL safety net (belt-and-suspenders after the budget cap above)
+            // Real-time SOQL guard: each entity uses 1+ queries (field-batching means wide CMT
+            // types run multiple queries). A pre-scan estimate based on entity count is inaccurate
+            // when entities have many suffix-matching fields. Rely solely on the live limit check.
             if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
-                String msg = 'ApexClassHandler: SOQL budget exhausted; CMT scan incomplete.';
+                String msg = 'ApexClassHandler: SOQL budget exhausted; remaining CMT entities not scanned. '
+                    + 'Some CMT class dependencies may be missing.';
                 System.debug(LoggingLevel.WARN, msg);
                 result.addError(msg);
                 break;
             }
             // CPU guard
             if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
-                String msg = 'ApexClassHandler: CPU budget exceeded; CMT scan incomplete.';
+                String msg = 'ApexClassHandler: CPU budget exceeded; remaining CMT entities not scanned. '
+                    + 'Some CMT class dependencies may be missing.';
                 System.debug(LoggingLevel.WARN, msg);
                 result.addError(msg);
                 break;
@@ -127,8 +117,9 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
             String entityName = entity.QualifiedApiName;
             SupplementalResult entityResult = scanCmtEntity(jobId, entityName, nodeByClassName);
             result.addNodes(entityResult.nodes);
-            for (String e : entityResult.errors) { result.addError(e); }
-            scannedEntities++;
+            // addAll merges pre-formatted strings directly - do not call addError() which
+            // would double-stamp timestamp + [Supplemental] prefix on already-formatted entries.
+            result.errors.addAll(entityResult.errors);
         }
         // Drain any per-entity describe failures collected during the entity loop.
         for (String descErr : MetaMapperDescribeCache.drainDescribeErrors()) {
@@ -180,6 +171,10 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
 
         // H1: Pre-query guards before Database.query()
         if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
+            String msg = 'ApexClassHandler.scanCmtEntity: SOQL budget exhausted before scanning '
+                + entityName + '; skipping. Some CMT class dependencies may be missing.';
+            System.debug(LoggingLevel.WARN, msg);
+            result.addError(msg);
             return result;
         }
         if (Limits.getQueryRows() >= Limits.getLimitQueryRows() - QUERY_ROW_RESERVE) {
@@ -197,14 +192,11 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
         // at MAX_CMT_FIELDS_PER_QUERY per query and run multiple queries when needed.
         Set<String> classNames = nodeByClassName.keySet();
 
-        // safeLimit driven by remaining query row budget only.
-        Integer safeLimit = Math.max(1,
-            Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE);
-
-        Boolean truncated = false;
+        Boolean truncated   = false;
+        Boolean cpuExceeded = false;
         try {
             Integer fieldBatchSize = MAX_CMT_FIELDS_PER_QUERY;
-            for (Integer fi = 0; fi < relevantFields.size(); fi += fieldBatchSize) {
+            for (Integer fi = 0; fi < relevantFields.size() && !cpuExceeded; fi += fieldBatchSize) {
                 // SOQL budget check before each field-batch query
                 if (Limits.getQueries() >= Limits.getLimitQueries() - SOQL_RESERVE) {
                     String soqlMsg2 = 'ApexClassHandler.scanCmtEntity: SOQL budget exhausted '
@@ -221,6 +213,11 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
                 for (String field : fieldBatch) {
                     conditions.add(field + ' IN :classNames');
                 }
+                // Recalculate safeLimit before EACH batch query.
+                // Calculating once before the loop would use a stale value after the first
+                // batch consumes rows, allowing subsequent queries to breach the 50K row limit.
+                Integer safeLimit = Math.max(1,
+                    Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE);
                 String fieldList = 'Id, DeveloperName, ' + String.join(fieldBatch, ', ');
                 String query = 'SELECT ' + fieldList + ' FROM ' + entityName
                     + ' WHERE ' + String.join(conditions, ' OR ')
@@ -234,15 +231,24 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
                 for (SObject record : records) {
                     // CPU check inside loop - String.contains() on large class-name sets
                     // can spike CPU for deeply populated CMT types.
+                    // cpuExceeded propagates the break to the outer field-batch loop so the
+                    // next batch query is not issued after the budget has been exhausted.
                     if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= CPU_THRESHOLD) {
                         String msg = 'ApexClassHandler: CPU budget exceeded inside entity '
                             + entityName + '; record processing stopped early. '
                             + 'Some CMT class dependencies for ' + entityName + ' may be missing.';
                         System.debug(LoggingLevel.WARN, msg);
                         result.addError(msg);
+                        cpuExceeded = true;
                         break;
                     }
-                    // Iterate only the fields in this batch - the record only has these columns
+                    // Design (L4): one node per (CMT record, field) pair, not one per record.
+                    // A CMT record storing class references in two different fields (e.g. both
+                    // handler__c and type__c match the same class) produces two supplemental nodes
+                    // with distinct Component_Uniqueness_Key__c values (record.Id + ':' + field).
+                    // Each records a separate dependency relationship. The engine deduplicates by
+                    // Metadata_Id__c during Tooling API traversal - both nodes queue identical work
+                    // but only one traversal result is stored; this is expected spanning-tree behavior.
                     for (String field : fieldBatch) {
                         String value = (String) record.get(field);
                         if (String.isBlank(value)) {
@@ -260,11 +266,20 @@ public without sharing class ApexClassHandler implements IDependencyTypeHandler 
                         // Multiple parentNodes for the same class name share the same uniqueKey -
                         // emitting a node for each would produce duplicate Component_Uniqueness_Key__c
                         // values in the upsert list, causing a fatal DML crash.
-                        result.addNode(CustomFieldHandler.buildNode(
+                        // H1: buildNode returns null when the parent's Ancestor_Path__c is near the
+                        // 32,000-char Long Text limit. Log and skip rather than upserting a truncated path.
+                        Metadata_Dependency__c supplementalNode = CustomFieldHandler.buildNode(
                             jobId, parentNodes.get(0),
                             record.Id, 'CustomMetadata', entityName + '.' + recordName,
                             CONFIDENCE_CMT, true, record.Id + ':' + field
-                        ));
+                        );
+                        if (supplementalNode == null) {
+                            result.addError('ApexClassHandler.scanCmtEntity: ancestor path depth '
+                                + 'limit reached at parent ' + parentNodes.get(0).Metadata_Id__c
+                                + '; supplemental node for ' + entityName + ' not added.');
+                        } else {
+                            result.addNode(supplementalNode);
+                        }
                     }
                 }
             } // end field-batch loop

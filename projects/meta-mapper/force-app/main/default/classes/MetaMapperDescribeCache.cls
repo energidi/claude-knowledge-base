@@ -44,12 +44,22 @@ public without sharing class MetaMapperDescribeCache {
         'class__c', 'handler__c', 'type__c', 'instance__c'
     };
 
-    private static List<EntityDefinition>                    cachedCmtEntities;
+    private static List<EntityDefinition>                        cachedCmtEntities;
     private static Map<String, Map<String, Schema.SObjectField>> cachedFieldMaps;
     // Collects describe failure messages from getFieldMap() and preloadFieldMaps() catch blocks.
     // Callers drain this list after preload/describe calls via drainDescribeErrors() and add
     // the messages to SupplementalResult.errors so they reach Error_Status_Message__c.
-    private static List<String> describeFailed = new List<String>();
+    private static List<String>  describeFailed     = new List<String>();
+    // Tracks entity names that already have a failure entry in describeFailed.
+    // Used in the preloadFieldMaps batch-failure fallback to skip entities that were already
+    // reported, preventing near-identical messages flooding Error_Status_Message__c.
+    // Separate from describeFailed to avoid fragile string-parsing for dedup keying.
+    private static Set<String>   failedEntityNames  = new Set<String>();
+    // Guards against duplicate CPU-exceeded messages in the preloadFieldMaps fallback loop.
+    // Multiple batch-describe failures in the same execution can each trigger the CPU guard;
+    // without this flag the same message would accumulate in describeFailed once per failed chunk.
+    // Reset in clearCache() so tests start with a clean state.
+    private static Boolean       fallbackCpuReported = false;
 
     /**
      * Returns all Custom Metadata Type EntityDefinition records, cached for the current
@@ -65,6 +75,7 @@ public without sharing class MetaMapperDescribeCache {
                 FROM EntityDefinition
                 WHERE IsCustomizable = true
                 AND QualifiedApiName LIKE '%__mdt'
+                LIMIT 2000
             ];
         }
         return cachedCmtEntities;
@@ -125,21 +136,28 @@ public without sharing class MetaMapperDescribeCache {
                     'MetaMapperDescribeCache.preloadFieldMaps: batch describe failed for '
                     + chunk.size() + ' entities; falling back to per-entity describes. '
                     + 'Cause: ' + e.getMessage());
-                // Track entity names that already have a failure message in describeFailed
-                // to prevent near-identical per-entity messages from the same batch failure
-                // flooding Error_Status_Message__c when many namespace-protected CMTs are present.
-                Set<String> alreadyReported = new Set<String>();
-                for (String descEntry : describeFailed) {
-                    // Entry format: 'MetaMapperDescribeCache: could not describe entity "<name>"...'
-                    // Extract the name between the first '"' pair for dedup keying.
-                    Integer q1 = descEntry.indexOf('"');
-                    Integer q2 = q1 >= 0 ? descEntry.indexOf('"', q1 + 1) : -1;
-                    if (q1 >= 0 && q2 > q1) {
-                        alreadyReported.add(descEntry.substring(q1 + 1, q2));
-                    }
-                }
+                // failedEntityNames is maintained by getFieldMap() catch blocks and tracks
+                // which entities have already produced a failure entry in describeFailed.
+                // This avoids the fragile string-parsing dedup that previously extracted
+                // entity names from formatted error message strings.
                 for (String name : chunk) {
-                    if (!cachedFieldMaps.containsKey(name) && !alreadyReported.contains(name)) {
+                    // CPU guard: batch failure in an org with many namespace-protected CMT types
+                    // can trigger N individual describe calls - one per entity in the chunk.
+                    // Break early rather than consuming the remaining CPU budget.
+                    if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= 0.70) {
+                        // M3: emit the message at most once per transaction regardless of how many
+                        // chunks trigger the CPU guard. Without this, one message per failed chunk
+                        // accumulates in describeFailed and floods Error_Status_Message__c.
+                        if (!fallbackCpuReported) {
+                            String cpuMsg = 'MetaMapperDescribeCache.preloadFieldMaps: CPU budget exceeded '
+                                + 'during fallback per-entity describe; remaining entities in chunk skipped.';
+                            System.debug(LoggingLevel.WARN, cpuMsg);
+                            describeFailed.add(cpuMsg);
+                            fallbackCpuReported = true;
+                        }
+                        break;
+                    }
+                    if (!cachedFieldMaps.containsKey(name) && !failedEntityNames.contains(name)) {
                         getFieldMap(name);
                     }
                 }
@@ -187,6 +205,7 @@ public without sharing class MetaMapperDescribeCache {
                     + '. CMT fields for this entity will not be scanned.';
                 System.debug(LoggingLevel.WARN, failMsg);
                 describeFailed.add(failMsg);
+                failedEntityNames.add(entityName);
                 cachedFieldMaps.put(entityName, null);
             }
         }
@@ -213,8 +232,10 @@ public without sharing class MetaMapperDescribeCache {
      */
     @TestVisible
     private static void clearCache() {
-        cachedCmtEntities = null;
-        cachedFieldMaps   = null;
-        describeFailed    = new List<String>();
+        cachedCmtEntities   = null;
+        cachedFieldMaps     = null;
+        describeFailed      = new List<String>();
+        failedEntityNames   = new Set<String>();
+        fallbackCpuReported = false;
     }
 }
