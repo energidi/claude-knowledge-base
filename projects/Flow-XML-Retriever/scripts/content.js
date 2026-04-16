@@ -213,6 +213,13 @@ function injectIntoFlowBuilder() {
     wrapper.appendChild(dropdownMenu);
 
     document.body.appendChild(wrapper);
+
+    // Hide our button whenever Salesforce opens a modal (backdrop present), restore when closed
+    const modalObserver = new MutationObserver(() => {
+        const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
+        wrapper.style.display = modalOpen ? 'none' : 'flex';
+    });
+    modalObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 // Returns flowApiName (from breadcrumb) or flowId (from URL) - never both

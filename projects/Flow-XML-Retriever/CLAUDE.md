@@ -3,6 +3,8 @@
 ## Project Overview
 **Flow XML Retriever** is a Chrome Extension (Manifest V3) designed for Salesforce Administrators. It allows for the one-click extraction of Flow metadata in raw XML format directly from the Salesforce browser UI, bypassing the need for Workbench, VS Code, or complex Data Loader exports.
 
+**GitHub:** https://github.com/energidi/claude-knowledge-base/tree/main/projects/Flow-XML-Retriever
+
 ## Persona & Instructions for AI
 - **Role:** Expert Salesforce Integration Developer & Chrome Extension Architect.
 - **Tone:** Technical, precise, and security-conscious.
