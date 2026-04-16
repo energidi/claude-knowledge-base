@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy - Flow XML Retriever</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 720px;
+      margin: 60px auto;
+      padding: 0 24px;
+      color: #1a1a1a;
+      line-height: 1.7;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 4px; }
+    h2 { font-size: 1.1rem; margin-top: 36px; color: #333; }
+    p, li { font-size: 0.97rem; color: #444; }
+    ul { padding-left: 20px; }
+    .meta { color: #888; font-size: 0.85rem; margin-bottom: 40px; }
+    hr { border: none; border-top: 1px solid #eee; margin: 40px 0; }
+  </style>
+</head>
+<body>
+
+  <h1>Privacy Policy</h1>
+  <p class="meta">Flow XML Retriever Chrome Extension &mdash; Last updated: April 16, 2026</p>
+
+  <h2>Overview</h2>
+  <p>
+    Flow XML Retriever is a Chrome Extension that allows Salesforce users to extract Flow metadata
+    as XML directly from the browser. This policy explains what data the extension accesses,
+    how it is used, and what is never collected.
+  </p>
+
+  <h2>Data We Access</h2>
+  <p>The extension reads one piece of data from your browser:</p>
+  <ul>
+    <li>
+      <strong>Salesforce Session Cookie (<code>sid</code>):</strong> The extension reads your
+      active Salesforce session token from the browser cookie store. This token is used solely
+      to authenticate a single API request to your Salesforce org's Tooling API, which retrieves
+      the Flow metadata you requested.
+    </li>
+  </ul>
+
+  <h2>How Your Data Is Used</h2>
+  <ul>
+    <li>The session token is used in memory, for the duration of a single API call, and is immediately discarded.</li>
+    <li>It is sent only to your own Salesforce org (the same domain you are already logged in to).</li>
+    <li>The Flow XML returned by the API is either copied to your clipboard or downloaded to your local computer - whichever you choose.</li>
+  </ul>
+
+  <h2>Data We Do Not Collect</h2>
+  <ul>
+    <li>We do not store any data on external servers.</li>
+    <li>We do not transmit any data to third parties.</li>
+    <li>We do not log, track, or retain your session token, Salesforce data, or any personal information.</li>
+    <li>We do not use analytics or tracking tools of any kind.</li>
+    <li>We have no backend infrastructure. All processing occurs locally in your browser.</li>
+  </ul>
+
+  <h2>Local Storage</h2>
+  <p>
+    The extension uses Chrome's local storage API to save your preferences (for example, whether
+    you prefer to copy XML to clipboard or download it as a file). This data never leaves your
+    device and is not accessible to anyone other than you.
+  </p>
+
+  <h2>Permissions Used</h2>
+  <ul>
+    <li><strong>cookies:</strong> To read the Salesforce session token for API authentication.</li>
+    <li><strong>downloads:</strong> To save the XML file to your computer when you choose the download option.</li>
+    <li><strong>storage:</strong> To persist your extension preferences locally.</li>
+    <li><strong>Host permissions (*.salesforce.com, *.lightning.force.com):</strong> To inject the retrieval button into Salesforce pages and to call the Salesforce Tooling API.</li>
+  </ul>
+
+  <h2>Contact</h2>
+  <p>
+    If you have any questions about this privacy policy, you can reach us at:
+    <a href="mailto:energidi@gmail.com">energidi@gmail.com</a>
+  </p>
+
+  <hr />
+  <p style="font-size:0.8rem; color:#aaa;">
+    This extension is not affiliated with Salesforce, Inc. Salesforce is a trademark of Salesforce, Inc.
+  </p>
+
+</body>
+</html>
