@@ -19,7 +19,8 @@
   },
   "host_permissions": [
     "*://*.salesforce.com/*",
-    "*://*.lightning.force.com/*"
+    "*://*.lightning.force.com/*",
+    "*://*.force.com/*"
   ],
   "background": {
     "service_worker": "scripts/background.js"
@@ -33,7 +34,6 @@
       "js": ["scripts/content.js"],
       "css": ["styles/custom.css"],
       "run_at": "document_idle"
-    },
-
+    }
   ]
 }

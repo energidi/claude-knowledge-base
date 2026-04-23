@@ -32,7 +32,6 @@ function showToast(message, type = 'info') {
         pointer-events: none;
     `;
 
-    // Inject keyframes once
     if (!document.getElementById('fxr-toast-styles')) {
         const style = document.createElement('style');
         style.id = 'fxr-toast-styles';
@@ -97,15 +96,38 @@ function execCommandCopy(text) {
 (function init() {
     if (window.location.href.includes('/builder_platform_interaction/flowBuilder')) {
         injectIntoFlowBuilder();
+        watchForNavigation(); // M3: handle SPA navigation within Flow Builder
     }
 })();
 
 // ==========================================
+// M3: Re-inject button on SPA navigation
+// Flow Builder is a LWC SPA - navigating between flows changes the URL
+// via history.pushState without a full page reload.
+// ==========================================
+function watchForNavigation() {
+    const handleNavigation = () => {
+        const existing = document.querySelector('#xml-retrieve-builder-btn');
+        if (existing) existing.remove();
+        if (window.location.href.includes('/builder_platform_interaction/flowBuilder')) {
+            setTimeout(injectIntoFlowBuilder, 300);
+        }
+    };
+
+    const originalPushState = history.pushState.bind(history);
+    history.pushState = function (...args) {
+        originalPushState(...args);
+        handleNavigation();
+    };
+    window.addEventListener('popstate', handleNavigation);
+}
+
+// ==========================================
 // SHARED: Send message to background and handle response
 // ==========================================
-function triggerRetrieve(method, flowApiName, versionNumber, flowId) {
+function triggerRetrieve(method, flowId) {
     chrome.runtime.sendMessage(
-        { action: 'RETRIEVE_FLOW', method, flowApiName, versionNumber, flowId },
+        { action: 'RETRIEVE_FLOW', method, flowApiName: null, versionNumber: null, flowId },
         (response) => {
             if (chrome.runtime.lastError) {
                 showToast(chrome.runtime.lastError.message, 'error');
@@ -133,24 +155,21 @@ function triggerRetrieve(method, flowApiName, versionNumber, flowId) {
 function injectIntoFlowBuilder() {
     if (document.querySelector('#xml-retrieve-builder-btn')) return;
 
-    const { flowApiName, flowId } = resolveFlowIdentityFromBuilder();
-
-    // Wrapper - fixed position, independent of Flow Builder DOM
     const wrapper = document.createElement('div');
     wrapper.id = 'xml-retrieve-builder-btn';
 
-    // Left half: JSON label - executes user's configured default action
     const primaryBtn = document.createElement('button');
     primaryBtn.id = 'xml-retrieve-btn-primary';
     primaryBtn.textContent = 'JSON';
     primaryBtn.title = 'Execute default action (configurable in extension options)';
     primaryBtn.addEventListener('click', () => {
+        // I5: Resolve flowId at click time - not at injection time - to survive SPA navigation
+        const { flowId } = resolveFlowIdentityFromBuilder();
         chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
-            triggerRetrieve(defaultAction, flowApiName, null, flowId);
+            triggerRetrieve(defaultAction, flowId);
         });
     });
 
-    // Right half: ▼ arrow - opens dropdown
     const arrowBtn = document.createElement('button');
     arrowBtn.id = 'xml-retrieve-btn-arrow';
     arrowBtn.textContent = '▼';
@@ -158,7 +177,6 @@ function injectIntoFlowBuilder() {
     arrowBtn.setAttribute('aria-haspopup', 'true');
     arrowBtn.setAttribute('aria-expanded', 'false');
 
-    // Dropdown menu
     const dropdownMenu = document.createElement('div');
     dropdownMenu.id = 'xml-retrieve-builder-menu';
     dropdownMenu.setAttribute('role', 'menu');
@@ -177,7 +195,9 @@ function injectIntoFlowBuilder() {
             e.preventDefault();
             e.stopPropagation();
             closeDropdown();
-            triggerRetrieve(method, flowApiName, null, flowId);
+            // I5: Resolve flowId at click time
+            const { flowId } = resolveFlowIdentityFromBuilder();
+            triggerRetrieve(method, flowId);
         });
         li.appendChild(a);
         return li;
@@ -206,20 +226,24 @@ function injectIntoFlowBuilder() {
     wrapper.appendChild(primaryBtn);
     wrapper.appendChild(arrowBtn);
     wrapper.appendChild(dropdownMenu);
-
     document.body.appendChild(wrapper);
 
-    // Hide our button whenever Salesforce opens a modal (backdrop present), restore when closed
+    // I4: Memoize last modal state to avoid redundant DOM writes on every mutation
+    // (Salesforce LWC is extremely chatty - this observer fires very frequently)
+    let lastModalState = false;
     const modalObserver = new MutationObserver(() => {
         const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
-        wrapper.style.display = modalOpen ? 'none' : 'flex';
+        if (modalOpen !== lastModalState) {
+            lastModalState = modalOpen;
+            wrapper.style.display = modalOpen ? 'none' : 'flex';
+        }
     });
     modalObserver.observe(document.body, { childList: true, subtree: true });
 }
 
-// Returns flowId from URL - API name is not reliably exposed in the Flow Builder DOM
+// Returns flowId from URL query params - resolved at click time to handle SPA navigation
 function resolveFlowIdentityFromBuilder() {
     const params = new URLSearchParams(window.location.search);
     const flowId = params.get('flowId') || params.get('id') || null;
-    return { flowApiName: null, flowId };
+    return { flowId };
 }

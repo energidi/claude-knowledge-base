@@ -1,14 +1,15 @@
 const SF_API_VERSION = 'v66.0';
 const FETCH_TIMEOUT_MS = 15000;
-const FLOW_API_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]*$/;
 const FLOW_ID_PATTERN = /^[a-zA-Z0-9]{15,18}$/;
+const FLOW_API_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+// I1: Allowlist for method values from content script messages
+const ALLOWED_METHODS = new Set(['COPY', 'DOWNLOAD']);
 const TRUSTED_ORIGINS = [
     /^https:\/\/([a-zA-Z0-9-]+\.)+salesforce\.com$/,
     /^https:\/\/([a-zA-Z0-9-]+\.)+lightning\.force\.com$/,
     /^https:\/\/([a-zA-Z0-9-]+\.)+force\.com$/
 ];
 
-// Validate that the message came from a trusted Salesforce tab
 function isTrustedSender(sender) {
     if (!sender?.tab?.url) return false;
     try {
@@ -19,12 +20,9 @@ function isTrustedSender(sender) {
     }
 }
 
-// Listen for messages from the Content Script (the UI)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-
     if (request.action === 'RETRIEVE_FLOW') {
 
-        // Security: reject any message not originating from a trusted Salesforce tab
         if (!isTrustedSender(sender)) {
             sendResponse({ success: false, error: 'Untrusted message origin.' });
             return;
@@ -33,7 +31,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const orgDomain = new URL(sender.tab.url).origin;
         const { flowApiName, flowId, versionNumber, method } = request;
 
-        // Validate inputs
+        // I1: Validate method against allowlist before any processing
+        if (!ALLOWED_METHODS.has(method)) {
+            sendResponse({ success: false, error: 'Invalid method.' });
+            return;
+        }
+
         if (!flowApiName && !flowId) {
             sendResponse({ success: false, error: 'Flow API Name or ID is required.' });
             return;
@@ -54,9 +57,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         }
 
-        // Step 1: Collect all sid cookie candidates across Salesforce domain variants.
-        // Try each one against the Tooling API directly - no pre-probe roundtrip needed.
-        getSalesforceSid(orgDomain).then(async (candidates) => {
+        // M1: Call collectAllSidCookies directly - getSalesforceSid was a pass-through wrapper
+        collectAllSidCookies(orgDomain).then(async (candidates) => {
             if (!candidates.length) {
                 sendResponse({ success: false, error: 'No active Salesforce session found. Please ensure you are logged in.' });
                 return;
@@ -67,7 +69,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             for (const { sessionId, apiDomain } of candidates) {
                 try {
                     const result = await fetchFlowFromSalesforce(
-                        apiDomain, sessionId, flowApiName, flowId, versionNumber
+                        apiDomain, sessionId, flowId, versionNumber
                     );
 
                     if (method === 'DOWNLOAD') {
@@ -80,7 +82,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 } catch (error) {
                     if (error.cause === 401) {
                         lastError = error.message;
-                        continue; // try next candidate
+                        continue;
                     }
                     sendResponse({ success: false, error: error.message });
                     return;
@@ -92,22 +94,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse({ success: false, error: error.message });
         });
 
-        return true; // Keep the message channel open for the async response
+        return true;
     }
 });
 
-// Promisified cookie lookups
 function getCookiesAll(details) {
     return new Promise(resolve => chrome.cookies.getAll(details, resolve));
 }
 
-// Collect every sid cookie across all known Salesforce domains.
-// chrome.cookies.get returns only the most domain-specific match,
-// which is often not the active API session. getAll finds them all.
 async function collectAllSidCookies(orgDomain) {
     const hostname = new URL(orgDomain).hostname;
 
-    // Derive all plausible domain roots from the org hostname
     const domainRoots = new Set();
     for (const suffix of ['.lightning.force.com', '.my.salesforce.com', '.salesforce.com', '.force.com']) {
         if (hostname.endsWith(suffix)) {
@@ -117,7 +114,7 @@ async function collectAllSidCookies(orgDomain) {
             domainRoots.add(`${base}.lightning.force.com`);
         }
     }
-    domainRoots.add(hostname); // always include the current host
+    domainRoots.add(hostname);
 
     const seen = new Set();
     const results = [];
@@ -127,26 +124,17 @@ async function collectAllSidCookies(orgDomain) {
         for (const c of cookies) {
             if (c.value && !seen.has(c.value)) {
                 seen.add(c.value);
-                // Prefer HTTPS and exact domain matches as the API endpoint
-                const apiDomain = `https://${domain}`;
-                results.push({ sessionId: c.value, apiDomain });
+                results.push({ sessionId: c.value, apiDomain: `https://${domain}` });
             }
         }
     }
     return results;
 }
 
-// Return all sid cookie candidates ordered by most-likely-correct domain first.
-// The caller tries each one and stops on the first successful API response.
-async function getSalesforceSid(orgDomain) {
-    const candidates = await collectAllSidCookies(orgDomain);
-    return candidates; // caller iterates and stops on first 200
-}
-
-// Resolve DeveloperName + VersionNumber for a Flow record.
-// Uses a single relationship query - Definition.DeveloperName traverses to FlowDefinition
-// where the API name reliably lives, avoiding a second roundtrip.
+// C1: Internal guard - validate flowId before building any SOQL query
 async function fetchFlowIdentity(apiDomain, sessionId, flowId) {
+    if (!FLOW_ID_PATTERN.test(flowId)) throw new Error('Invalid Flow ID passed to fetchFlowIdentity.');
+
     const query = `SELECT Id, VersionNumber, Definition.DeveloperName FROM Flow WHERE Id = '${flowId}'`;
     const url = `${apiDomain}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodeURIComponent(query)}`;
 
@@ -184,34 +172,26 @@ async function fetchFlowIdentity(apiDomain, sessionId, flowId) {
     };
 }
 
-// Fetch from Tooling API and return raw JSON metadata
-async function fetchFlowFromSalesforce(apiDomain, sessionId, flowApiName, flowId, versionNumber) {
-    let query;
-    let ver = versionNumber != null ? Number(versionNumber) : null;
-    let resolvedApiName = flowApiName || null;
+// C1: Internal guard - validate flowId before building any SOQL query
+// I2: flowApiName-only path removed - extension always operates via flowId from Flow Builder
+async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber) {
+    if (!flowId || !FLOW_ID_PATTERN.test(flowId)) throw new Error('A valid Flow ID is required.');
 
-    // When we have a flowId, always fetch metadata by Id - it is the only reliable
-    // query form that avoids 400 errors from Salesforce Tooling API edge cases.
-    // Identity resolution runs separately and is used only for the filename.
-    if (flowId) {
-        query = `SELECT Metadata FROM Flow WHERE Id = '${flowId}'`;
-        if (!resolvedApiName) {
-            try {
-                const identity = await fetchFlowIdentity(apiDomain, sessionId, flowId);
-                resolvedApiName = identity.developerName;
-                ver = identity.versionNumber ?? ver;
-            } catch {
-                // Best-effort - filename will fall back to metadata label
-            }
-        }
-    } else if (flowApiName && ver !== null) {
-        query = `SELECT Metadata FROM Flow WHERE DeveloperName = '${flowApiName}' AND VersionNumber = ${ver}`;
-    } else if (flowApiName) {
-        query = `SELECT Metadata FROM Flow WHERE DeveloperName = '${flowApiName}' AND Status = 'Active'`;
-    } else {
-        throw new Error('Flow API Name or ID is required.');
+    let ver = versionNumber != null ? Number(versionNumber) : null;
+    let resolvedApiName = null;
+
+    const query = `SELECT Metadata FROM Flow WHERE Id = '${flowId}'`;
+
+    try {
+        const identity = await fetchFlowIdentity(apiDomain, sessionId, flowId);
+        resolvedApiName = identity.developerName;
+        ver = identity.versionNumber ?? ver;
+    } catch (err) {
+        // C2: Log only err.message - never log sessionId or full error objects from authenticated calls
+        console.warn('[FlowRetriever] Could not resolve flow identity for filename:', err.message);
     }
 
+    // I3: No Content-Type header on GET requests
     const url = `${apiDomain}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodeURIComponent(query)}`;
 
     const controller = new AbortController();
@@ -220,10 +200,7 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowApiName, flowId
     let response;
     try {
         response = await fetch(url, {
-            headers: {
-                'Authorization': `Bearer ${sessionId}`,
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Authorization': `Bearer ${sessionId}` },
             signal: controller.signal
         });
     } catch (err) {
@@ -235,36 +212,30 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowApiName, flowId
 
     if (!response.ok) {
         const err = new Error(`Salesforce API Error: ${response.status} ${response.statusText}`);
-        err.cause = response.status; // lets caller detect 401 and try next session candidate
+        err.cause = response.status;
         throw err;
     }
 
     const jsonResponse = await response.json();
 
     if (!jsonResponse.records || jsonResponse.records.length === 0) {
-        const label = resolvedApiName || flowApiName || flowId;
-        throw new Error(`Flow "${label}" (Version ${ver ?? 'Active'}) not found in this org.`);
+        throw new Error(`Flow "${flowId}" (Version ${ver ?? 'Active'}) not found in this org.`);
     }
 
     const metadata = jsonResponse.records[0].Metadata;
 
-    // If API name could not be resolved via identity query, fall back to the
-    // label embedded in the metadata JSON (already in hand - no extra API call).
-    // Sanitize: replace whitespace with underscores, strip chars invalid in filenames.
     if (!resolvedApiName && metadata?.label) {
-        resolvedApiName = metadata.label.replace(/\s+/g, '_').replace(/[\\/:*?"<>|]/g, '');
+        // M2: Strip dots in addition to other invalid filename characters to prevent .. sequences
+        resolvedApiName = metadata.label.replace(/\s+/g, '_').replace(/[\\/:*?"<>|.]/g, '');
     }
 
     return {
         json: JSON.stringify(metadata, null, 2),
-        flowApiName: resolvedApiName,
+        flowApiName: resolvedApiName || flowId,
         versionNumber: ver
     };
 }
 
-// Trigger a local file download via chrome.downloads.
-// Uses a base64 data URL instead of URL.createObjectURL - the latter is not
-// available in MV3 service workers.
 function downloadJsonFile(jsonContent, flowLabel, versionNumber) {
     const bytes = new TextEncoder().encode(jsonContent);
     let binary = '';
@@ -274,6 +245,5 @@ function downloadJsonFile(jsonContent, flowLabel, versionNumber) {
     }
     const dataUrl = `data:application/json;base64,${btoa(binary)}`;
     const filename = `${flowLabel}_Ver${versionNumber ?? 'Active'}.json`;
-
     chrome.downloads.download({ url: dataUrl, filename, saveAs: true });
 }

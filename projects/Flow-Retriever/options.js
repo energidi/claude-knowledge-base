@@ -1,12 +1,16 @@
+// M4: Allowlist of valid action values - guards against corrupted or legacy storage values
+const ALLOWED_ACTIONS = new Set(['COPY', 'DOWNLOAD']);
 const radios = document.querySelectorAll('input[name="defaultAction"]');
 const status = document.getElementById('status');
 
-// Load saved setting
 chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
-    radios.forEach(r => { r.checked = r.value === defaultAction; });
+    const safeDefault = ALLOWED_ACTIONS.has(defaultAction) ? defaultAction : 'COPY';
+    if (safeDefault !== defaultAction) {
+        chrome.storage.sync.set({ defaultAction: safeDefault });
+    }
+    radios.forEach(r => { r.checked = r.value === safeDefault; });
 });
 
-// Save on change
 radios.forEach(radio => {
     radio.addEventListener('change', () => {
         chrome.storage.sync.set({ defaultAction: radio.value }, () => {
