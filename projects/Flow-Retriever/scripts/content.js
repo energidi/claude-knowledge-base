@@ -91,25 +91,58 @@ function execCommandCopy(text) {
 }
 
 // ==========================================
+// DOWNLOAD HELPER
+// I6: data: URL downloads are deprecated in Chrome MV3 (Chrome 120+).
+// Blob URL + anchor click is the correct replacement and works in content scripts.
+// ==========================================
+function downloadJson(jsonContent, flowApiName, versionNumber) {
+    const filename = `${flowApiName}_Ver${versionNumber ?? 'Active'}.json`;
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.cssText = 'display:none;position:fixed;';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Delay revoke to give browser time to initiate the download
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showToast(`Downloaded: ${filename}`, 'success');
+}
+
+// ==========================================
 // ENTRY POINT
 // ==========================================
 (function init() {
     if (window.location.href.includes('/builder_platform_interaction/flowBuilder')) {
         injectIntoFlowBuilder();
-        watchForNavigation(); // M3: handle SPA navigation within Flow Builder
+        watchForNavigation();
     }
 })();
 
 // ==========================================
-// M3: Re-inject button on SPA navigation
-// Flow Builder is a LWC SPA - navigating between flows changes the URL
-// via history.pushState without a full page reload.
+// M3 + I2 + I3: SPA navigation watcher
+// - I2: Guard against patch accumulation on extension hot-reload
+// - I3: Track lastUrl so re-injection only fires when flowId/path actually changes
 // ==========================================
 function watchForNavigation() {
+    // I2: Prevent stacking pushState wrappers if content script context is reused
+    if (window._fxrNavPatched) return;
+    window._fxrNavPatched = true;
+
+    let lastUrl = window.location.href;
+
     const handleNavigation = () => {
+        const currentUrl = window.location.href;
+        // I3: Skip if URL has not meaningfully changed (e.g. Salesforce state-only pushState)
+        if (currentUrl === lastUrl) return;
+        lastUrl = currentUrl;
+
         const existing = document.querySelector('#xml-retrieve-builder-btn');
         if (existing) existing.remove();
-        if (window.location.href.includes('/builder_platform_interaction/flowBuilder')) {
+
+        if (currentUrl.includes('/builder_platform_interaction/flowBuilder')) {
             setTimeout(injectIntoFlowBuilder, 300);
         }
     };
@@ -143,8 +176,10 @@ function triggerRetrieve(method, flowId) {
                 }).catch(() => {
                     showToast('Clipboard write failed. Try the Download option instead.', 'error');
                 });
+            } else if (method === 'DOWNLOAD') {
+                // I6: Download handled here via blob URL - replaces deprecated data: URL in background
+                downloadJson(response.json, response.flowApiName, response.versionNumber);
             }
-            // DOWNLOAD is handled entirely in background.js
         }
     );
 }
@@ -163,7 +198,7 @@ function injectIntoFlowBuilder() {
     primaryBtn.textContent = 'JSON';
     primaryBtn.title = 'Execute default action (configurable in extension options)';
     primaryBtn.addEventListener('click', () => {
-        // I5: Resolve flowId at click time - not at injection time - to survive SPA navigation
+        // I5: Resolve flowId at click time to handle SPA navigation
         const { flowId } = resolveFlowIdentityFromBuilder();
         chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
             triggerRetrieve(defaultAction, flowId);
@@ -229,7 +264,6 @@ function injectIntoFlowBuilder() {
     document.body.appendChild(wrapper);
 
     // I4: Memoize last modal state to avoid redundant DOM writes on every mutation
-    // (Salesforce LWC is extremely chatty - this observer fires very frequently)
     let lastModalState = false;
     const modalObserver = new MutationObserver(() => {
         const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');

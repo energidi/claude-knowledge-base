@@ -1,14 +1,27 @@
 const SF_API_VERSION = 'v66.0';
 const FETCH_TIMEOUT_MS = 15000;
-const FLOW_ID_PATTERN = /^[a-zA-Z0-9]{15,18}$/;
+// m1: Salesforce IDs are exactly 15 or exactly 18 chars - never 16 or 17
+const FLOW_ID_PATTERN = /^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/;
 const FLOW_API_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]*$/;
-// I1: Allowlist for method values from content script messages
 const ALLOWED_METHODS = new Set(['COPY', 'DOWNLOAD']);
 const TRUSTED_ORIGINS = [
     /^https:\/\/([a-zA-Z0-9-]+\.)+salesforce\.com$/,
     /^https:\/\/([a-zA-Z0-9-]+\.)+lightning\.force\.com$/,
     /^https:\/\/([a-zA-Z0-9-]+\.)+force\.com$/
 ];
+
+// C2: No-op alarm listener - the act of handling the alarm event keeps the
+// service worker alive during async fetch operations in MV3.
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'sw-keepalive') {} // intentional no-op
+});
+
+// C2: Wrap any async operation in an alarm-based keepalive so the MV3
+// service worker is not suspended mid-fetch by the browser.
+function withKeepAlive(asyncFn) {
+    chrome.alarms.create('sw-keepalive', { periodInMinutes: 0.1 });
+    return asyncFn().finally(() => chrome.alarms.clear('sw-keepalive'));
+}
 
 function isTrustedSender(sender) {
     if (!sender?.tab?.url) return false;
@@ -31,12 +44,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const orgDomain = new URL(sender.tab.url).origin;
         const { flowApiName, flowId, versionNumber, method } = request;
 
-        // I1: Validate method against allowlist before any processing
         if (!ALLOWED_METHODS.has(method)) {
             sendResponse({ success: false, error: 'Invalid method.' });
             return;
         }
-
         if (!flowApiName && !flowId) {
             sendResponse({ success: false, error: 'Flow API Name or ID is required.' });
             return;
@@ -57,8 +68,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         }
 
-        // M1: Call collectAllSidCookies directly - getSalesforceSid was a pass-through wrapper
-        collectAllSidCookies(orgDomain).then(async (candidates) => {
+        withKeepAlive(() => collectAllSidCookies(orgDomain)).then(async (candidates) => {
             if (!candidates.length) {
                 sendResponse({ success: false, error: 'No active Salesforce session found. Please ensure you are logged in.' });
                 return;
@@ -68,19 +78,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
             for (const { sessionId, apiDomain } of candidates) {
                 try {
-                    const result = await fetchFlowFromSalesforce(
-                        apiDomain, sessionId, flowId, versionNumber
+                    const result = await withKeepAlive(() =>
+                        fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber)
                     );
-
-                    if (method === 'DOWNLOAD') {
-                        downloadJsonFile(result.json, result.flowApiName, result.versionNumber);
-                    }
-
-                    sendResponse({ success: true, json: result.json });
+                    // Download is now handled in content.js via blob URL (I6: data: URL deprecated in MV3)
+                    sendResponse({
+                        success: true,
+                        json: result.json,
+                        flowApiName: result.flowApiName,
+                        versionNumber: result.versionNumber
+                    });
                     return;
-
                 } catch (error) {
-                    if (error.cause === 401) {
+                    // C1: Also retry on network errors (TypeError) in addition to 401,
+                    // since cookie-derived apiDomains may not always be valid API endpoints.
+                    if (error.cause === 401 || error instanceof TypeError) {
                         lastError = error.message;
                         continue;
                     }
@@ -112,6 +124,8 @@ async function collectAllSidCookies(orgDomain) {
             domainRoots.add(`${base}.salesforce.com`);
             domainRoots.add(`${base}.my.salesforce.com`);
             domainRoots.add(`${base}.lightning.force.com`);
+            // I4: Also add the force.com variant - missing from previous version
+            domainRoots.add(`${base}.force.com`);
         }
     }
     domainRoots.add(hostname);
@@ -124,7 +138,12 @@ async function collectAllSidCookies(orgDomain) {
         for (const c of cookies) {
             if (c.value && !seen.has(c.value)) {
                 seen.add(c.value);
-                results.push({ sessionId: c.value, apiDomain: `https://${domain}` });
+                // C1: Derive apiDomain from the cookie's actual domain attribute, not the
+                // query domain. This ensures the API call goes to the correct host.
+                // If c.domain is a bare parent (e.g. salesforce.com), the retry loop
+                // handles the resulting network error and moves to the next candidate.
+                const cookieHost = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
+                results.push({ sessionId: c.value, apiDomain: `https://${cookieHost}` });
             }
         }
     }
@@ -173,7 +192,6 @@ async function fetchFlowIdentity(apiDomain, sessionId, flowId) {
 }
 
 // C1: Internal guard - validate flowId before building any SOQL query
-// I2: flowApiName-only path removed - extension always operates via flowId from Flow Builder
 async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber) {
     if (!flowId || !FLOW_ID_PATTERN.test(flowId)) throw new Error('A valid Flow ID is required.');
 
@@ -187,11 +205,13 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumb
         resolvedApiName = identity.developerName;
         ver = identity.versionNumber ?? ver;
     } catch (err) {
-        // C2: Log only err.message - never log sessionId or full error objects from authenticated calls
+        // I5: Re-throw 401 so caller's retry loop skips to the next session candidate
+        // immediately, avoiding a redundant second failing API call with the same token.
+        if (err.cause === 401) throw err;
+        // C2: Log only err.message - never log sessionId or full error objects
         console.warn('[FlowRetriever] Could not resolve flow identity for filename:', err.message);
     }
 
-    // I3: No Content-Type header on GET requests
     const url = `${apiDomain}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodeURIComponent(query)}`;
 
     const controller = new AbortController();
@@ -224,8 +244,13 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumb
 
     const metadata = jsonResponse.records[0].Metadata;
 
-    if (!resolvedApiName && metadata?.label) {
-        // M2: Strip dots in addition to other invalid filename characters to prevent .. sequences
+    // m2: Explicit null check - missing metadata means a permissions problem, not a missing flow
+    if (metadata == null) {
+        throw new Error(`Flow "${flowId}" returned no metadata. Check org permissions.`);
+    }
+
+    if (!resolvedApiName && metadata.label) {
+        // Strip dots in addition to other invalid filename chars to prevent .. sequences
         resolvedApiName = metadata.label.replace(/\s+/g, '_').replace(/[\\/:*?"<>|.]/g, '');
     }
 
@@ -234,16 +259,4 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumb
         flowApiName: resolvedApiName || flowId,
         versionNumber: ver
     };
-}
-
-function downloadJsonFile(jsonContent, flowLabel, versionNumber) {
-    const bytes = new TextEncoder().encode(jsonContent);
-    let binary = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-    }
-    const dataUrl = `data:application/json;base64,${btoa(binary)}`;
-    const filename = `${flowLabel}_Ver${versionNumber ?? 'Active'}.json`;
-    chrome.downloads.download({ url: dataUrl, filename, saveAs: true });
 }
