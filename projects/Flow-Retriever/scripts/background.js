@@ -71,10 +71,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     );
 
                     if (method === 'DOWNLOAD') {
-                        downloadXmlFile(result.xml, result.flowApiName, result.versionNumber);
+                        downloadJsonFile(result.json, result.flowApiName, result.versionNumber);
                     }
 
-                    sendResponse({ success: true, xml: result.xml });
+                    sendResponse({ success: true, json: result.json });
                     return;
 
                 } catch (error) {
@@ -184,7 +184,7 @@ async function fetchFlowIdentity(apiDomain, sessionId, flowId) {
     };
 }
 
-// Fetch from Tooling API and convert JSON to XML
+// Fetch from Tooling API and return raw JSON metadata
 async function fetchFlowFromSalesforce(apiDomain, sessionId, flowApiName, flowId, versionNumber) {
     let query;
     let ver = versionNumber != null ? Number(versionNumber) : null;
@@ -256,75 +256,24 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowApiName, flowId
     }
 
     return {
-        xml: convertJsonToXml(metadata),
+        json: JSON.stringify(metadata, null, 2),
         flowApiName: resolvedApiName,
         versionNumber: ver
     };
 }
 
-// Custom JSON to XML converter for Salesforce Flow metadata
-function convertJsonToXml(jsonObj) {
-    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xml += '<Flow xmlns="http://soap.sforce.com/2006/04/metadata">\n';
-
-    function parseNode(node, name, indentLevel) {
-        const indent = '    '.repeat(indentLevel);
-        if (node === null || node === undefined) return '';
-
-        if (Array.isArray(node)) {
-            return node.map(item => parseNode(item, name, indentLevel)).join('');
-        }
-
-        if (typeof node === 'object') {
-            let objXml = `${indent}<${name}>\n`;
-            for (const key of Object.keys(node)) {
-                if (key !== 'urls' && key !== 'attributes') {
-                    objXml += parseNode(node[key], key, indentLevel + 1);
-                }
-            }
-            objXml += `${indent}</${name}>\n`;
-            return objXml;
-        }
-
-        return `${indent}<${name}>${escapeXml(String(node))}</${name}>\n`;
-    }
-
-    for (const key of Object.keys(jsonObj)) {
-        if (key !== 'urls' && key !== 'attributes') {
-            xml += parseNode(jsonObj[key], key, 1);
-        }
-    }
-
-    xml += '</Flow>';
-    return xml;
-}
-
-// Escape characters that would break XML
-function escapeXml(unsafeStr) {
-    return unsafeStr.replace(/[<>&'"]/g, (c) => {
-        switch (c) {
-            case '<': return '&lt;';
-            case '>': return '&gt;';
-            case '&': return '&amp;';
-            case '\'': return '&apos;';
-            case '"': return '&quot;';
-            default: return c;
-        }
-    });
-}
-
 // Trigger a local file download via chrome.downloads.
 // Uses a base64 data URL instead of URL.createObjectURL - the latter is not
 // available in MV3 service workers.
-function downloadXmlFile(xmlContent, flowLabel, versionNumber) {
-    const bytes = new TextEncoder().encode(xmlContent);
+function downloadJsonFile(jsonContent, flowLabel, versionNumber) {
+    const bytes = new TextEncoder().encode(jsonContent);
     let binary = '';
     const chunkSize = 8192;
     for (let i = 0; i < bytes.length; i += chunkSize) {
         binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
     }
-    const dataUrl = `data:application/xml;base64,${btoa(binary)}`;
-    const filename = `${flowLabel}_Ver${versionNumber ?? 'Active'}_XML.xml`;
+    const dataUrl = `data:application/json;base64,${btoa(binary)}`;
+    const filename = `${flowLabel}_Ver${versionNumber ?? 'Active'}.json`;
 
     chrome.downloads.download({ url: dataUrl, filename, saveAs: true });
 }

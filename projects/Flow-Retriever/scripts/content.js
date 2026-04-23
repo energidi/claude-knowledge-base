@@ -92,16 +92,11 @@ function execCommandCopy(text) {
 }
 
 // ==========================================
-// ENTRY POINT - Route to correct environment
+// ENTRY POINT
 // ==========================================
 (function init() {
-    const url = window.location.href;
-    if (url.includes('/builder_platform_interaction/flowBuilder')) {
+    if (window.location.href.includes('/builder_platform_interaction/flowBuilder')) {
         injectIntoFlowBuilder();
-    } else if (url.includes('/lightning/setup/Flows')) {
-        injectIntoOldSetupPage();
-    } else if (url.includes('/lightning/r/Flow/') || url.includes('/lightning/r/FlowRecord/')) {
-        injectIntoNewLwcPage();
     }
 })();
 
@@ -121,8 +116,8 @@ function triggerRetrieve(method, flowApiName, versionNumber, flowId) {
                 return;
             }
             if (method === 'COPY') {
-                copyToClipboard(response.xml).then(() => {
-                    showToast('Flow XML copied to clipboard.', 'success');
+                copyToClipboard(response.json).then(() => {
+                    showToast('Flow JSON copied to clipboard.', 'success');
                 }).catch(() => {
                     showToast('Clipboard write failed. Try the Download option instead.', 'error');
                 });
@@ -133,7 +128,7 @@ function triggerRetrieve(method, flowApiName, versionNumber, flowId) {
 }
 
 // ==========================================
-// ENVIRONMENT 1: Flow Builder Canvas
+// ENVIRONMENT: Flow Builder Canvas
 // ==========================================
 function injectIntoFlowBuilder() {
     if (document.querySelector('#xml-retrieve-builder-btn')) return;
@@ -144,10 +139,10 @@ function injectIntoFlowBuilder() {
     const wrapper = document.createElement('div');
     wrapper.id = 'xml-retrieve-builder-btn';
 
-    // Left half: XML label - executes user's configured default action
+    // Left half: JSON label - executes user's configured default action
     const primaryBtn = document.createElement('button');
     primaryBtn.id = 'xml-retrieve-btn-primary';
-    primaryBtn.textContent = 'XML';
+    primaryBtn.textContent = 'JSON';
     primaryBtn.title = 'Execute default action (configurable in extension options)';
     primaryBtn.addEventListener('click', () => {
         chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
@@ -158,8 +153,8 @@ function injectIntoFlowBuilder() {
     // Right half: ▼ arrow - opens dropdown
     const arrowBtn = document.createElement('button');
     arrowBtn.id = 'xml-retrieve-btn-arrow';
-    arrowBtn.textContent = '\u25BC';
-    arrowBtn.title = 'XML options';
+    arrowBtn.textContent = '▼';
+    arrowBtn.title = 'JSON options';
     arrowBtn.setAttribute('aria-haspopup', 'true');
     arrowBtn.setAttribute('aria-expanded', 'false');
 
@@ -188,8 +183,8 @@ function injectIntoFlowBuilder() {
         return li;
     };
 
-    menuList.appendChild(makeMenuItem('📋  Copy XML', 'COPY'));
-    menuList.appendChild(makeMenuItem('⬇  Download XML', 'DOWNLOAD'));
+    menuList.appendChild(makeMenuItem('📋  Copy JSON', 'COPY'));
+    menuList.appendChild(makeMenuItem('⬇  Download JSON', 'DOWNLOAD'));
     dropdownMenu.appendChild(menuList);
 
     const closeDropdown = () => {
@@ -222,134 +217,9 @@ function injectIntoFlowBuilder() {
     modalObserver.observe(document.body, { childList: true, subtree: true });
 }
 
-// Returns flowApiName (from breadcrumb) or flowId (from URL) - never both
+// Returns flowId from URL - API name is not reliably exposed in the Flow Builder DOM
 function resolveFlowIdentityFromBuilder() {
-    // Primary: breadcrumb label is the human-readable Flow Label, not the API name.
-    // The API name is not reliably exposed in the Flow Builder DOM, so we fall back to URL.
     const params = new URLSearchParams(window.location.search);
     const flowId = params.get('flowId') || params.get('id') || null;
     return { flowApiName: null, flowId };
-}
-
-// ==========================================
-// ENVIRONMENT 2: "Old" Setup Page (Flow Detail)
-// ==========================================
-function injectIntoOldSetupPage() {
-    const observer = new MutationObserver((_mutations, obs) => {
-        const versionTableRows = document.querySelectorAll('table.list tr.dataRow');
-
-        const apiNameLabel = Array.from(document.querySelectorAll('td.labelCol'))
-            .find(el => el.innerText.trim() === 'Flow API Name');
-        const flowApiName = apiNameLabel ? apiNameLabel.nextElementSibling.innerText.trim() : null;
-
-        if (versionTableRows.length > 0 && flowApiName && !document.querySelector('td.actionColumn .xml-injected-old')) {
-            versionTableRows.forEach(row => {
-                const actionCell = row.querySelector('td.actionColumn');
-                const versionCell = row.querySelector('td[data-label="Version Number"]');
-                const versionNumber = versionCell?.innerText.trim();
-
-                if (!versionNumber) {
-                    console.warn('[FlowXMLRetriever] Could not resolve version number for row, skipping.');
-                    return;
-                }
-
-                if (actionCell && !actionCell.querySelector('.xml-injected-old')) {
-                    const separator = document.createTextNode(' | ');
-                    const retrieveLink = document.createElement('a');
-                    retrieveLink.href = '#';
-                    retrieveLink.innerText = 'Retrieve XML';
-                    retrieveLink.className = 'xml-injected-old';
-
-                    retrieveLink.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        triggerRetrieve('DOWNLOAD', flowApiName, versionNumber);
-                    });
-
-                    actionCell.appendChild(separator);
-                    actionCell.appendChild(retrieveLink);
-                }
-            });
-            obs.disconnect();
-        }
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-}
-
-// ==========================================
-// ENVIRONMENT 3: "New" LWC App Page (Versions Tab)
-// ==========================================
-function injectIntoNewLwcPage() {
-    let debounceTimer = null;
-
-    const observer = new MutationObserver(() => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            const flowApiName = resolveFlowApiNameFromShadowDom();
-            const flowId = flowApiName ? null : resolveFlowIdFromUrl();
-            if (!flowApiName && !flowId) return;
-
-            const tableRows = document.querySelectorAll('lightning-datatable tr');
-            tableRows.forEach(row => {
-                if (row.dataset.xmlInjected) return;
-
-                const versionCell = row.querySelector('td[data-label="Version Number"]');
-                if (!versionCell) return;
-
-                const versionText = versionCell.querySelector('lightning-primitive-cell-factory')?.innerText.trim()
-                    || versionCell.innerText.trim();
-
-                if (!versionText) {
-                    console.warn('[FlowXMLRetriever] Could not resolve version number for LWC row, skipping.');
-                    return;
-                }
-
-                const actionCell = row.querySelector('td:last-child');
-                if (!actionCell) return;
-
-                const iconBtn = document.createElement('button');
-                iconBtn.textContent = '📄 XML';
-                iconBtn.className = 'slds-button slds-button_icon slds-button_icon-border-filled xml-injected-lwc';
-                iconBtn.title = `Download XML for Version ${versionText}`;
-
-                iconBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    triggerRetrieve('DOWNLOAD', flowApiName, versionText, flowId);
-                });
-
-                actionCell.prepend(iconBtn);
-                row.dataset.xmlInjected = 'true';
-            });
-        }, 200);
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-}
-
-// Walk shadow roots recursively to find an element matching a selector
-function walkShadowRoots(root, selector) {
-    const direct = root.querySelector(selector);
-    if (direct) return direct;
-
-    for (const el of root.querySelectorAll('*')) {
-        if (el.shadowRoot) {
-            const found = walkShadowRoots(el.shadowRoot, selector);
-            if (found) return found;
-        }
-    }
-    return null;
-}
-
-// Look for the API Name field specifically - target the labeled output field
-function resolveFlowApiNameFromShadowDom() {
-    // Target only elements explicitly labeled as API Name to avoid matching arbitrary text fields
-    const el = walkShadowRoots(document, '[data-field="ApiName"] lightning-formatted-text, [data-output-field="ApiName"] lightning-formatted-text');
-    const value = el?.innerText?.trim();
-    // Validate it looks like a real API name before returning
-    return value && /^[a-zA-Z][a-zA-Z0-9_]*$/.test(value) ? value : null;
-}
-
-function resolveFlowIdFromUrl() {
-    const match = window.location.pathname.match(/\/lightning\/r\/Flow(?:Record)?\/([a-zA-Z0-9]{15,18})\//);
-    return match ? match[1] : null;
 }

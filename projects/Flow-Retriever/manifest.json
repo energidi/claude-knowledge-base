@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Flow XML Retriever",
+  "name": "Flow Retriever",
   "version": "1.0.0",
-  "description": "One-click Salesforce Flow XML extraction directly from the browser.",
+  "description": "One-click Salesforce Flow JSON extraction directly from the browser.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -34,25 +34,6 @@
       "css": ["styles/custom.css"],
       "run_at": "document_idle"
     },
-    {
-      "matches": [
-        "*://*.salesforce.com/lightning/setup/Flows/*",
-        "*://*.lightning.force.com/lightning/setup/Flows/*"
-      ],
-      "js": ["scripts/content.js"],
-      "css": ["styles/custom.css"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "*://*.salesforce.com/lightning/r/Flow/*",
-        "*://*.lightning.force.com/lightning/r/Flow/*",
-        "*://*.salesforce.com/lightning/r/FlowRecord/*",
-        "*://*.lightning.force.com/lightning/r/FlowRecord/*"
-      ],
-      "js": ["scripts/content.js"],
-      "css": ["styles/custom.css"],
-      "run_at": "document_idle"
-    }
+
   ]
 }

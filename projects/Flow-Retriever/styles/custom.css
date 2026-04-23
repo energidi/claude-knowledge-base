@@ -1,24 +1,6 @@
-/* --- FLOW XML RETRIEVER: CUSTOM STYLES --- */
+/* --- FLOW RETRIEVER: CUSTOM STYLES --- */
 
-/* 1. LWC Page: Add a tiny bit of spacing between our new icon and the native dropdown arrow */
-.xml-injected-lwc {
-    margin-right: 0.25rem !important;
-    vertical-align: middle;
-}
-
-/* 2. Old Setup Page: Ensure our injected text link perfectly matches the standard Salesforce blue action links */
-a.xml-injected-old {
-    color: #015ba7;
-    text-decoration: none;
-    font-weight: normal;
-}
-
-a.xml-injected-old:hover {
-    text-decoration: underline;
-    color: #015ba7;
-}
-
-/* 3. Flow Builder: Fixed-position split button, top-right, clear of the ? help icon */
+/* Flow Builder: Fixed-position split button, top-right, clear of the ? help icon */
 #xml-retrieve-builder-btn {
     position: fixed;
     top: 6px;
