@@ -59,9 +59,11 @@ The extension reads the `sid` (Session ID) cookie from the active Salesforce tab
 | `execCommandCopy` removed | The deprecated fallback wrote the full Flow JSON into a `<textarea>` appended to the page DOM, making it readable by third-party page scripts (ISV managed packages). Replaced with a hard error toast. |
 | `sender.origin` check | `isTrustedSender` validates both `sender.tab.url` (top-level frame) and `sender.origin` (the frame that actually sent the message) to prevent spoofing via embedded iframes. |
 | `301` prefix in FLOW_ID_PATTERN | Salesforce Flow record IDs always begin with `301`. Enforcing this prefix rejects IDs for other object types before any API call is made. |
+| Single Tooling API call | `SELECT Id, VersionNumber, Definition.DeveloperName, Metadata FROM Flow` fetches identity and metadata in one round-trip. Previously two sequential calls. |
+| Module-level `_defaultAction` cache | Caching the storage value at startup and keeping it live via `storage.onChanged` allows the primary button click handler to act synchronously, preserving the user-gesture window required for Clipboard API access. |
 
 ### Review History
-The codebase has undergone two sequential human-guided review rounds, five independent parallel AI review rounds (Claude), and one additional round each from ChatGPT and Gemini. The following categories of issues have already been identified and fixed:
+The codebase has undergone two sequential human-guided review rounds, five independent parallel AI review rounds (Claude), and two additional rounds each from ChatGPT and Grok. The following categories of issues have already been identified and fixed:
 
 - SOQL injection (per-field `safeId` sanitization added as defense-in-depth)
 - Deprecated `data:` URL download (replaced with Blob URL)
@@ -89,6 +91,11 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 - `privacy-policy.html` stale references (fully updated)
 - `options.js` no `lastError` check on storage write (added)
 - `privacy-policy.html` stale references (fully updated)
+- Two sequential Tooling API calls merged into one (eliminates one round-trip per retrieval)
+- `response.json()` unguarded - now wrapped in try/catch for malformed API response
+- `collectAllSidCookies` sequential domain lookups replaced with `Promise.all` (parallel)
+- Async `chrome.storage.sync.get` inside click handler expired clipboard gesture window - replaced with module-level `_defaultAction` cache + `storage.onChanged` listener
+- `options.js` `storage.get` callback did not check `chrome.runtime.lastError`
 
 ---
 
@@ -100,7 +107,7 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 {
   "manifest_version": 3,
   "name": "Flow Retriever",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "One-click Salesforce Flow JSON extraction directly from the browser.",
   "icons": {
     "16": "icons/icon16.png",
@@ -287,11 +294,15 @@ async function collectAllSidCookies(orgDomain) {
     }
     domainRoots.add(hostname);
 
+    // Fetch all domains in parallel - independent cookie reads have no ordering dependency
+    const allCookies = await Promise.all(
+        [...domainRoots].map(domain => getCookiesAll({ domain, name: 'sid' }))
+    );
+
     const seen = new Set();
     const results = [];
 
-    for (const domain of domainRoots) {
-        const cookies = await getCookiesAll({ domain, name: 'sid' });
+    for (const cookies of allCookies) {
         for (const c of cookies) {
             if (c.value && !seen.has(c.value)) {
                 seen.add(c.value);
@@ -308,71 +319,13 @@ async function collectAllSidCookies(orgDomain) {
     return results;
 }
 
-// Internal guard - validate flowId before building any SOQL query
-async function fetchFlowIdentity(apiDomain, sessionId, flowId) {
-    if (!FLOW_ID_PATTERN.test(flowId)) throw new Error('Invalid Flow ID passed to fetchFlowIdentity.');
-
-    // Secondary sanitization before interpolation - defense in depth
-    const safeId = flowId.replace(/[^a-zA-Z0-9]/g, '');
-    const query = `SELECT Id, VersionNumber, Definition.DeveloperName FROM Flow WHERE Id = '${safeId}'`;
-    const url = `${apiDomain}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodeURIComponent(query)}`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-    let response;
-    try {
-        response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${sessionId}` },
-            signal: controller.signal
-        });
-    } catch (err) {
-        if (err.name === 'AbortError') throw new Error('Request timed out resolving Flow identity.');
-        throw err;
-    } finally {
-        clearTimeout(timeoutId);
-    }
-
-    if (!response.ok) {
-        const err = new Error(`Salesforce API Error: ${response.status} ${response.statusText}`);
-        err.cause = response.status;
-        throw err;
-    }
-
-    const data = await response.json();
-    if (!data.records || data.records.length === 0) {
-        throw new Error('Flow identity not found.');
-    }
-
-    const record = data.records[0];
-    return {
-        developerName: record.Definition?.DeveloperName || null,
-        versionNumber: record.VersionNumber || null
-    };
-}
-
-// Internal guard - validate flowId before building any SOQL query
+// Single Tooling API call returns identity fields + metadata in one round-trip
 async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber) {
     if (!flowId || !FLOW_ID_PATTERN.test(flowId)) throw new Error('A valid Flow ID is required.');
 
-    let ver = versionNumber != null ? Number(versionNumber) : null;
-    let resolvedApiName = null;
-
     // Secondary sanitization before interpolation - defense in depth
     const safeId = flowId.replace(/[^a-zA-Z0-9]/g, '');
-    const query = `SELECT Metadata FROM Flow WHERE Id = '${safeId}'`;
-
-    try {
-        const identity = await fetchFlowIdentity(apiDomain, sessionId, flowId);
-        resolvedApiName = identity.developerName;
-        ver = identity.versionNumber ?? ver;
-    } catch (err) {
-        // Re-throw 401 so caller's retry loop skips to the next session candidate
-        if (err.cause === 401) throw err;
-        // Log only err.message - never log sessionId or full error objects
-        console.warn('[FlowRetriever] Could not resolve flow identity for filename:', err.message);
-    }
-
+    const query = `SELECT Id, VersionNumber, Definition.DeveloperName, Metadata FROM Flow WHERE Id = '${safeId}'`;
     const url = `${apiDomain}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodeURIComponent(query)}`;
 
     const controller = new AbortController();
@@ -397,28 +350,39 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumb
         throw err;
     }
 
-    const jsonResponse = await response.json();
-
-    if (!jsonResponse.records || jsonResponse.records.length === 0) {
-        throw new Error(`Flow "${flowId}" (Version ${ver ?? 'Active'}) not found in this org.`);
+    let jsonResponse;
+    try {
+        jsonResponse = await response.json();
+    } catch {
+        throw new Error('Salesforce API returned malformed JSON.');
     }
 
-    const metadata = jsonResponse.records[0].Metadata;
+    if (!jsonResponse.records || jsonResponse.records.length === 0) {
+        throw new Error(`Flow "${flowId}" (Version ${versionNumber ?? 'Active'}) not found in this org.`);
+    }
+
+    const record = jsonResponse.records[0];
+    const metadata = record.Metadata;
 
     // Explicit null check - missing metadata means a permissions problem, not a missing flow
     if (metadata == null) {
         throw new Error(`Flow "${flowId}" returned no metadata. Check org permissions.`);
     }
 
-    if (!resolvedApiName && metadata.label) {
+    const resolvedApiName = record.Definition?.DeveloperName || null;
+    const ver = record.VersionNumber ?? (versionNumber != null ? Number(versionNumber) : null);
+
+    let filename = resolvedApiName;
+    if (!filename && metadata.label) {
         // Strip invalid filename chars, dots (prevents .. sequences), control characters,
-        // and Unicode right-to-left override to prevent filename spoofing
-        resolvedApiName = metadata.label.replace(/\s+/g, '_').replace(/[\\/:*?"<>|.\x00-\x1f‮​]/g, '');
+        // and Unicode direction overrides (‮) and zero-width chars (​) to
+        // prevent filename spoofing attacks.
+        filename = metadata.label.replace(/\s+/g, '_').replace(/[\\/:*?"<>|.\x00-\x1f‮​]/g, '');
     }
 
     return {
         json: JSON.stringify(metadata, null, 2),
-        flowApiName: resolvedApiName || flowId,
+        flowApiName: filename || flowId,
         versionNumber: ver
     };
 }
@@ -534,6 +498,20 @@ let _modalObserver = null;
 let _modalDebounceTimer = null;
 let _dropdownListenerController = null;
 
+// Cache defaultAction so the click handler can act synchronously - the async
+// storage.sync.get callback expires the user-gesture window needed for clipboard access.
+let _defaultAction = 'COPY';
+chrome.storage.sync.get({ defaultAction: 'COPY' }, (result) => {
+    if (!chrome.runtime.lastError && result?.defaultAction) {
+        _defaultAction = result.defaultAction;
+    }
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes.defaultAction) {
+        _defaultAction = changes.defaultAction.newValue;
+    }
+});
+
 // ==========================================
 // SPA navigation watcher
 // Patches pushState AND replaceState (Salesforce uses both) to detect navigation.
@@ -634,13 +612,8 @@ function injectIntoFlowBuilder() {
     primaryBtn.textContent = 'JSON';
     primaryBtn.title = 'Execute default action (configurable in extension options)';
     primaryBtn.addEventListener('click', () => {
-        // Resolve flowId inside the storage callback to avoid a race where the user
-        // navigates between the click and the async callback firing
-        chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
-            const action = chrome.runtime.lastError ? 'COPY' : defaultAction;
-            const { flowId } = resolveFlowIdentityFromBuilder();
-            triggerRetrieve(action, flowId);
-        });
+        const { flowId } = resolveFlowIdentityFromBuilder();
+        triggerRetrieve(_defaultAction, flowId);
     });
 
     const arrowBtn = document.createElement('button');
@@ -740,9 +713,10 @@ const ALLOWED_ACTIONS = new Set(['COPY', 'DOWNLOAD']);
 const radios = document.querySelectorAll('input[name="defaultAction"]');
 const status = document.getElementById('status');
 
-chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
+chrome.storage.sync.get({ defaultAction: 'COPY' }, (result) => {
+    const defaultAction = chrome.runtime.lastError ? 'COPY' : (result?.defaultAction ?? 'COPY');
     const safeDefault = ALLOWED_ACTIONS.has(defaultAction) ? defaultAction : 'COPY';
-    if (safeDefault !== defaultAction) {
+    if (!chrome.runtime.lastError && safeDefault !== defaultAction) {
         chrome.storage.sync.set({ defaultAction: safeDefault });
     }
     radios.forEach(r => { r.checked = r.value === safeDefault; });
