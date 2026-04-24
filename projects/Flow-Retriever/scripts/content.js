@@ -61,39 +61,21 @@ function showToast(message, type = 'info') {
 
 // ==========================================
 // CLIPBOARD HELPER
-// Falls back to execCommand when the Clipboard API is unavailable or
-// the document has lost focus (common in Salesforce Lightning iframes).
+// Uses the async Clipboard API only. execCommand('copy') was removed because
+// it writes the full Flow JSON into the page DOM where other page scripts
+// (e.g. ISV managed package JS) can read it during the operation.
+// If the Clipboard API is unavailable, the caller surfaces an error toast.
 // ==========================================
 function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(text).catch(() => execCommandCopy(text));
+        return navigator.clipboard.writeText(text);
     }
-    return execCommandCopy(text);
-}
-
-function execCommandCopy(text) {
-    return new Promise((resolve, reject) => {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        try {
-            const ok = document.execCommand('copy');
-            textarea.remove();
-            ok ? resolve() : reject(new Error('execCommand copy returned false'));
-        } catch (err) {
-            textarea.remove();
-            reject(err);
-        }
-    });
+    return Promise.reject(new Error('Clipboard API unavailable'));
 }
 
 // ==========================================
 // DOWNLOAD HELPER
-// I6: data: URL downloads are deprecated in Chrome MV3 (Chrome 120+).
-// Blob URL + anchor click is the correct replacement and works in content scripts.
+// Blob URL + anchor click is the correct approach for content scripts in MV3 (Chrome 120+).
 // ==========================================
 function downloadJson(jsonContent, flowApiName, versionNumber) {
     const filename = `${flowApiName}_Ver${versionNumber ?? 'Active'}.json`;
@@ -121,13 +103,17 @@ function downloadJson(jsonContent, flowApiName, versionNumber) {
     }
 })();
 
+// Module-level references for cleanup across SPA navigations
+let _modalObserver = null;
+let _dropdownListenerController = null;
+
 // ==========================================
-// M3 + I2 + I3: SPA navigation watcher
-// - I2: Guard against patch accumulation on extension hot-reload
-// - I3: Track lastUrl so re-injection only fires when flowId/path actually changes
+// SPA navigation watcher
+// Patches pushState AND replaceState (Salesforce uses both) to detect navigation.
+// Guard against patch accumulation on extension hot-reload via _fxrNavPatched flag.
 // ==========================================
 function watchForNavigation() {
-    // I2: Prevent stacking pushState wrappers if content script context is reused
+    // Prevent stacking wrappers if content script context is reused
     if (window._fxrNavPatched) return;
     window._fxrNavPatched = true;
 
@@ -135,12 +121,16 @@ function watchForNavigation() {
 
     const handleNavigation = () => {
         const currentUrl = window.location.href;
-        // I3: Skip if URL has not meaningfully changed (e.g. Salesforce state-only pushState)
+        // Skip if URL has not meaningfully changed
         if (currentUrl === lastUrl) return;
         lastUrl = currentUrl;
 
         const existing = document.querySelector('#xml-retrieve-builder-btn');
-        if (existing) existing.remove();
+        if (existing) {
+            // Disconnect observer before removing the element to prevent memory/CPU leak
+            if (_modalObserver) { _modalObserver.disconnect(); _modalObserver = null; }
+            existing.remove();
+        }
 
         if (currentUrl.includes('/builder_platform_interaction/flowBuilder')) {
             setTimeout(injectIntoFlowBuilder, 300);
@@ -152,6 +142,14 @@ function watchForNavigation() {
         originalPushState(...args);
         handleNavigation();
     };
+
+    // Salesforce also uses replaceState for in-place URL updates (e.g. version changes)
+    const originalReplaceState = history.replaceState.bind(history);
+    history.replaceState = function (...args) {
+        originalReplaceState(...args);
+        handleNavigation();
+    };
+
     window.addEventListener('popstate', handleNavigation);
 }
 
@@ -159,6 +157,13 @@ function watchForNavigation() {
 // SHARED: Send message to background and handle response
 // ==========================================
 function triggerRetrieve(method, flowId) {
+    if (!flowId) {
+        showToast('Flow ID not found in URL. Please ensure a Flow is open.', 'error');
+        return;
+    }
+
+    const MAX_JSON_CHARS = 5 * 1024 * 1024; // 5 MB guard
+
     chrome.runtime.sendMessage(
         { action: 'RETRIEVE_FLOW', method, flowApiName: null, versionNumber: null, flowId },
         (response) => {
@@ -170,14 +175,17 @@ function triggerRetrieve(method, flowId) {
                 showToast(response?.error || 'Unknown error', 'error');
                 return;
             }
+            if (response.json && response.json.length > MAX_JSON_CHARS) {
+                showToast('Flow JSON exceeds 5 MB. Use Download instead.', 'error');
+                return;
+            }
             if (method === 'COPY') {
                 copyToClipboard(response.json).then(() => {
                     showToast('Flow JSON copied to clipboard.', 'success');
                 }).catch(() => {
-                    showToast('Clipboard write failed. Try the Download option instead.', 'error');
+                    showToast('Clipboard access denied. Use Download instead.', 'error');
                 });
             } else if (method === 'DOWNLOAD') {
-                // I6: Download handled here via blob URL - replaces deprecated data: URL in background
                 downloadJson(response.json, response.flowApiName, response.versionNumber);
             }
         }
@@ -198,9 +206,10 @@ function injectIntoFlowBuilder() {
     primaryBtn.textContent = 'JSON';
     primaryBtn.title = 'Execute default action (configurable in extension options)';
     primaryBtn.addEventListener('click', () => {
-        // I5: Resolve flowId at click time to handle SPA navigation
-        const { flowId } = resolveFlowIdentityFromBuilder();
+        // Resolve flowId inside the storage callback to avoid a race where the user
+        // navigates between the click and the async callback firing
         chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
+            const { flowId } = resolveFlowIdentityFromBuilder();
             triggerRetrieve(defaultAction, flowId);
         });
     });
@@ -215,6 +224,7 @@ function injectIntoFlowBuilder() {
     const dropdownMenu = document.createElement('div');
     dropdownMenu.id = 'xml-retrieve-builder-menu';
     dropdownMenu.setAttribute('role', 'menu');
+    dropdownMenu.setAttribute('aria-label', 'JSON export options');
 
     const menuList = document.createElement('ul');
     menuList.className = 'slds-dropdown__list';
@@ -230,7 +240,6 @@ function injectIntoFlowBuilder() {
             e.preventDefault();
             e.stopPropagation();
             closeDropdown();
-            // I5: Resolve flowId at click time
             const { flowId } = resolveFlowIdentityFromBuilder();
             triggerRetrieve(method, flowId);
         });
@@ -254,28 +263,33 @@ function injectIntoFlowBuilder() {
         arrowBtn.setAttribute('aria-expanded', String(!isOpen));
     });
 
+    // AbortController ensures the previous document listener is removed before re-injecting,
+    // preventing accumulation of stale capture listeners across SPA navigations
+    if (_dropdownListenerController) _dropdownListenerController.abort();
+    _dropdownListenerController = new AbortController();
     document.addEventListener('click', (e) => {
         if (!wrapper.contains(e.target)) closeDropdown();
-    }, { capture: true });
+    }, { capture: true, signal: _dropdownListenerController.signal });
 
     wrapper.appendChild(primaryBtn);
     wrapper.appendChild(arrowBtn);
     wrapper.appendChild(dropdownMenu);
     document.body.appendChild(wrapper);
 
-    // I4: Memoize last modal state to avoid redundant DOM writes on every mutation
+    // Memoize last modal state to avoid redundant DOM writes on every mutation.
+    // Stored in module-level var so watchForNavigation can disconnect it on re-inject.
     let lastModalState = false;
-    const modalObserver = new MutationObserver(() => {
+    _modalObserver = new MutationObserver(() => {
         const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
         if (modalOpen !== lastModalState) {
             lastModalState = modalOpen;
             wrapper.style.display = modalOpen ? 'none' : 'flex';
         }
     });
-    modalObserver.observe(document.body, { childList: true, subtree: true });
+    _modalObserver.observe(document.body, { childList: true, subtree: true });
 }
 
-// Returns flowId from URL query params - resolved at click time to handle SPA navigation
+// Returns flowId from URL query params - resolved at call time to handle SPA navigation
 function resolveFlowIdentityFromBuilder() {
     const params = new URLSearchParams(window.location.search);
     const flowId = params.get('flowId') || params.get('id') || null;

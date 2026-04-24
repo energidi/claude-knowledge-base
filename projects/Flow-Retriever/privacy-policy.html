@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Privacy Policy - Flow XML Retriever</title>
+  <title>Privacy Policy - Flow Retriever</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -24,12 +24,12 @@
 <body>
 
   <h1>Privacy Policy</h1>
-  <p class="meta">Flow XML Retriever Chrome Extension &mdash; Last updated: April 16, 2026</p>
+  <p class="meta">Flow Retriever Chrome Extension &mdash; Last updated: April 24, 2026</p>
 
   <h2>Overview</h2>
   <p>
-    Flow XML Retriever is a Chrome Extension that allows Salesforce users to extract Flow metadata
-    as XML directly from the browser. This policy explains what data the extension accesses,
+    Flow Retriever is a Chrome Extension that allows Salesforce users to extract Flow metadata
+    as JSON directly from the browser. This policy explains what data the extension accesses,
     how it is used, and what is never collected.
   </p>
 
@@ -48,7 +48,7 @@
   <ul>
     <li>The session token is used in memory, for the duration of a single API call, and is immediately discarded.</li>
     <li>It is sent only to your own Salesforce org (the same domain you are already logged in to).</li>
-    <li>The Flow XML returned by the API is either copied to your clipboard or downloaded to your local computer - whichever you choose.</li>
+    <li>The Flow JSON returned by the API is passed through the extension's internal message bus to the active browser tab, where it is either copied to your clipboard or downloaded to your local computer &mdash; whichever you choose. This transit is local to your browser and is not transmitted to any external server.</li>
   </ul>
 
   <h2>Data We Do Not Collect</h2>
@@ -62,17 +62,18 @@
 
   <h2>Local Storage</h2>
   <p>
-    The extension uses Chrome's local storage API to save your preferences (for example, whether
-    you prefer to copy XML to clipboard or download it as a file). This data never leaves your
-    device and is not accessible to anyone other than you.
+    The extension uses Chrome's <code>storage.sync</code> API to save your preferences (for example,
+    whether you prefer to copy JSON to clipboard or download it as a file). This preference is synced
+    across your Chrome profile via your Google account. No Salesforce data or session information is
+    ever written to storage.
   </p>
 
   <h2>Permissions Used</h2>
   <ul>
     <li><strong>cookies:</strong> To read the Salesforce session token for API authentication.</li>
-    <li><strong>downloads:</strong> To save the XML file to your computer when you choose the download option.</li>
-    <li><strong>storage:</strong> To persist your extension preferences locally.</li>
-    <li><strong>Host permissions (*.salesforce.com, *.lightning.force.com):</strong> To inject the retrieval button into Salesforce pages and to call the Salesforce Tooling API.</li>
+    <li><strong>storage:</strong> To persist your extension preferences across devices via Chrome sync.</li>
+    <li><strong>alarms:</strong> To keep the extension's background service worker alive during API requests (a Chrome MV3 requirement).</li>
+    <li><strong>Host permissions (*.salesforce.com, *.lightning.force.com, *.force.com):</strong> To inject the retrieval button into Salesforce Flow Builder pages and to call the Salesforce Tooling API.</li>
   </ul>
 
   <h2>Contact</h2>

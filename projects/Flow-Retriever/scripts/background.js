@@ -1,8 +1,8 @@
 const SF_API_VERSION = 'v66.0';
 const FETCH_TIMEOUT_MS = 15000;
-// m1: Salesforce IDs are exactly 15 or exactly 18 chars - never 16 or 17
-const FLOW_ID_PATTERN = /^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/;
-const FLOW_API_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+// Salesforce Flow IDs are exactly 15 or 18 chars and begin with '301'
+const FLOW_ID_PATTERN = /^301[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/;
+const FLOW_API_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]{0,79}$/;
 const ALLOWED_METHODS = new Set(['COPY', 'DOWNLOAD']);
 const TRUSTED_ORIGINS = [
     /^https:\/\/([a-zA-Z0-9-]+\.)+salesforce\.com$/,
@@ -10,24 +10,28 @@ const TRUSTED_ORIGINS = [
     /^https:\/\/([a-zA-Z0-9-]+\.)+force\.com$/
 ];
 
-// C2: No-op alarm listener - the act of handling the alarm event keeps the
+// No-op alarm listener - the act of handling the alarm event keeps the
 // service worker alive during async fetch operations in MV3.
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'sw-keepalive') {} // intentional no-op
 });
 
-// C2: Wrap any async operation in an alarm-based keepalive so the MV3
-// service worker is not suspended mid-fetch by the browser.
+// Reference-counted keepalive: alarm is created on first acquire and cleared
+// only when all concurrent callers have released, preventing alarm collisions.
+let _keepAliveCount = 0;
 function withKeepAlive(asyncFn) {
-    chrome.alarms.create('sw-keepalive', { periodInMinutes: 0.1 });
-    return asyncFn().finally(() => chrome.alarms.clear('sw-keepalive'));
+    if (++_keepAliveCount === 1) chrome.alarms.create('sw-keepalive', { periodInMinutes: 0.1 });
+    return asyncFn().finally(() => { if (--_keepAliveCount === 0) chrome.alarms.clear('sw-keepalive'); });
 }
 
 function isTrustedSender(sender) {
     if (!sender?.tab?.url) return false;
     try {
-        const origin = new URL(sender.tab.url).origin;
-        return TRUSTED_ORIGINS.some(pattern => pattern.test(origin));
+        const tabOrigin = new URL(sender.tab.url).origin;
+        // sender.origin is the frame origin in MV3; fall back to tabOrigin if absent
+        const frameOrigin = sender.origin || tabOrigin;
+        return TRUSTED_ORIGINS.some(p => p.test(tabOrigin)) &&
+               TRUSTED_ORIGINS.some(p => p.test(frameOrigin));
     } catch {
         return false;
     }
@@ -68,7 +72,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         }
 
-        withKeepAlive(() => collectAllSidCookies(orgDomain)).then(async (candidates) => {
+        // Single withKeepAlive wraps the entire async chain to avoid nested alarm collisions
+        withKeepAlive(async () => {
+            const candidates = await collectAllSidCookies(orgDomain);
             if (!candidates.length) {
                 sendResponse({ success: false, error: 'No active Salesforce session found. Please ensure you are logged in.' });
                 return;
@@ -78,10 +84,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
             for (const { sessionId, apiDomain } of candidates) {
                 try {
-                    const result = await withKeepAlive(() =>
-                        fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber)
-                    );
-                    // Download is now handled in content.js via blob URL (I6: data: URL deprecated in MV3)
+                    const result = await fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber);
                     sendResponse({
                         success: true,
                         json: result.json,
@@ -90,8 +93,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     });
                     return;
                 } catch (error) {
-                    // C1: Also retry on network errors (TypeError) in addition to 401,
-                    // since cookie-derived apiDomains may not always be valid API endpoints.
+                    // Retry on 401 or network errors - cookie-derived apiDomains may not always be valid
                     if (error.cause === 401 || error instanceof TypeError) {
                         lastError = error.message;
                         continue;
@@ -124,7 +126,6 @@ async function collectAllSidCookies(orgDomain) {
             domainRoots.add(`${base}.salesforce.com`);
             domainRoots.add(`${base}.my.salesforce.com`);
             domainRoots.add(`${base}.lightning.force.com`);
-            // I4: Also add the force.com variant - missing from previous version
             domainRoots.add(`${base}.force.com`);
         }
     }
@@ -138,23 +139,26 @@ async function collectAllSidCookies(orgDomain) {
         for (const c of cookies) {
             if (c.value && !seen.has(c.value)) {
                 seen.add(c.value);
-                // C1: Derive apiDomain from the cookie's actual domain attribute, not the
-                // query domain. This ensures the API call goes to the correct host.
-                // If c.domain is a bare parent (e.g. salesforce.com), the retry loop
-                // handles the resulting network error and moves to the next candidate.
                 const cookieHost = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
-                results.push({ sessionId: c.value, apiDomain: `https://${cookieHost}` });
+                const apiDomainCandidate = `https://${cookieHost}`;
+                // Only use cookie domains that match a known Salesforce origin pattern;
+                // bare parent domains (e.g. salesforce.com) are rejected here rather than
+                // sending the sid to an unvalidated host and relying on a network error retry.
+                if (!TRUSTED_ORIGINS.some(p => p.test(apiDomainCandidate))) continue;
+                results.push({ sessionId: c.value, apiDomain: apiDomainCandidate });
             }
         }
     }
     return results;
 }
 
-// C1: Internal guard - validate flowId before building any SOQL query
+// Internal guard - validate flowId before building any SOQL query
 async function fetchFlowIdentity(apiDomain, sessionId, flowId) {
     if (!FLOW_ID_PATTERN.test(flowId)) throw new Error('Invalid Flow ID passed to fetchFlowIdentity.');
 
-    const query = `SELECT Id, VersionNumber, Definition.DeveloperName FROM Flow WHERE Id = '${flowId}'`;
+    // Secondary sanitization before interpolation - defense in depth
+    const safeId = flowId.replace(/[^a-zA-Z0-9]/g, '');
+    const query = `SELECT Id, VersionNumber, Definition.DeveloperName FROM Flow WHERE Id = '${safeId}'`;
     const url = `${apiDomain}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodeURIComponent(query)}`;
 
     const controller = new AbortController();
@@ -191,24 +195,25 @@ async function fetchFlowIdentity(apiDomain, sessionId, flowId) {
     };
 }
 
-// C1: Internal guard - validate flowId before building any SOQL query
+// Internal guard - validate flowId before building any SOQL query
 async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber) {
     if (!flowId || !FLOW_ID_PATTERN.test(flowId)) throw new Error('A valid Flow ID is required.');
 
     let ver = versionNumber != null ? Number(versionNumber) : null;
     let resolvedApiName = null;
 
-    const query = `SELECT Metadata FROM Flow WHERE Id = '${flowId}'`;
+    // Secondary sanitization before interpolation - defense in depth
+    const safeId = flowId.replace(/[^a-zA-Z0-9]/g, '');
+    const query = `SELECT Metadata FROM Flow WHERE Id = '${safeId}'`;
 
     try {
         const identity = await fetchFlowIdentity(apiDomain, sessionId, flowId);
         resolvedApiName = identity.developerName;
         ver = identity.versionNumber ?? ver;
     } catch (err) {
-        // I5: Re-throw 401 so caller's retry loop skips to the next session candidate
-        // immediately, avoiding a redundant second failing API call with the same token.
+        // Re-throw 401 so caller's retry loop skips to the next session candidate
         if (err.cause === 401) throw err;
-        // C2: Log only err.message - never log sessionId or full error objects
+        // Log only err.message - never log sessionId or full error objects
         console.warn('[FlowRetriever] Could not resolve flow identity for filename:', err.message);
     }
 
@@ -244,14 +249,15 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumb
 
     const metadata = jsonResponse.records[0].Metadata;
 
-    // m2: Explicit null check - missing metadata means a permissions problem, not a missing flow
+    // Explicit null check - missing metadata means a permissions problem, not a missing flow
     if (metadata == null) {
         throw new Error(`Flow "${flowId}" returned no metadata. Check org permissions.`);
     }
 
     if (!resolvedApiName && metadata.label) {
-        // Strip dots in addition to other invalid filename chars to prevent .. sequences
-        resolvedApiName = metadata.label.replace(/\s+/g, '_').replace(/[\\/:*?"<>|.]/g, '');
+        // Strip invalid filename chars, dots (prevents .. sequences), control characters,
+        // and Unicode right-to-left override to prevent filename spoofing
+        resolvedApiName = metadata.label.replace(/\s+/g, '_').replace(/[\\/:*?"<>|.\x00-\x1f‮​]/g, '');
     }
 
     return {
