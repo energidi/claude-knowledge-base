@@ -32,15 +32,8 @@ function showToast(message, type = 'info') {
         pointer-events: none;
     `;
 
-    if (!document.getElementById('fxr-toast-styles')) {
-        const style = document.createElement('style');
-        style.id = 'fxr-toast-styles';
-        style.textContent = `
-            @keyframes fxr-slide-in { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
-            @keyframes fxr-fade-out { from { opacity:1; } to { opacity:0; transform:translateY(-6px); } }
-        `;
-        document.head.appendChild(style);
-    }
+    // Animations are defined in styles/custom.css (injected by the extension),
+    // avoiding dynamic <style> injection into the host page DOM.
 
     const iconEl = document.createElement('span');
     iconEl.style.cssText = 'font-size:15px;flex-shrink:0;';
@@ -88,8 +81,10 @@ function downloadJson(jsonContent, flowApiName, versionNumber) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    // Delay revoke to give browser time to initiate the download
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    // 60s delay: if the user has "Ask where to save" enabled in Chrome, the OS file
+    // dialog stays open and the download reads the Blob URL after the click. Revoking
+    // at 5s destroys the URL before they finish navigating the dialog.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
     showToast(`Downloaded: ${filename}`, 'success');
 }
 
@@ -105,6 +100,7 @@ function downloadJson(jsonContent, flowApiName, versionNumber) {
 
 // Module-level references for cleanup across SPA navigations
 let _modalObserver = null;
+let _modalDebounceTimer = null;
 let _dropdownListenerController = null;
 
 // ==========================================
@@ -127,8 +123,9 @@ function watchForNavigation() {
 
         const existing = document.querySelector('#xml-retrieve-builder-btn');
         if (existing) {
-            // Disconnect observer before removing the element to prevent memory/CPU leak
+            // Disconnect observer and cancel any pending debounce before removing the element
             if (_modalObserver) { _modalObserver.disconnect(); _modalObserver = null; }
+            if (_modalDebounceTimer) { clearTimeout(_modalDebounceTimer); _modalDebounceTimer = null; }
             existing.remove();
         }
 
@@ -209,8 +206,9 @@ function injectIntoFlowBuilder() {
         // Resolve flowId inside the storage callback to avoid a race where the user
         // navigates between the click and the async callback firing
         chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
+            const action = chrome.runtime.lastError ? 'COPY' : defaultAction;
             const { flowId } = resolveFlowIdentityFromBuilder();
-            triggerRetrieve(defaultAction, flowId);
+            triggerRetrieve(action, flowId);
         });
     });
 
@@ -276,15 +274,20 @@ function injectIntoFlowBuilder() {
     wrapper.appendChild(dropdownMenu);
     document.body.appendChild(wrapper);
 
-    // Memoize last modal state to avoid redundant DOM writes on every mutation.
-    // Stored in module-level var so watchForNavigation can disconnect it on re-inject.
+    // Debounced MutationObserver: Salesforce Flow Builder mutates the DOM hundreds of
+    // times per second (drag, type, hover). Running querySelector on every mutation
+    // causes layout thrashing. The 150ms debounce coalesces bursts into one check.
     let lastModalState = false;
     _modalObserver = new MutationObserver(() => {
-        const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
-        if (modalOpen !== lastModalState) {
-            lastModalState = modalOpen;
-            wrapper.style.display = modalOpen ? 'none' : 'flex';
-        }
+        if (_modalDebounceTimer) return;
+        _modalDebounceTimer = setTimeout(() => {
+            _modalDebounceTimer = null;
+            const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
+            if (modalOpen !== lastModalState) {
+                lastModalState = modalOpen;
+                wrapper.style.display = modalOpen ? 'none' : 'flex';
+            }
+        }, 150);
     });
     _modalObserver.observe(document.body, { childList: true, subtree: true });
 }

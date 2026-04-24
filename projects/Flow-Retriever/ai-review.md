@@ -61,23 +61,32 @@ The extension reads the `sid` (Session ID) cookie from the active Salesforce tab
 | `301` prefix in FLOW_ID_PATTERN | Salesforce Flow record IDs always begin with `301`. Enforcing this prefix rejects IDs for other object types before any API call is made. |
 
 ### Review History
-The codebase has undergone two sequential human-guided review rounds plus five independent parallel AI review rounds. The following categories of issues have already been identified and fixed:
+The codebase has undergone two sequential human-guided review rounds, five independent parallel AI review rounds (Claude), and one additional round each from ChatGPT and Gemini. The following categories of issues have already been identified and fixed:
 
 - SOQL injection (per-field `safeId` sanitization added as defense-in-depth)
 - Deprecated `data:` URL download (replaced with Blob URL)
 - Nested `withKeepAlive` alarm race condition (replaced with reference-counted pattern)
+- `periodInMinutes: 0.1` below Chrome's 1-minute minimum clamp (fixed to `periodInMinutes: 1`)
 - Stale document click listeners across SPA navigations (fixed with `AbortController`)
-- `MutationObserver` memory leak across SPA navigations (fixed with module-level ref + `disconnect()`)
+- `MutationObserver` memory leak + layout thrashing (module-level ref + `disconnect()` + 150ms debounce)
+- Dynamic `<style>` injection into host page DOM (moved `@keyframes` to `custom.css`)
 - `history.replaceState` not patched (now patched alongside `pushState`)
 - `apiDomain` sent to unvalidated cookie-derived hosts (TRUSTED_ORIGINS check added)
 - `execCommandCopy` DOM exposure risk (removed entirely)
-- `sender.origin` not checked (now validated in `isTrustedSender`)
+- `sender.origin` fallback to `tabOrigin` when absent (now fails if `sender.origin` is missing)
 - `FLOW_ID_PATTERN` allowing any object type prefix (now enforces `301`)
 - `FLOW_API_NAME_PATTERN` unbounded length (capped at 80 chars)
 - Filename strip regex missing control characters and Unicode RLO (added)
 - `flowId` captured before async storage gap in primary button handler (moved inside callback)
 - Pre-flight null `flowId` check missing (added in `triggerRetrieve`)
 - 5 MB size gate on `response.json` before clipboard/download
+- Retry loop stopped on 401/TypeError only - now retries all per-candidate failures (403, 404, 429, timeout)
+- `getCookiesAll` ignored `chrome.runtime.lastError` (now rejects with a clear error message)
+- Storage read `lastError` not checked in primary button handler (now falls back to `COPY`)
+- Blob URL revoked after 5s - race condition when user has "Ask where to save" dialog (increased to 60s)
+- `options.html` CSP blocked inline `<style>` (added `style-src 'self' 'unsafe-inline'`)
+- `options.js` no `lastError` check on storage write (added)
+- `privacy-policy.html` stale references (fully updated)
 - `options.js` no `lastError` check on storage write (added)
 - `privacy-policy.html` stale references (fully updated)
 
@@ -91,7 +100,7 @@ The codebase has undergone two sequential human-guided review rounds plus five i
 {
   "manifest_version": 3,
   "name": "Flow Retriever",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "One-click Salesforce Flow JSON extraction directly from the browser.",
   "icons": {
     "16": "icons/icon16.png",
@@ -157,18 +166,19 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // only when all concurrent callers have released, preventing alarm collisions.
 let _keepAliveCount = 0;
 function withKeepAlive(asyncFn) {
-    if (++_keepAliveCount === 1) chrome.alarms.create('sw-keepalive', { periodInMinutes: 0.1 });
+    if (++_keepAliveCount === 1) chrome.alarms.create('sw-keepalive', { periodInMinutes: 1 });
     return asyncFn().finally(() => { if (--_keepAliveCount === 0) chrome.alarms.clear('sw-keepalive'); });
 }
 
 function isTrustedSender(sender) {
-    if (!sender?.tab?.url) return false;
+    // Require both tab URL and sender.origin (frame origin in MV3).
+    // Falling back to tabOrigin when sender.origin is absent would allow sandboxed
+    // iframes (origin "null") to be implicitly trusted via the parent tab URL.
+    if (!sender?.tab?.url || !sender.origin) return false;
     try {
         const tabOrigin = new URL(sender.tab.url).origin;
-        // sender.origin is the frame origin in MV3; fall back to tabOrigin if absent
-        const frameOrigin = sender.origin || tabOrigin;
         return TRUSTED_ORIGINS.some(p => p.test(tabOrigin)) &&
-               TRUSTED_ORIGINS.some(p => p.test(frameOrigin));
+               TRUSTED_ORIGINS.some(p => p.test(sender.origin));
     } catch {
         return false;
     }
@@ -230,13 +240,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     });
                     return;
                 } catch (error) {
-                    // Retry on 401 or network errors - cookie-derived apiDomains may not always be valid
-                    if (error.cause === 401 || error instanceof TypeError) {
-                        lastError = error.message;
-                        continue;
+                    // Only abort the loop for input-validation errors that will not change
+                    // across candidates (e.g. structurally invalid Flow ID).
+                    // All per-candidate failures (401, 403, 404, 429, timeout, network error)
+                    // are retried with the next candidate session.
+                    if (error.message.startsWith('A valid Flow ID')) {
+                        sendResponse({ success: false, error: error.message });
+                        return;
                     }
-                    sendResponse({ success: false, error: error.message });
-                    return;
+                    lastError = error.message;
+                    continue;
                 }
             }
 
@@ -250,7 +263,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 function getCookiesAll(details) {
-    return new Promise(resolve => chrome.cookies.getAll(details, resolve));
+    return new Promise((resolve, reject) => chrome.cookies.getAll(details, (cookies) => {
+        if (chrome.runtime.lastError) {
+            reject(new Error(`Unable to read Salesforce session cookies: ${chrome.runtime.lastError.message}`));
+        } else {
+            resolve(cookies);
+        }
+    }));
 }
 
 async function collectAllSidCookies(orgDomain) {
@@ -444,15 +463,8 @@ function showToast(message, type = 'info') {
         pointer-events: none;
     `;
 
-    if (!document.getElementById('fxr-toast-styles')) {
-        const style = document.createElement('style');
-        style.id = 'fxr-toast-styles';
-        style.textContent = `
-            @keyframes fxr-slide-in { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
-            @keyframes fxr-fade-out { from { opacity:1; } to { opacity:0; transform:translateY(-6px); } }
-        `;
-        document.head.appendChild(style);
-    }
+    // Animations are defined in styles/custom.css (injected by the extension),
+    // avoiding dynamic <style> injection into the host page DOM.
 
     const iconEl = document.createElement('span');
     iconEl.style.cssText = 'font-size:15px;flex-shrink:0;';
@@ -500,8 +512,10 @@ function downloadJson(jsonContent, flowApiName, versionNumber) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    // Delay revoke to give browser time to initiate the download
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    // 60s delay: if the user has "Ask where to save" enabled in Chrome, the OS file
+    // dialog stays open and the download reads the Blob URL after the click. Revoking
+    // at 5s destroys the URL before they finish navigating the dialog.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
     showToast(`Downloaded: ${filename}`, 'success');
 }
 
@@ -517,6 +531,7 @@ function downloadJson(jsonContent, flowApiName, versionNumber) {
 
 // Module-level references for cleanup across SPA navigations
 let _modalObserver = null;
+let _modalDebounceTimer = null;
 let _dropdownListenerController = null;
 
 // ==========================================
@@ -539,8 +554,9 @@ function watchForNavigation() {
 
         const existing = document.querySelector('#xml-retrieve-builder-btn');
         if (existing) {
-            // Disconnect observer before removing the element to prevent memory/CPU leak
+            // Disconnect observer and cancel any pending debounce before removing the element
             if (_modalObserver) { _modalObserver.disconnect(); _modalObserver = null; }
+            if (_modalDebounceTimer) { clearTimeout(_modalDebounceTimer); _modalDebounceTimer = null; }
             existing.remove();
         }
 
@@ -621,8 +637,9 @@ function injectIntoFlowBuilder() {
         // Resolve flowId inside the storage callback to avoid a race where the user
         // navigates between the click and the async callback firing
         chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
+            const action = chrome.runtime.lastError ? 'COPY' : defaultAction;
             const { flowId } = resolveFlowIdentityFromBuilder();
-            triggerRetrieve(defaultAction, flowId);
+            triggerRetrieve(action, flowId);
         });
     });
 
@@ -688,15 +705,20 @@ function injectIntoFlowBuilder() {
     wrapper.appendChild(dropdownMenu);
     document.body.appendChild(wrapper);
 
-    // Memoize last modal state to avoid redundant DOM writes on every mutation.
-    // Stored in module-level var so watchForNavigation can disconnect it on re-inject.
+    // Debounced MutationObserver: Salesforce Flow Builder mutates the DOM hundreds of
+    // times per second (drag, type, hover). Running querySelector on every mutation
+    // causes layout thrashing. The 150ms debounce coalesces bursts into one check.
     let lastModalState = false;
     _modalObserver = new MutationObserver(() => {
-        const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
-        if (modalOpen !== lastModalState) {
-            lastModalState = modalOpen;
-            wrapper.style.display = modalOpen ? 'none' : 'flex';
-        }
+        if (_modalDebounceTimer) return;
+        _modalDebounceTimer = setTimeout(() => {
+            _modalDebounceTimer = null;
+            const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
+            if (modalOpen !== lastModalState) {
+                lastModalState = modalOpen;
+                wrapper.style.display = modalOpen ? 'none' : 'flex';
+            }
+        }, 150);
     });
     _modalObserver.observe(document.body, { childList: true, subtree: true });
 }
@@ -752,7 +774,7 @@ radios.forEach(radio => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
     <title>Flow Retriever - Options</title>
     <style>
         body {
@@ -820,6 +842,10 @@ radios.forEach(radio => {
 
 ```css
 /* --- FLOW RETRIEVER: CUSTOM STYLES --- */
+
+/* Toast animations - defined here so content.js does not inject <style> into the host DOM */
+@keyframes fxr-slide-in { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+@keyframes fxr-fade-out { from { opacity:1; } to { opacity:0; transform:translateY(-6px); } }
 
 /* Flow Builder: Fixed-position split button, top-right, clear of the ? help icon */
 #xml-retrieve-builder-btn {

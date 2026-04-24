@@ -1,5 +1,9 @@
 /* --- FLOW RETRIEVER: CUSTOM STYLES --- */
 
+/* Toast animations - defined here so content.js does not inject <style> into the host DOM */
+@keyframes fxr-slide-in { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+@keyframes fxr-fade-out { from { opacity:1; } to { opacity:0; transform:translateY(-6px); } }
+
 /* Flow Builder: Fixed-position split button, top-right, clear of the ? help icon */
 #xml-retrieve-builder-btn {
     position: fixed;

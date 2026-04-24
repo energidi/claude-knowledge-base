@@ -20,18 +20,19 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // only when all concurrent callers have released, preventing alarm collisions.
 let _keepAliveCount = 0;
 function withKeepAlive(asyncFn) {
-    if (++_keepAliveCount === 1) chrome.alarms.create('sw-keepalive', { periodInMinutes: 0.1 });
+    if (++_keepAliveCount === 1) chrome.alarms.create('sw-keepalive', { periodInMinutes: 1 });
     return asyncFn().finally(() => { if (--_keepAliveCount === 0) chrome.alarms.clear('sw-keepalive'); });
 }
 
 function isTrustedSender(sender) {
-    if (!sender?.tab?.url) return false;
+    // Require both tab URL and sender.origin (frame origin in MV3).
+    // Falling back to tabOrigin when sender.origin is absent would allow sandboxed
+    // iframes (origin "null") to be implicitly trusted via the parent tab URL.
+    if (!sender?.tab?.url || !sender.origin) return false;
     try {
         const tabOrigin = new URL(sender.tab.url).origin;
-        // sender.origin is the frame origin in MV3; fall back to tabOrigin if absent
-        const frameOrigin = sender.origin || tabOrigin;
         return TRUSTED_ORIGINS.some(p => p.test(tabOrigin)) &&
-               TRUSTED_ORIGINS.some(p => p.test(frameOrigin));
+               TRUSTED_ORIGINS.some(p => p.test(sender.origin));
     } catch {
         return false;
     }
@@ -93,13 +94,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     });
                     return;
                 } catch (error) {
-                    // Retry on 401 or network errors - cookie-derived apiDomains may not always be valid
-                    if (error.cause === 401 || error instanceof TypeError) {
-                        lastError = error.message;
-                        continue;
+                    // Only abort the loop for input-validation errors that will not change
+                    // across candidates (e.g. structurally invalid Flow ID).
+                    // All per-candidate failures (401, 403, 404, 429, timeout, network error)
+                    // are retried with the next candidate session.
+                    if (error.message.startsWith('A valid Flow ID')) {
+                        sendResponse({ success: false, error: error.message });
+                        return;
                     }
-                    sendResponse({ success: false, error: error.message });
-                    return;
+                    lastError = error.message;
+                    continue;
                 }
             }
 
@@ -113,7 +117,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 function getCookiesAll(details) {
-    return new Promise(resolve => chrome.cookies.getAll(details, resolve));
+    return new Promise((resolve, reject) => chrome.cookies.getAll(details, (cookies) => {
+        if (chrome.runtime.lastError) {
+            reject(new Error(`Unable to read Salesforce session cookies: ${chrome.runtime.lastError.message}`));
+        } else {
+            resolve(cookies);
+        }
+    }));
 }
 
 async function collectAllSidCookies(orgDomain) {
