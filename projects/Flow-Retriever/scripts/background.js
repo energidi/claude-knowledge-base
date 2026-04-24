@@ -141,11 +141,15 @@ async function collectAllSidCookies(orgDomain) {
     }
     domainRoots.add(hostname);
 
+    // Fetch all domains in parallel - independent cookie reads have no ordering dependency
+    const allCookies = await Promise.all(
+        [...domainRoots].map(domain => getCookiesAll({ domain, name: 'sid' }))
+    );
+
     const seen = new Set();
     const results = [];
 
-    for (const domain of domainRoots) {
-        const cookies = await getCookiesAll({ domain, name: 'sid' });
+    for (const cookies of allCookies) {
         for (const c of cookies) {
             if (c.value && !seen.has(c.value)) {
                 seen.add(c.value);
@@ -162,71 +166,13 @@ async function collectAllSidCookies(orgDomain) {
     return results;
 }
 
-// Internal guard - validate flowId before building any SOQL query
-async function fetchFlowIdentity(apiDomain, sessionId, flowId) {
-    if (!FLOW_ID_PATTERN.test(flowId)) throw new Error('Invalid Flow ID passed to fetchFlowIdentity.');
-
-    // Secondary sanitization before interpolation - defense in depth
-    const safeId = flowId.replace(/[^a-zA-Z0-9]/g, '');
-    const query = `SELECT Id, VersionNumber, Definition.DeveloperName FROM Flow WHERE Id = '${safeId}'`;
-    const url = `${apiDomain}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodeURIComponent(query)}`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-    let response;
-    try {
-        response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${sessionId}` },
-            signal: controller.signal
-        });
-    } catch (err) {
-        if (err.name === 'AbortError') throw new Error('Request timed out resolving Flow identity.');
-        throw err;
-    } finally {
-        clearTimeout(timeoutId);
-    }
-
-    if (!response.ok) {
-        const err = new Error(`Salesforce API Error: ${response.status} ${response.statusText}`);
-        err.cause = response.status;
-        throw err;
-    }
-
-    const data = await response.json();
-    if (!data.records || data.records.length === 0) {
-        throw new Error('Flow identity not found.');
-    }
-
-    const record = data.records[0];
-    return {
-        developerName: record.Definition?.DeveloperName || null,
-        versionNumber: record.VersionNumber || null
-    };
-}
-
-// Internal guard - validate flowId before building any SOQL query
+// Single Tooling API call returns identity fields + metadata in one round-trip
 async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber) {
     if (!flowId || !FLOW_ID_PATTERN.test(flowId)) throw new Error('A valid Flow ID is required.');
 
-    let ver = versionNumber != null ? Number(versionNumber) : null;
-    let resolvedApiName = null;
-
     // Secondary sanitization before interpolation - defense in depth
     const safeId = flowId.replace(/[^a-zA-Z0-9]/g, '');
-    const query = `SELECT Metadata FROM Flow WHERE Id = '${safeId}'`;
-
-    try {
-        const identity = await fetchFlowIdentity(apiDomain, sessionId, flowId);
-        resolvedApiName = identity.developerName;
-        ver = identity.versionNumber ?? ver;
-    } catch (err) {
-        // Re-throw 401 so caller's retry loop skips to the next session candidate
-        if (err.cause === 401) throw err;
-        // Log only err.message - never log sessionId or full error objects
-        console.warn('[FlowRetriever] Could not resolve flow identity for filename:', err.message);
-    }
-
+    const query = `SELECT Id, VersionNumber, Definition.DeveloperName, Metadata FROM Flow WHERE Id = '${safeId}'`;
     const url = `${apiDomain}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodeURIComponent(query)}`;
 
     const controller = new AbortController();
@@ -251,28 +197,39 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumb
         throw err;
     }
 
-    const jsonResponse = await response.json();
-
-    if (!jsonResponse.records || jsonResponse.records.length === 0) {
-        throw new Error(`Flow "${flowId}" (Version ${ver ?? 'Active'}) not found in this org.`);
+    let jsonResponse;
+    try {
+        jsonResponse = await response.json();
+    } catch {
+        throw new Error('Salesforce API returned malformed JSON.');
     }
 
-    const metadata = jsonResponse.records[0].Metadata;
+    if (!jsonResponse.records || jsonResponse.records.length === 0) {
+        throw new Error(`Flow "${flowId}" (Version ${versionNumber ?? 'Active'}) not found in this org.`);
+    }
+
+    const record = jsonResponse.records[0];
+    const metadata = record.Metadata;
 
     // Explicit null check - missing metadata means a permissions problem, not a missing flow
     if (metadata == null) {
         throw new Error(`Flow "${flowId}" returned no metadata. Check org permissions.`);
     }
 
-    if (!resolvedApiName && metadata.label) {
+    const resolvedApiName = record.Definition?.DeveloperName || null;
+    const ver = record.VersionNumber ?? (versionNumber != null ? Number(versionNumber) : null);
+
+    let filename = resolvedApiName;
+    if (!filename && metadata.label) {
         // Strip invalid filename chars, dots (prevents .. sequences), control characters,
-        // and Unicode right-to-left override to prevent filename spoofing
-        resolvedApiName = metadata.label.replace(/\s+/g, '_').replace(/[\\/:*?"<>|.\x00-\x1f‮​]/g, '');
+        // and Unicode direction overrides (‮) and zero-width chars (​) to
+        // prevent filename spoofing attacks.
+        filename = metadata.label.replace(/\s+/g, '_').replace(/[\\/:*?"<>|.\x00-\x1f‮​]/g, '');
     }
 
     return {
         json: JSON.stringify(metadata, null, 2),
-        flowApiName: resolvedApiName || flowId,
+        flowApiName: filename || flowId,
         versionNumber: ver
     };
 }

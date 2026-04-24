@@ -103,6 +103,20 @@ let _modalObserver = null;
 let _modalDebounceTimer = null;
 let _dropdownListenerController = null;
 
+// Cache defaultAction so the click handler can act synchronously - the async
+// storage.sync.get callback expires the user-gesture window needed for clipboard access.
+let _defaultAction = 'COPY';
+chrome.storage.sync.get({ defaultAction: 'COPY' }, (result) => {
+    if (!chrome.runtime.lastError && result?.defaultAction) {
+        _defaultAction = result.defaultAction;
+    }
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync' && changes.defaultAction) {
+        _defaultAction = changes.defaultAction.newValue;
+    }
+});
+
 // ==========================================
 // SPA navigation watcher
 // Patches pushState AND replaceState (Salesforce uses both) to detect navigation.
@@ -203,13 +217,8 @@ function injectIntoFlowBuilder() {
     primaryBtn.textContent = 'JSON';
     primaryBtn.title = 'Execute default action (configurable in extension options)';
     primaryBtn.addEventListener('click', () => {
-        // Resolve flowId inside the storage callback to avoid a race where the user
-        // navigates between the click and the async callback firing
-        chrome.storage.sync.get({ defaultAction: 'COPY' }, ({ defaultAction }) => {
-            const action = chrome.runtime.lastError ? 'COPY' : defaultAction;
-            const { flowId } = resolveFlowIdentityFromBuilder();
-            triggerRetrieve(action, flowId);
-        });
+        const { flowId } = resolveFlowIdentityFromBuilder();
+        triggerRetrieve(_defaultAction, flowId);
     });
 
     const arrowBtn = document.createElement('button');
