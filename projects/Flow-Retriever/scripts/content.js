@@ -105,10 +105,11 @@ let _dropdownListenerController = null;
 
 // Cache defaultAction so the click handler can act synchronously - the async
 // storage.sync.get callback expires the user-gesture window needed for clipboard access.
+const _ALLOWED_ACTIONS = new Set(['COPY', 'DOWNLOAD']);
 let _defaultAction = 'COPY';
 chrome.storage.sync.get({ defaultAction: 'COPY' }, (result) => {
     if (!chrome.runtime.lastError && result?.defaultAction) {
-        _defaultAction = result.defaultAction;
+        _defaultAction = _ALLOWED_ACTIONS.has(result.defaultAction) ? result.defaultAction : 'COPY';
     }
 });
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -130,6 +131,7 @@ function watchForNavigation() {
     let lastUrl = window.location.href;
 
     const handleNavigation = () => {
+        if (document.hidden) return; // No work needed while tab is not visible
         const currentUrl = window.location.href;
         // Skip if URL has not meaningfully changed
         if (currentUrl === lastUrl) return;
@@ -198,7 +200,10 @@ function triggerRetrieve(method, flowId) {
 // ENVIRONMENT: Flow Builder Canvas
 // ==========================================
 function injectIntoFlowBuilder() {
-    if (document.querySelector('#xml-retrieve-builder-btn')) return;
+    // Remove any stale button from a previous extension context (hot-reload / auto-update).
+    // Returning early would leave the old button whose event listeners point to the dead context.
+    const existing = document.querySelector('#xml-retrieve-builder-btn');
+    if (existing) existing.remove();
 
     const wrapper = document.createElement('div');
     wrapper.id = 'xml-retrieve-builder-btn';
@@ -278,15 +283,21 @@ function injectIntoFlowBuilder() {
     // times per second (drag, type, hover). Running querySelector on every mutation
     // causes layout thrashing. The 150ms debounce coalesces bursts into one check.
     let lastModalState = false;
+    const syncModalState = () => {
+        const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
+        if (modalOpen !== lastModalState) {
+            lastModalState = modalOpen;
+            wrapper.style.display = modalOpen ? 'none' : 'flex';
+        }
+    };
+
+    syncModalState(); // Sync immediately - modal may already be open at injection time
+
     _modalObserver = new MutationObserver(() => {
         if (_modalDebounceTimer) return;
         _modalDebounceTimer = setTimeout(() => {
             _modalDebounceTimer = null;
-            const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
-            if (modalOpen !== lastModalState) {
-                lastModalState = modalOpen;
-                wrapper.style.display = modalOpen ? 'none' : 'flex';
-            }
+            syncModalState();
         }, 150);
     });
     _modalObserver.observe(document.body, { childList: true, subtree: true });

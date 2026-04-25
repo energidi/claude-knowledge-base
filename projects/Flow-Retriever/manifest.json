@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Flow Retriever",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "One-click Salesforce Flow JSON extraction directly from the browser.",
   "icons": {
     "16": "icons/icon16.png",
@@ -11,7 +11,8 @@
   "permissions": [
     "cookies",
     "storage",
-    "alarms"
+    "alarms",
+    "clipboardWrite"
   ],
   "options_ui": {
     "page": "options.html",
