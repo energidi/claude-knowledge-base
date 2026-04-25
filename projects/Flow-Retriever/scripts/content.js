@@ -148,19 +148,10 @@ function watchForNavigation() {
         }
     };
 
-    const originalPushState = history.pushState.bind(history);
-    history.pushState = function (...args) {
-        originalPushState(...args);
-        handleNavigation();
-    };
-
-    // Salesforce also uses replaceState for in-place URL updates (e.g. version changes)
-    const originalReplaceState = history.replaceState.bind(history);
-    history.replaceState = function (...args) {
-        originalReplaceState(...args);
-        handleNavigation();
-    };
-
+    // Poll for URL changes every 500ms - the only reliable SPA detection approach
+    // in MV3 isolated-world content scripts (pushState/replaceState patching only
+    // intercepts calls from the content script's own world, not the page's JS).
+    setInterval(handleNavigation, 500);
     window.addEventListener('popstate', handleNavigation);
 }
 

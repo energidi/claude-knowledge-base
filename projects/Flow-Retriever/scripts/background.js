@@ -143,7 +143,7 @@ async function collectAllSidCookies(orgDomain) {
 
     // Fetch all domains in parallel - independent cookie reads have no ordering dependency
     const allCookies = await Promise.all(
-        [...domainRoots].map(domain => getCookiesAll({ domain, name: 'sid' }))
+        [...domainRoots].map(domain => getCookiesAll({ domain, name: 'sid' }).catch(() => []))
     );
 
     const seen = new Set();
