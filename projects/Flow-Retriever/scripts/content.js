@@ -114,7 +114,8 @@ chrome.storage.sync.get({ defaultAction: 'COPY' }, (result) => {
 });
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'sync' && changes.defaultAction) {
-        _defaultAction = changes.defaultAction.newValue;
+        const nv = changes.defaultAction.newValue;
+        _defaultAction = _ALLOWED_ACTIONS.has(nv) ? nv : 'COPY';
     }
 });
 
@@ -125,7 +126,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Guard against interval accumulation on extension hot-reload via _fxrNavPatched flag.
 // ==========================================
 function watchForNavigation() {
-    // Prevent stacking wrappers if content script context is reused
+    // Clear any prior interval from a stale context before starting a new one
+    if (window._fxrNavInterval) { clearInterval(window._fxrNavInterval); window._fxrNavInterval = null; }
     if (window._fxrNavPatched) return;
     window._fxrNavPatched = true;
 
@@ -154,7 +156,7 @@ function watchForNavigation() {
     // Poll for URL changes every 500ms - the only reliable SPA detection approach
     // in MV3 isolated-world content scripts (pushState/replaceState patching only
     // intercepts calls from the content script's own world, not the page's JS).
-    setInterval(handleNavigation, 500);
+    window._fxrNavInterval = setInterval(handleNavigation, 500);
     window.addEventListener('popstate', handleNavigation);
 }
 
@@ -201,6 +203,8 @@ function triggerRetrieve(method, flowId) {
 // ENVIRONMENT: Flow Builder Canvas
 // ==========================================
 function injectIntoFlowBuilder() {
+    // Guard: deferred setTimeout calls can fire after the user has already navigated away.
+    if (!window.location.href.includes('/builder_platform_interaction/flowBuilder')) return;
     // Remove any stale button from a previous extension context (hot-reload / auto-update).
     // Returning early would leave the old button whose event listeners point to the dead context.
     const existing = document.querySelector('#xml-retrieve-builder-btn');
