@@ -28,6 +28,11 @@ For every finding, provide:
 
 Be exhaustive. Do not summarise without specifics. Do not skip files.
 
+At the end of your review, provide a final verdict:
+
+**GO** - No Critical or Important blocking issues. The extension is ready for Chrome Web Store release.
+**NO GO** - One or more Critical or Important issues must be resolved before release. List each blocker by finding number.
+
 ---
 
 ## Background
@@ -54,16 +59,17 @@ The extension reads the `sid` (Session ID) cookie from the active Salesforce tab
 | `chrome.alarms` keepalive | MV3 service workers are suspended after ~30s of inactivity. An alarm event keeps the worker alive during async Tooling API fetches. |
 | Reference-counted `withKeepAlive` | Prevents alarm collision when multiple async operations are in flight simultaneously. |
 | TRUSTED_ORIGINS allowlist | Cookie-derived `apiDomain` values are validated against a regex allowlist before the `sid` is ever sent to them. Bare parent domains (e.g. `salesforce.com`) are rejected. |
-| `history.pushState` + `replaceState` patching | Salesforce Flow Builder is a full SPA. Both methods are patched to detect navigation and re-inject/remove the button. |
+| URL polling (setInterval 500ms) | MV3 isolated-world content scripts cannot intercept `history.pushState` calls made by the page's JavaScript - each isolated world has its own copy of the `history` object. Polling `window.location.href` every 500ms is the correct approach for SPA navigation detection without requiring the `webNavigation` permission. `popstate` listener handles browser back/forward. |
 | MutationObserver for modal detection | Salesforce modals overlay the canvas. The button is hidden when a modal is open so it doesn't interfere. |
 | `execCommandCopy` removed | The deprecated fallback wrote the full Flow JSON into a `<textarea>` appended to the page DOM, making it readable by third-party page scripts (ISV managed packages). Replaced with a hard error toast. |
 | `sender.origin` check | `isTrustedSender` validates both `sender.tab.url` (top-level frame) and `sender.origin` (the frame that actually sent the message) to prevent spoofing via embedded iframes. |
 | `301` prefix in FLOW_ID_PATTERN | Salesforce Flow record IDs always begin with `301`. Enforcing this prefix rejects IDs for other object types before any API call is made. |
 | Single Tooling API call | `SELECT Id, VersionNumber, Definition.DeveloperName, Metadata FROM Flow` fetches identity and metadata in one round-trip. Previously two sequential calls. |
 | Module-level `_defaultAction` cache | Caching the storage value at startup and keeping it live via `storage.onChanged` allows the primary button click handler to act synchronously, preserving the user-gesture window required for Clipboard API access. |
+| Broad multi-domain cookie collection | Salesforce orgs can be accessed via `*.salesforce.com`, `*.my.salesforce.com`, `*.lightning.force.com`, and `*.force.com`. Restricting to a single origin would break users on non-standard org domains. The TRUSTED_ORIGINS allowlist ensures only legitimate Salesforce origins are used as API endpoints. |
 
 ### Review History
-The codebase has undergone two sequential human-guided review rounds, five independent parallel AI review rounds (Claude), and two additional rounds each from ChatGPT and Grok. The following categories of issues have already been identified and fixed:
+The codebase has undergone two sequential human-guided review rounds, five independent parallel AI review rounds (Claude), and three additional rounds from ChatGPT, Gemini, and Grok. The following categories of issues have already been identified and fixed:
 
 - SOQL injection (per-field `safeId` sanitization added as defense-in-depth)
 - Deprecated `data:` URL download (replaced with Blob URL)
@@ -72,7 +78,7 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 - Stale document click listeners across SPA navigations (fixed with `AbortController`)
 - `MutationObserver` memory leak + layout thrashing (module-level ref + `disconnect()` + 150ms debounce)
 - Dynamic `<style>` injection into host page DOM (moved `@keyframes` to `custom.css`)
-- `history.replaceState` not patched (now patched alongside `pushState`)
+- `history.pushState/replaceState` patching replaced with URL polling (patching only intercepts content script calls, not page JS calls, due to Chrome MV3 isolated worlds)
 - `apiDomain` sent to unvalidated cookie-derived hosts (TRUSTED_ORIGINS check added)
 - `execCommandCopy` DOM exposure risk (removed entirely)
 - `sender.origin` fallback to `tabOrigin` when absent (now fails if `sender.origin` is missing)
@@ -96,6 +102,7 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 - `collectAllSidCookies` sequential domain lookups replaced with `Promise.all` (parallel)
 - Async `chrome.storage.sync.get` inside click handler expired clipboard gesture window - replaced with module-level `_defaultAction` cache + `storage.onChanged` listener
 - `options.js` `storage.get` callback did not check `chrome.runtime.lastError`
+- `Promise.all` in `collectAllSidCookies` was fail-fast - single domain rejection aborted entire collection (added `.catch(() => [])` per domain)
 
 ---
 
@@ -107,7 +114,7 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 {
   "manifest_version": 3,
   "name": "Flow Retriever",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "One-click Salesforce Flow JSON extraction directly from the browser.",
   "icons": {
     "16": "icons/icon16.png",
@@ -294,9 +301,10 @@ async function collectAllSidCookies(orgDomain) {
     }
     domainRoots.add(hostname);
 
-    // Fetch all domains in parallel - independent cookie reads have no ordering dependency
+    // Fetch all domains in parallel; individual failures resolve to [] so one bad
+    // domain does not abort the entire collection via Promise.all's fail-fast behaviour.
     const allCookies = await Promise.all(
-        [...domainRoots].map(domain => getCookiesAll({ domain, name: 'sid' }))
+        [...domainRoots].map(domain => getCookiesAll({ domain, name: 'sid' }).catch(() => []))
     );
 
     const seen = new Set();
@@ -514,11 +522,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // ==========================================
 // SPA navigation watcher
-// Patches pushState AND replaceState (Salesforce uses both) to detect navigation.
-// Guard against patch accumulation on extension hot-reload via _fxrNavPatched flag.
+// Polls window.location.href every 500ms for URL changes.
+// pushState/replaceState patching was removed: MV3 isolated-world content scripts
+// have their own copy of the history object and cannot intercept calls made by
+// the host page's JavaScript. Polling is the correct approach without requiring
+// the webNavigation permission. popstate is kept for browser back/forward.
+// Guard against interval accumulation on extension hot-reload via _fxrNavPatched flag.
 // ==========================================
 function watchForNavigation() {
-    // Prevent stacking wrappers if content script context is reused
+    // Prevent stacking intervals if content script context is reused
     if (window._fxrNavPatched) return;
     window._fxrNavPatched = true;
 
@@ -543,19 +555,10 @@ function watchForNavigation() {
         }
     };
 
-    const originalPushState = history.pushState.bind(history);
-    history.pushState = function (...args) {
-        originalPushState(...args);
-        handleNavigation();
-    };
-
-    // Salesforce also uses replaceState for in-place URL updates (e.g. version changes)
-    const originalReplaceState = history.replaceState.bind(history);
-    history.replaceState = function (...args) {
-        originalReplaceState(...args);
-        handleNavigation();
-    };
-
+    // Poll for URL changes every 500ms - the only reliable SPA detection approach
+    // in MV3 isolated-world content scripts (pushState/replaceState patching only
+    // intercepts calls from the content script's own world, not the page's JS).
+    setInterval(handleNavigation, 500);
     window.addEventListener('popstate', handleNavigation);
 }
 
