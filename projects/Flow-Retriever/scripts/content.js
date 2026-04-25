@@ -120,8 +120,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // ==========================================
 // SPA navigation watcher
-// Patches pushState AND replaceState (Salesforce uses both) to detect navigation.
-// Guard against patch accumulation on extension hot-reload via _fxrNavPatched flag.
+// Polls window.location.href every 500ms. pushState/replaceState patching does not
+// work in MV3 isolated worlds (each world has its own history object).
+// Guard against interval accumulation on extension hot-reload via _fxrNavPatched flag.
 // ==========================================
 function watchForNavigation() {
     // Prevent stacking wrappers if content script context is reused
