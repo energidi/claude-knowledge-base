@@ -46,7 +46,7 @@ At the end of your review, provide a final verdict:
 - **Content script:** `scripts/content.js` - injected into Flow Builder pages only
 - **Options page:** `options.html` + `options.js`
 - **No backend.** All processing is local to the browser.
-- **Permissions:** `cookies`, `storage`, `alarms`
+- **Permissions:** `cookies`, `storage`, `alarms`, `clipboardWrite`
 - **Host permissions:** `*.salesforce.com`, `*.lightning.force.com`, `*.force.com`
 
 ### Authentication Approach
@@ -59,17 +59,19 @@ The extension reads the `sid` (Session ID) cookie from the active Salesforce tab
 | `chrome.alarms` keepalive | MV3 service workers are suspended after ~30s of inactivity. An alarm event keeps the worker alive during async Tooling API fetches. |
 | Reference-counted `withKeepAlive` | Prevents alarm collision when multiple async operations are in flight simultaneously. |
 | TRUSTED_ORIGINS allowlist | Cookie-derived `apiDomain` values are validated against a regex allowlist before the `sid` is ever sent to them. Bare parent domains (e.g. `salesforce.com`) are rejected. |
-| URL polling (setInterval 500ms) | MV3 isolated-world content scripts cannot intercept `history.pushState` calls made by the page's JavaScript - each isolated world has its own copy of the `history` object. Polling `window.location.href` every 500ms is the correct approach for SPA navigation detection without requiring the `webNavigation` permission. `popstate` listener handles browser back/forward. |
-| MutationObserver for modal detection | Salesforce modals overlay the canvas. The button is hidden when a modal is open so it doesn't interfere. |
+| URL polling (setInterval 500ms) | MV3 isolated-world content scripts cannot intercept `history.pushState` calls made by the page's JavaScript - each isolated world has its own copy of the `history` object. Polling `window.location.href` every 500ms is the correct approach without requiring the `webNavigation` permission. `popstate` listener handles browser back/forward. Hidden tab guard prevents unnecessary work in background tabs. |
+| MutationObserver for modal detection | Salesforce modals overlay the canvas. The button is hidden when a modal is open so it doesn't interfere. `syncModalState()` is called once at injection to handle modals already open at init time. |
 | `execCommandCopy` removed | The deprecated fallback wrote the full Flow JSON into a `<textarea>` appended to the page DOM, making it readable by third-party page scripts (ISV managed packages). Replaced with a hard error toast. |
 | `sender.origin` check | `isTrustedSender` validates both `sender.tab.url` (top-level frame) and `sender.origin` (the frame that actually sent the message) to prevent spoofing via embedded iframes. |
 | `301` prefix in FLOW_ID_PATTERN | Salesforce Flow record IDs always begin with `301`. Enforcing this prefix rejects IDs for other object types before any API call is made. |
-| Single Tooling API call | `SELECT Id, VersionNumber, Definition.DeveloperName, Metadata FROM Flow` fetches identity and metadata in one round-trip. Previously two sequential calls. |
+| Single Tooling API call | `SELECT Id, VersionNumber, Definition.DeveloperName, Metadata FROM Flow` fetches identity and metadata in one round-trip. |
 | Module-level `_defaultAction` cache | Caching the storage value at startup and keeping it live via `storage.onChanged` allows the primary button click handler to act synchronously, preserving the user-gesture window required for Clipboard API access. |
-| Broad multi-domain cookie collection | Salesforce orgs can be accessed via `*.salesforce.com`, `*.my.salesforce.com`, `*.lightning.force.com`, and `*.force.com`. Restricting to a single origin would break users on non-standard org domains. The TRUSTED_ORIGINS allowlist ensures only legitimate Salesforce origins are used as API endpoints. |
+| `clipboardWrite` permission | Without this permission, `navigator.clipboard.writeText()` requires a live user-gesture activation. After an async Tooling API fetch (which can take several seconds), the activation window has expired. `clipboardWrite` allows the clipboard write to succeed regardless of activation state. |
+| Broad multi-domain cookie collection | Salesforce orgs are accessed via `*.salesforce.com`, `*.my.salesforce.com`, `*.lightning.force.com`, and `*.force.com`. The TRUSTED_ORIGINS allowlist ensures only legitimate Salesforce origins receive the `sid`. |
+| Hot-reload safe re-injection | `injectIntoFlowBuilder` removes any existing button before injecting a fresh one. This ensures that after extension hot-reload or auto-update, the new context's event listeners replace the stale ones from the old context. |
 
 ### Review History
-The codebase has undergone two sequential human-guided review rounds, five independent parallel AI review rounds (Claude), and three additional rounds from ChatGPT, Gemini, and Grok. The following categories of issues have already been identified and fixed:
+The codebase has undergone two sequential human-guided review rounds, five independent parallel AI review rounds (Claude), and four additional rounds from ChatGPT, Gemini, Grok, and Vercel. The following categories of issues have already been identified and fixed:
 
 - SOQL injection (per-field `safeId` sanitization added as defense-in-depth)
 - Deprecated `data:` URL download (replaced with Blob URL)
@@ -103,6 +105,12 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 - Async `chrome.storage.sync.get` inside click handler expired clipboard gesture window - replaced with module-level `_defaultAction` cache + `storage.onChanged` listener
 - `options.js` `storage.get` callback did not check `chrome.runtime.lastError`
 - `Promise.all` in `collectAllSidCookies` was fail-fast - single domain rejection aborted entire collection (added `.catch(() => [])` per domain)
+- `history.pushState/replaceState` patching was silently ineffective in isolated worlds - replaced with 500ms URL poll
+- `clipboardWrite` permission missing - clipboard writes after async fetch were unreliable due to expired user-gesture activation window
+- Hot-reload left stale button in DOM with dead event listeners - now always removes existing button before re-injecting
+- URL poll ran in background tabs unnecessarily - added `document.hidden` guard
+- Modal state not synced at injection time - `syncModalState()` now called once immediately on inject
+- `_defaultAction` loaded from storage without validating against allowed values (added check)
 
 ---
 
@@ -114,7 +122,7 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 {
   "manifest_version": 3,
   "name": "Flow Retriever",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "One-click Salesforce Flow JSON extraction directly from the browser.",
   "icons": {
     "16": "icons/icon16.png",
@@ -124,7 +132,8 @@ The codebase has undergone two sequential human-guided review rounds, five indep
   "permissions": [
     "cookies",
     "storage",
-    "alarms"
+    "alarms",
+    "clipboardWrite"
   ],
   "options_ui": {
     "page": "options.html",
@@ -508,10 +517,11 @@ let _dropdownListenerController = null;
 
 // Cache defaultAction so the click handler can act synchronously - the async
 // storage.sync.get callback expires the user-gesture window needed for clipboard access.
+const _ALLOWED_ACTIONS = new Set(['COPY', 'DOWNLOAD']);
 let _defaultAction = 'COPY';
 chrome.storage.sync.get({ defaultAction: 'COPY' }, (result) => {
     if (!chrome.runtime.lastError && result?.defaultAction) {
-        _defaultAction = result.defaultAction;
+        _defaultAction = _ALLOWED_ACTIONS.has(result.defaultAction) ? result.defaultAction : 'COPY';
     }
 });
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -522,11 +532,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // ==========================================
 // SPA navigation watcher
-// Polls window.location.href every 500ms for URL changes.
-// pushState/replaceState patching was removed: MV3 isolated-world content scripts
-// have their own copy of the history object and cannot intercept calls made by
-// the host page's JavaScript. Polling is the correct approach without requiring
-// the webNavigation permission. popstate is kept for browser back/forward.
+// Polls window.location.href every 500ms. pushState/replaceState patching does not
+// work in MV3 isolated worlds (each world has its own history object).
 // Guard against interval accumulation on extension hot-reload via _fxrNavPatched flag.
 // ==========================================
 function watchForNavigation() {
@@ -537,6 +544,7 @@ function watchForNavigation() {
     let lastUrl = window.location.href;
 
     const handleNavigation = () => {
+        if (document.hidden) return; // No work needed while tab is not visible
         const currentUrl = window.location.href;
         // Skip if URL has not meaningfully changed
         if (currentUrl === lastUrl) return;
@@ -605,7 +613,10 @@ function triggerRetrieve(method, flowId) {
 // ENVIRONMENT: Flow Builder Canvas
 // ==========================================
 function injectIntoFlowBuilder() {
-    if (document.querySelector('#xml-retrieve-builder-btn')) return;
+    // Remove any stale button from a previous extension context (hot-reload / auto-update).
+    // Returning early would leave the old button whose event listeners point to the dead context.
+    const existing = document.querySelector('#xml-retrieve-builder-btn');
+    if (existing) existing.remove();
 
     const wrapper = document.createElement('div');
     wrapper.id = 'xml-retrieve-builder-btn';
@@ -685,15 +696,21 @@ function injectIntoFlowBuilder() {
     // times per second (drag, type, hover). Running querySelector on every mutation
     // causes layout thrashing. The 150ms debounce coalesces bursts into one check.
     let lastModalState = false;
+    const syncModalState = () => {
+        const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
+        if (modalOpen !== lastModalState) {
+            lastModalState = modalOpen;
+            wrapper.style.display = modalOpen ? 'none' : 'flex';
+        }
+    };
+
+    syncModalState(); // Sync immediately - modal may already be open at injection time
+
     _modalObserver = new MutationObserver(() => {
         if (_modalDebounceTimer) return;
         _modalDebounceTimer = setTimeout(() => {
             _modalDebounceTimer = null;
-            const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
-            if (modalOpen !== lastModalState) {
-                lastModalState = modalOpen;
-                wrapper.style.display = modalOpen ? 'none' : 'flex';
-            }
+            syncModalState();
         }, 150);
     });
     _modalObserver.observe(document.body, { childList: true, subtree: true });
