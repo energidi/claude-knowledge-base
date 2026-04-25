@@ -111,6 +111,9 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 - URL poll ran in background tabs unnecessarily - added `document.hidden` guard
 - Modal state not synced at injection time - `syncModalState()` now called once immediately on inject
 - `_defaultAction` loaded from storage without validating against allowed values (added check)
+- `storage.onChanged` listener assigned `newValue` to `_defaultAction` without `_ALLOWED_ACTIONS` validation - mirrors exact gap in initial load fix (now validates; undefined on key deletion falls back to 'COPY')
+- `injectIntoFlowBuilder` had no URL guard - deferred 300ms `setTimeout` could fire after user navigated away from Flow Builder, injecting the button into a non-Flow-Builder page (URL guard added at function entry)
+- `setInterval` return value was discarded - stored as `window._fxrNavInterval` and cleared on re-entry to `watchForNavigation` to prevent stale-context overlap accumulation on extension re-inject
 
 ---
 
@@ -131,8 +134,7 @@ Do not raise these again unless the codebase has changed in a way that makes the
 | R8 | Vercel | Tighten TRUSTED_ORIGINS regex to limit subdomain depth (e.g. `{0,2}` segments) | The `$` anchor on all TRUSTED_ORIGINS patterns already prevents bypass via appended segments (e.g. `evil.salesforce.com.attacker.com` does not match because the string does not end with `.salesforce.com`). Tightening the depth could break legitimate Salesforce domains with 3+ subdomain levels (e.g. `orgname.sandbox.my.salesforce.com`). No real attack vector exists - an attacker cannot register subdomains under `salesforce.com`. |
 | R9 | Vercel | Check `Content-Length` header before calling `response.json()` to guard against oversized responses | `Content-Length` is an optional HTTP header not present in chunked transfer encoding, making it an unreliable gate. The 5 MB check in content.js already prevents oversized payloads reaching the user. Adding an unreliable pre-check does not meaningfully improve safety and was rejected. |
 | R10 | ChatGPT | Download via `chrome.downloads.download()` from background instead of injecting a Blob URL anchor in the page DOM | The Blob URL anchor in the DOM is the standard MV3 content script download approach and was explicitly chosen after removing `execCommandCopy`. Using `chrome.downloads` would require adding the `downloads` permission, which is a broader permission visible to users in the Web Store. The Blob URL is present in the DOM for ~100ms and the attacker would need a running MutationObserver and the ability to fetch a same-origin Blob URL within that window. Risk is accepted as negligible. |
-| R11 | multiple | Add `setInterval` ID storage and explicit cleanup on navigation / page hide | The `_fxrNavPatched` flag prevents interval stacking across re-injections. Content scripts are destroyed on full navigation. The 500ms interval is trivially cheap (one string comparison). The cleanup complexity was not justified. |
-| R12 | multiple | Add keyboard arrow/Escape navigation to the dropdown menu | Valid accessibility improvement but not a Chrome Web Store compliance blocker. Deferred as a post-release enhancement. |
+| R11 | multiple | Add keyboard arrow/Escape navigation to the dropdown menu | Valid accessibility improvement but not a Chrome Web Store compliance blocker. Deferred as a post-release enhancement. |
 
 ---
 
@@ -144,7 +146,7 @@ Do not raise these again unless the codebase has changed in a way that makes the
 {
   "manifest_version": 3,
   "name": "Flow Retriever",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "One-click Salesforce Flow JSON extraction directly from the browser.",
   "icons": {
     "16": "icons/icon16.png",
@@ -548,7 +550,8 @@ chrome.storage.sync.get({ defaultAction: 'COPY' }, (result) => {
 });
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'sync' && changes.defaultAction) {
-        _defaultAction = changes.defaultAction.newValue;
+        const nv = changes.defaultAction.newValue;
+        _defaultAction = _ALLOWED_ACTIONS.has(nv) ? nv : 'COPY';
     }
 });
 
@@ -559,7 +562,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Guard against interval accumulation on extension hot-reload via _fxrNavPatched flag.
 // ==========================================
 function watchForNavigation() {
-    // Prevent stacking intervals if content script context is reused
+    // Clear any prior interval from a stale context before starting a new one
+    if (window._fxrNavInterval) { clearInterval(window._fxrNavInterval); window._fxrNavInterval = null; }
     if (window._fxrNavPatched) return;
     window._fxrNavPatched = true;
 
@@ -588,7 +592,7 @@ function watchForNavigation() {
     // Poll for URL changes every 500ms - the only reliable SPA detection approach
     // in MV3 isolated-world content scripts (pushState/replaceState patching only
     // intercepts calls from the content script's own world, not the page's JS).
-    setInterval(handleNavigation, 500);
+    window._fxrNavInterval = setInterval(handleNavigation, 500);
     window.addEventListener('popstate', handleNavigation);
 }
 
@@ -635,6 +639,8 @@ function triggerRetrieve(method, flowId) {
 // ENVIRONMENT: Flow Builder Canvas
 // ==========================================
 function injectIntoFlowBuilder() {
+    // Guard: deferred setTimeout calls can fire after the user has already navigated away.
+    if (!window.location.href.includes('/builder_platform_interaction/flowBuilder')) return;
     // Remove any stale button from a previous extension context (hot-reload / auto-update).
     // Returning early would leave the old button whose event listeners point to the dead context.
     const existing = document.querySelector('#xml-retrieve-builder-btn');
