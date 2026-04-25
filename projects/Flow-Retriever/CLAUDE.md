@@ -23,6 +23,36 @@
    - **Flow Builder only:** Split button (JSON | ▼) fixed top-right in the Flow Builder canvas.
 4. **Naming Convention:** `[Flow API Name]_Ver[Version Number].json`.
 
+## AI Review Workflow
+
+After each code iteration:
+1. Apply only the findings you evaluate as correct and valid.
+2. Commit + push local git repo.
+3. Push changed source files to GitHub (`energidi/claude-knowledge-base`, `projects/Flow-Retriever/`).
+4. Rewrite `ai-review.md` (Write tool, not Edit) with:
+   - Updated Code section (all 6 source files verbatim).
+   - New entries in the Review History for everything fixed this round.
+   - New entries in the **Rejected Findings** section (see below) for everything NOT applied.
+5. Push `ai-review.md` to GitHub.
+
+### Rejected Findings Section in ai-review.md
+
+Every time you update `ai-review.md`, append rejected findings to a **Rejected Findings** section placed just before the `## Code` section. Format:
+
+```
+## Rejected Findings
+
+The following findings from prior review rounds were evaluated and deliberately not applied.
+Do not raise these again unless the codebase has changed in a way that makes the original
+reasoning no longer valid.
+
+| # | Source | Finding | Reason Rejected |
+|---|---|---|---|
+| R1 | ChatGPT | ... | ... |
+```
+
+Keep the table cumulative across rounds - never delete old rows, only add new ones.
+
 ## Project Structure
 ```text
 flow-retriever/

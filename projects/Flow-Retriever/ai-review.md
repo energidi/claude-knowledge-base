@@ -114,6 +114,28 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 
 ---
 
+## Rejected Findings
+
+The following findings from prior review rounds were evaluated and deliberately not applied.
+Do not raise these again unless the codebase has changed in a way that makes the original reasoning no longer valid.
+
+| # | Source | Finding | Reason Rejected |
+|---|---|---|---|
+| R1 | ChatGPT | Restrict `host_permissions` to `activeTab` + exact origin; use `chrome.cookies.get` with a single URL instead of `getAll` | Intentional multi-domain design. Salesforce orgs are accessed via `*.salesforce.com`, `*.my.salesforce.com`, `*.lightning.force.com`, and `*.force.com`. Restricting to `activeTab` would break users on non-standard org domains. Broad `host_permissions` is required for both content script injection and background cookie reads across all Salesforce subdomains. |
+| R2 | ChatGPT | Bind `apiDomainCandidate` to `orgDomain` strictly (no cross-domain session iteration) | Intentional multi-domain design. The same org can be reached under different subdomains depending on the user's browser tab URL vs. the actual API domain where the `sid` cookie lives. The TRUSTED_ORIGINS allowlist already ensures only legitimate Salesforce domains are used as API endpoints. The retry loop across candidates is a correctness requirement, not a security hole. |
+| R3 | ChatGPT | Enforce strict equality between `sender.origin` and `sender.tab.url` origin (`if (sender.origin !== tabOrigin) return false`) | Would break multi-domain support. `isTrustedSender` already validates both `sender.origin` and `tabOrigin` independently against the TRUSTED_ORIGINS regex. The two values can legitimately differ when the user is on one Salesforce subdomain but the content script URL was resolved differently. |
+| R4 | ChatGPT / multiple | Require user confirmation dialog before clipboard write for large payloads | Bad UX. The 5 MB size gate already prevents oversized payloads reaching clipboard. An extra confirmation dialog adds friction to the primary workflow with no meaningful security benefit. |
+| R5 | ChatGPT | Restrict `host_permissions` to narrow scope for Chrome Web Store least-privilege compliance | Same as R1. Broad host permissions are necessary and justified. The store listing and privacy policy explicitly disclose the cookie access scope. This pattern is accepted for legitimate Salesforce tooling extensions. |
+| R6 | ChatGPT / multiple | `versionNumber` is validated and returned but not used in the SOQL query | By design. The extension always retrieves the active/current version's metadata by Flow record ID. `versionNumber` is surfaced in the filename and returned in the response for labeling purposes only. Adding `AND VersionNumber = X` to the query would require a version selector UI that does not exist. |
+| R7 | Gemini / multiple | Move `options.html` inline `<style>` to an external `options.css` file and remove `'unsafe-inline'` from CSP | Chrome Web Store accepts `'unsafe-inline'` for `style-src` on extension pages. The risk is automated scanner friction only - there is no actual security vulnerability. Moving to an external CSS file adds a new file with no functional benefit and was rejected for being low-value churn. |
+| R8 | Vercel | Tighten TRUSTED_ORIGINS regex to limit subdomain depth (e.g. `{0,2}` segments) | The `$` anchor on all TRUSTED_ORIGINS patterns already prevents bypass via appended segments (e.g. `evil.salesforce.com.attacker.com` does not match because the string does not end with `.salesforce.com`). Tightening the depth could break legitimate Salesforce domains with 3+ subdomain levels (e.g. `orgname.sandbox.my.salesforce.com`). No real attack vector exists - an attacker cannot register subdomains under `salesforce.com`. |
+| R9 | Vercel | Check `Content-Length` header before calling `response.json()` to guard against oversized responses | `Content-Length` is an optional HTTP header not present in chunked transfer encoding, making it an unreliable gate. The 5 MB check in content.js already prevents oversized payloads reaching the user. Adding an unreliable pre-check does not meaningfully improve safety and was rejected. |
+| R10 | ChatGPT | Download via `chrome.downloads.download()` from background instead of injecting a Blob URL anchor in the page DOM | The Blob URL anchor in the DOM is the standard MV3 content script download approach and was explicitly chosen after removing `execCommandCopy`. Using `chrome.downloads` would require adding the `downloads` permission, which is a broader permission visible to users in the Web Store. The Blob URL is present in the DOM for ~100ms and the attacker would need a running MutationObserver and the ability to fetch a same-origin Blob URL within that window. Risk is accepted as negligible. |
+| R11 | multiple | Add `setInterval` ID storage and explicit cleanup on navigation / page hide | The `_fxrNavPatched` flag prevents interval stacking across re-injections. Content scripts are destroyed on full navigation. The 500ms interval is trivially cheap (one string comparison). The cleanup complexity was not justified. |
+| R12 | multiple | Add keyboard arrow/Escape navigation to the dropdown menu | Valid accessibility improvement but not a Chrome Web Store compliance blocker. Deferred as a post-release enhancement. |
+
+---
+
 ## Code
 
 ### `manifest.json`
