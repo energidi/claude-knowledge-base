@@ -111,10 +111,38 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
 });
 
+// Polls until the Flow Builder loading spinner (DIV.spinner) has appeared and then
+// disappeared, indicating the canvas is ready. Two-phase: first waits for the spinner
+// to appear (it may not exist yet when the content script runs), then for it to go.
+// Falls back after 30s for slow orgs. MutationObserver cannot be used here because
+// Salesforce renders the spinner inside shadow DOM, which MutationObserver cannot observe.
+function waitForFlowCanvas(callback) {
+    const TIMEOUT_MS = 30000;
+    const start = Date.now();
+    let spinnerSeen = !!document.querySelector('lightning-spinner');
+
+    const interval = setInterval(() => {
+        const spinner = !!document.querySelector('lightning-spinner');
+
+        if (!spinnerSeen && spinner) {
+            spinnerSeen = true;
+        } else if (spinnerSeen && !spinner) {
+            clearInterval(interval);
+            callback();
+            return;
+        }
+
+        if (Date.now() - start >= TIMEOUT_MS) {
+            clearInterval(interval);
+            callback();
+        }
+    }, 500);
+}
+
 // ==========================================
 (function init() {
     if (window.location.href.includes('/builder_platform_interaction/flowBuilder')) {
-        injectIntoFlowBuilder();
+        waitForFlowCanvas(injectIntoFlowBuilder);
         watchForNavigation();
     }
 })();
@@ -149,7 +177,7 @@ function watchForNavigation() {
         }
 
         if (currentUrl.includes('/builder_platform_interaction/flowBuilder')) {
-            setTimeout(injectIntoFlowBuilder, 300);
+            waitForFlowCanvas(injectIntoFlowBuilder);
         }
     };
 
@@ -169,8 +197,6 @@ function triggerRetrieve(method, flowId) {
         return;
     }
 
-    const MAX_JSON_CHARS = 5 * 1024 * 1024; // 5 MB guard
-
     chrome.runtime.sendMessage(
         { action: 'RETRIEVE_FLOW', method, flowApiName: null, versionNumber: null, flowId },
         (response) => {
@@ -182,16 +208,9 @@ function triggerRetrieve(method, flowId) {
                 showToast(response?.error || 'Unknown error', 'error');
                 return;
             }
-            if (response.json && response.json.length > MAX_JSON_CHARS) {
-                showToast('Flow JSON exceeds 5 MB. Use Download instead.', 'error');
-                return;
-            }
             if (method === 'COPY') {
-                copyToClipboard(response.json).then(() => {
-                    showToast('Flow JSON copied to clipboard.', 'success');
-                }).catch(() => {
-                    showToast('Clipboard access denied. Use Download instead.', 'error');
-                });
+                // Clipboard write handled by background via offscreen document
+                showToast('Flow JSON copied to clipboard.', 'success');
             } else if (method === 'DOWNLOAD') {
                 downloadJson(response.json, response.flowApiName, response.versionNumber);
             }

@@ -16,6 +16,35 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'sw-keepalive') {} // intentional no-op
 });
 
+// Offscreen document is used for clipboard writes. Content scripts cannot reliably
+// call navigator.clipboard.writeText() on Salesforce pages because Salesforce sets
+// a Permissions-Policy that blocks clipboard-write in third-party contexts.
+// The offscreen document runs at the extension's own origin, bypassing that restriction.
+let _offscreenCreating = null;
+async function ensureOffscreen() {
+    if (await chrome.offscreen.hasDocument()) return;
+    if (_offscreenCreating) return _offscreenCreating;
+    _offscreenCreating = chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['CLIPBOARD'],
+        justification: 'Write Flow JSON to clipboard from extension origin'
+    }).finally(() => { _offscreenCreating = null; });
+    return _offscreenCreating;
+}
+
+async function copyViaOffscreen(text) {
+    const MAX_JSON_CHARS = 5 * 1024 * 1024;
+    if (text.length > MAX_JSON_CHARS) throw new Error('Flow JSON exceeds 5 MB. Use Download instead.');
+    await ensureOffscreen();
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ action: 'COPY_TO_CLIPBOARD', text }, (response) => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else if (response?.success) resolve();
+            else reject(new Error(response?.error || 'Clipboard write failed.'));
+        });
+    });
+}
+
 // Reference-counted keepalive: alarm is created on first acquire and cleared
 // only when all concurrent callers have released, preventing alarm collisions.
 let _keepAliveCount = 0;
@@ -86,12 +115,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             for (const { sessionId, apiDomain } of candidates) {
                 try {
                     const result = await fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber);
-                    sendResponse({
-                        success: true,
-                        json: result.json,
-                        flowApiName: result.flowApiName,
-                        versionNumber: result.versionNumber
-                    });
+                    if (method === 'COPY') {
+                        await copyViaOffscreen(result.json);
+                        sendResponse({ success: true, flowApiName: result.flowApiName, versionNumber: result.versionNumber });
+                    } else {
+                        sendResponse({ success: true, json: result.json, flowApiName: result.flowApiName, versionNumber: result.versionNumber });
+                    }
                     return;
                 } catch (error) {
                     // Only abort the loop for input-validation errors that will not change

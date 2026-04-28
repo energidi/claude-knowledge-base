@@ -12,7 +12,7 @@
     "cookies",
     "storage",
     "alarms",
-    "clipboardWrite"
+    "offscreen"
   ],
   "options_ui": {
     "page": "options.html",
