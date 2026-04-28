@@ -114,6 +114,9 @@ The codebase has undergone two sequential human-guided review rounds, five indep
 - `storage.onChanged` listener assigned `newValue` to `_defaultAction` without `_ALLOWED_ACTIONS` validation - mirrors exact gap in initial load fix (now validates; undefined on key deletion falls back to 'COPY')
 - `injectIntoFlowBuilder` had no URL guard - deferred 300ms `setTimeout` could fire after user navigated away from Flow Builder, injecting the button into a non-Flow-Builder page (URL guard added at function entry)
 - `setInterval` return value was discarded - stored as `window._fxrNavInterval` and cleared on re-entry to `watchForNavigation` to prevent stale-context overlap accumulation on extension re-inject
+- TDZ crash on init: module-level `let` declarations (`_modalObserver`, `_modalDebounceTimer`, `_dropdownListenerController`) were placed after the IIFE that calls `injectIntoFlowBuilder` - moved before the IIFE
+- `clipboardWrite` manifest permission does not bypass Salesforce's `Permissions-Policy` for `navigator.clipboard` in content scripts - replaced with `offscreen` permission; clipboard writes now routed through an offscreen document (`offscreen.html` + `scripts/offscreen.js`) running at the extension's own origin
+- Button injected before Flow Builder canvas was rendered - replaced fixed delay with `lightning-spinner` polling: two-phase poll waits for spinner to appear then disappear, adapting to any connection speed
 
 ---
 
@@ -157,7 +160,7 @@ Do not raise these again unless the codebase has changed in a way that makes the
     "cookies",
     "storage",
     "alarms",
-    "clipboardWrite"
+    "offscreen"
   ],
   "options_ui": {
     "page": "options.html",
@@ -208,6 +211,35 @@ const TRUSTED_ORIGINS = [
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'sw-keepalive') {} // intentional no-op
 });
+
+// Offscreen document is used for clipboard writes. Content scripts cannot reliably
+// call navigator.clipboard.writeText() on Salesforce pages because Salesforce sets
+// a Permissions-Policy that blocks clipboard-write in third-party contexts.
+// The offscreen document runs at the extension's own origin, bypassing that restriction.
+let _offscreenCreating = null;
+async function ensureOffscreen() {
+    if (await chrome.offscreen.hasDocument()) return;
+    if (_offscreenCreating) return _offscreenCreating;
+    _offscreenCreating = chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['CLIPBOARD'],
+        justification: 'Write Flow JSON to clipboard from extension origin'
+    }).finally(() => { _offscreenCreating = null; });
+    return _offscreenCreating;
+}
+
+async function copyViaOffscreen(text) {
+    const MAX_JSON_CHARS = 5 * 1024 * 1024;
+    if (text.length > MAX_JSON_CHARS) throw new Error('Flow JSON exceeds 5 MB. Use Download instead.');
+    await ensureOffscreen();
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ action: 'COPY_TO_CLIPBOARD', text }, (response) => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else if (response?.success) resolve();
+            else reject(new Error(response?.error || 'Clipboard write failed.'));
+        });
+    });
+}
 
 // Reference-counted keepalive: alarm is created on first acquire and cleared
 // only when all concurrent callers have released, preventing alarm collisions.
@@ -279,12 +311,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             for (const { sessionId, apiDomain } of candidates) {
                 try {
                     const result = await fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber);
-                    sendResponse({
-                        success: true,
-                        json: result.json,
-                        flowApiName: result.flowApiName,
-                        versionNumber: result.versionNumber
-                    });
+                    if (method === 'COPY') {
+                        await copyViaOffscreen(result.json);
+                        sendResponse({ success: true, flowApiName: result.flowApiName, versionNumber: result.versionNumber });
+                    } else {
+                        sendResponse({ success: true, json: result.json, flowApiName: result.flowApiName, versionNumber: result.versionNumber });
+                    }
                     return;
                 } catch (error) {
                     // Only abort the loop for input-validation errors that will not change
@@ -555,6 +587,44 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
 });
 
+// Polls until the Flow Builder loading spinner (lightning-spinner) has appeared and then
+// disappeared, indicating the canvas is ready. Two-phase: first waits for the spinner
+// to appear (it may not exist yet when the content script runs), then for it to go.
+// Falls back after 30s for slow orgs. MutationObserver cannot be used here because
+// Salesforce renders the spinner inside shadow DOM, which MutationObserver cannot observe.
+function waitForFlowCanvas(callback) {
+    const TIMEOUT_MS = 30000;
+    const start = Date.now();
+    let spinnerSeen = !!document.querySelector('lightning-spinner');
+
+    const interval = setInterval(() => {
+        const spinner = !!document.querySelector('lightning-spinner');
+
+        if (!spinnerSeen && spinner) {
+            spinnerSeen = true;
+        } else if (spinnerSeen && !spinner) {
+            clearInterval(interval);
+            callback();
+            return;
+        }
+
+        if (Date.now() - start >= TIMEOUT_MS) {
+            clearInterval(interval);
+            callback();
+        }
+    }, 500);
+}
+
+// ==========================================
+// ENTRY POINT
+// ==========================================
+(function init() {
+    if (window.location.href.includes('/builder_platform_interaction/flowBuilder')) {
+        waitForFlowCanvas(injectIntoFlowBuilder);
+        watchForNavigation();
+    }
+})();
+
 // ==========================================
 // SPA navigation watcher
 // Polls window.location.href every 500ms. pushState/replaceState patching does not
@@ -585,7 +655,7 @@ function watchForNavigation() {
         }
 
         if (currentUrl.includes('/builder_platform_interaction/flowBuilder')) {
-            setTimeout(injectIntoFlowBuilder, 300);
+            waitForFlowCanvas(injectIntoFlowBuilder);
         }
     };
 
@@ -605,8 +675,6 @@ function triggerRetrieve(method, flowId) {
         return;
     }
 
-    const MAX_JSON_CHARS = 5 * 1024 * 1024; // 5 MB guard
-
     chrome.runtime.sendMessage(
         { action: 'RETRIEVE_FLOW', method, flowApiName: null, versionNumber: null, flowId },
         (response) => {
@@ -618,16 +686,9 @@ function triggerRetrieve(method, flowId) {
                 showToast(response?.error || 'Unknown error', 'error');
                 return;
             }
-            if (response.json && response.json.length > MAX_JSON_CHARS) {
-                showToast('Flow JSON exceeds 5 MB. Use Download instead.', 'error');
-                return;
-            }
             if (method === 'COPY') {
-                copyToClipboard(response.json).then(() => {
-                    showToast('Flow JSON copied to clipboard.', 'success');
-                }).catch(() => {
-                    showToast('Clipboard access denied. Use Download instead.', 'error');
-                });
+                // Clipboard write handled by background via offscreen document
+                showToast('Flow JSON copied to clipboard.', 'success');
             } else if (method === 'DOWNLOAD') {
                 downloadJson(response.json, response.flowApiName, response.versionNumber);
             }
