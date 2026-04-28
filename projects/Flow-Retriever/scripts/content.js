@@ -90,14 +90,6 @@ function downloadJson(jsonContent, flowApiName, versionNumber) {
 
 // ==========================================
 // ENTRY POINT
-// ==========================================
-(function init() {
-    if (window.location.href.includes('/builder_platform_interaction/flowBuilder')) {
-        injectIntoFlowBuilder();
-        watchForNavigation();
-    }
-})();
-
 // Module-level references for cleanup across SPA navigations
 let _modalObserver = null;
 let _modalDebounceTimer = null;
@@ -118,6 +110,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
         _defaultAction = _ALLOWED_ACTIONS.has(nv) ? nv : 'COPY';
     }
 });
+
+// ==========================================
+(function init() {
+    if (window.location.href.includes('/builder_platform_interaction/flowBuilder')) {
+        injectIntoFlowBuilder();
+        watchForNavigation();
+    }
+})();
 
 // ==========================================
 // SPA navigation watcher
