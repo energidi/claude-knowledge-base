@@ -118,6 +118,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Salesforce renders the spinner inside shadow DOM, which MutationObserver cannot observe.
 function waitForFlowCanvas(callback) {
     const TIMEOUT_MS = 30000;
+    // If no spinner appears within 2s the canvas is already ready (e.g. re-inject
+    // after save where the spinner came and went before this call was made).
+    const NO_SPINNER_FAST_PATH_MS = 2000;
     const start = Date.now();
     let spinnerSeen = !!document.querySelector('lightning-spinner');
 
@@ -132,11 +135,33 @@ function waitForFlowCanvas(callback) {
             return;
         }
 
-        if (Date.now() - start >= TIMEOUT_MS) {
+        const elapsed = Date.now() - start;
+        if (!spinnerSeen && elapsed >= NO_SPINNER_FAST_PATH_MS) {
+            clearInterval(interval);
+            callback();
+            return;
+        }
+        if (elapsed >= TIMEOUT_MS) {
             clearInterval(interval);
             callback();
         }
     }, 500);
+}
+
+// ==========================================
+// WATCHDOG
+// Polls every 2s. If we are on the Flow Builder page, the button is missing,
+// and no loading spinner is visible, re-inject. Handles any DOM replacement
+// scenario (save, version activate, etc.) that bypasses the MutationObserver.
+// Guard via window._fxrWatchdog to prevent interval accumulation on hot-reload.
+function startButtonWatchdog() {
+    if (window._fxrWatchdog) { clearInterval(window._fxrWatchdog); }
+    window._fxrWatchdog = setInterval(() => {
+        if (!window.location.href.includes('/builder_platform_interaction/flowBuilder')) return;
+        if (document.querySelector('#xml-retrieve-builder-btn')) return;
+        if (document.querySelector('lightning-spinner')) return;
+        injectIntoFlowBuilder();
+    }, 2000);
 }
 
 // ==========================================
@@ -145,6 +170,7 @@ function waitForFlowCanvas(callback) {
         waitForFlowCanvas(injectIntoFlowBuilder);
         watchForNavigation();
     }
+    startButtonWatchdog();
 })();
 
 // ==========================================
