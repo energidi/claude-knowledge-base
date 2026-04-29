@@ -85,7 +85,7 @@ function downloadJson(jsonContent, flowApiName, versionNumber) {
     // dialog stays open and the download reads the Blob URL after the click. Revoking
     // at 5s destroys the URL before they finish navigating the dialog.
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    showToast(`Downloaded: ${filename}`, 'success');
+    showToast('JSON File Successfully Downloaded.', 'success');
 }
 
 // ==========================================
@@ -308,6 +308,14 @@ function injectIntoFlowBuilder() {
     // causes layout thrashing. The 150ms debounce coalesces bursts into one check.
     let lastModalState = false;
     const syncModalState = () => {
+        // Salesforce re-renders the canvas on save, which removes our injected button.
+        // Detect removal and restart the inject cycle (waits for the save spinner to clear).
+        if (!document.body.contains(wrapper)) {
+            if (_modalObserver) { _modalObserver.disconnect(); _modalObserver = null; }
+            if (_modalDebounceTimer) { clearTimeout(_modalDebounceTimer); _modalDebounceTimer = null; }
+            waitForFlowCanvas(injectIntoFlowBuilder);
+            return;
+        }
         const modalOpen = !!document.querySelector('.modal-backdrop, .slds-backdrop_open');
         if (modalOpen !== lastModalState) {
             lastModalState = modalOpen;
