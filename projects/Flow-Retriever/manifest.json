@@ -15,9 +15,6 @@
     "offscreen",
     "clipboardWrite"
   ],
-  "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'"
-  },
   "options_ui": {
     "page": "options.html",
     "open_in_tab": false

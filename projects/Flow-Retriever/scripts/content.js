@@ -12,31 +12,30 @@ function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.style.cssText = `
         position: fixed;
-        top: 20px;
-        right: 20px;
         z-index: 99999;
         display: flex;
         align-items: center;
         gap: 10px;
-        padding: 12px 16px;
+        padding: 8px 14px;
         background: ${bg};
         color: #fff;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 500;
         border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-        max-width: 360px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+        max-width: 320px;
         line-height: 1.4;
         animation: fxr-slide-in 0.2s ease-out;
         pointer-events: none;
+        white-space: nowrap;
     `;
 
     // Animations are defined in styles/custom.css (injected by the extension),
     // avoiding dynamic <style> injection into the host page DOM.
 
     const iconEl = document.createElement('span');
-    iconEl.style.cssText = 'font-size:15px;flex-shrink:0;';
+    iconEl.style.cssText = 'font-size:13px;flex-shrink:0;';
     iconEl.textContent = icon;
 
     const textEl = document.createElement('span');
@@ -45,6 +44,18 @@ function showToast(message, type = 'info') {
     toast.appendChild(iconEl);
     toast.appendChild(textEl);
     document.body.appendChild(toast);
+
+    // Position to the left of the button, vertically aligned with it.
+    // Falls back to top-right corner if the button is not in the DOM yet.
+    const btn = document.querySelector('#xml-retrieve-builder-btn');
+    if (btn) {
+        const rect = btn.getBoundingClientRect();
+        toast.style.top = `${rect.top}px`;
+        toast.style.right = `${window.innerWidth - rect.left + 8}px`;
+    } else {
+        toast.style.top = '8px';
+        toast.style.right = '20px';
+    }
 
     setTimeout(() => {
         toast.style.animation = 'fxr-fade-out 0.3s ease-in forwards';
