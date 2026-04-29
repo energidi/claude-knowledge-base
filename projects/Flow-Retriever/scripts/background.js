@@ -1,8 +1,7 @@
-const SF_API_VERSION = 'v66.0';
+const SF_API_VERSION = 'v62.0';
 const FETCH_TIMEOUT_MS = 15000;
 // Salesforce Flow IDs are exactly 15 or 18 chars and begin with '301'
 const FLOW_ID_PATTERN = /^301[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/;
-const FLOW_API_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]{0,79}$/;
 const ALLOWED_METHODS = new Set(['COPY', 'DOWNLOAD']);
 const TRUSTED_ORIGINS = [
     /^https:\/\/([a-zA-Z0-9-]+\.)+salesforce\.com$/,
@@ -22,6 +21,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // The offscreen document runs at the extension's own origin, bypassing that restriction.
 let _offscreenCreating = null;
 async function ensureOffscreen() {
+    if (_offscreenCreating) return _offscreenCreating;
     if (await chrome.offscreen.hasDocument()) return;
     if (_offscreenCreating) return _offscreenCreating;
     _offscreenCreating = chrome.offscreen.createDocument({
@@ -76,21 +76,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
 
         const orgDomain = new URL(sender.tab.url).origin;
-        const { flowApiName, flowId, versionNumber, method } = request;
+        const { flowId, versionNumber, method } = request;
 
         if (!ALLOWED_METHODS.has(method)) {
             sendResponse({ success: false, error: 'Invalid method.' });
             return;
         }
-        if (!flowApiName && !flowId) {
-            sendResponse({ success: false, error: 'Flow API Name or ID is required.' });
+        if (!flowId) {
+            sendResponse({ success: false, error: 'Flow ID is required.' });
             return;
         }
-        if (flowApiName && !FLOW_API_NAME_PATTERN.test(flowApiName)) {
-            sendResponse({ success: false, error: 'Invalid Flow API Name.' });
-            return;
-        }
-        if (flowId && !FLOW_ID_PATTERN.test(flowId)) {
+        if (!FLOW_ID_PATTERN.test(flowId)) {
             sendResponse({ success: false, error: 'Invalid Flow ID.' });
             return;
         }
@@ -111,17 +107,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
 
             let lastError = 'All session candidates failed.';
+            let fetchResult = null;
 
             for (const { sessionId, apiDomain } of candidates) {
                 try {
-                    const result = await fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber);
-                    if (method === 'COPY') {
-                        await copyViaOffscreen(result.json);
-                        sendResponse({ success: true, flowApiName: result.flowApiName, versionNumber: result.versionNumber });
-                    } else {
-                        sendResponse({ success: true, json: result.json, flowApiName: result.flowApiName, versionNumber: result.versionNumber });
-                    }
-                    return;
+                    fetchResult = await fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumber);
+                    break;
                 } catch (error) {
                     // Only abort the loop for input-validation errors that will not change
                     // across candidates (e.g. structurally invalid Flow ID).
@@ -132,11 +123,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         return;
                     }
                     lastError = error.message;
-                    continue;
                 }
             }
 
-            sendResponse({ success: false, error: lastError });
+            if (!fetchResult) {
+                sendResponse({ success: false, error: lastError });
+                return;
+            }
+
+            // Clipboard and download operations happen after a successful fetch,
+            // outside the retry loop so their failures are not confused with fetch errors.
+            if (method === 'COPY') {
+                try {
+                    await copyViaOffscreen(fetchResult.json);
+                    sendResponse({ success: true, flowApiName: fetchResult.flowApiName, versionNumber: fetchResult.versionNumber });
+                } catch (error) {
+                    sendResponse({ success: false, error: error.message });
+                }
+            } else {
+                sendResponse({ success: true, json: fetchResult.json, flowApiName: fetchResult.flowApiName, versionNumber: fetchResult.versionNumber });
+            }
         }).catch((error) => {
             sendResponse({ success: false, error: error.message });
         });
@@ -201,7 +207,7 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumb
 
     // Secondary sanitization before interpolation - defense in depth
     const safeId = flowId.replace(/[^a-zA-Z0-9]/g, '');
-    const query = `SELECT Id, VersionNumber, Definition.DeveloperName, Metadata FROM Flow WHERE Id = '${safeId}'`;
+    const query = `SELECT Id, VersionNumber, Definition.DeveloperName, Metadata FROM Flow WHERE Id = '${safeId}' LIMIT 1`;
     const url = `${apiDomain}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodeURIComponent(query)}`;
 
     const controller = new AbortController();
@@ -221,7 +227,7 @@ async function fetchFlowFromSalesforce(apiDomain, sessionId, flowId, versionNumb
     }
 
     if (!response.ok) {
-        const err = new Error(`Salesforce API Error: ${response.status} ${response.statusText}`);
+        const err = new Error(`Salesforce API Error: ${response.status} (API ${SF_API_VERSION})`);
         err.cause = response.status;
         throw err;
     }

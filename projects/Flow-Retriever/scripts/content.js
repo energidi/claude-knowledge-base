@@ -53,25 +53,13 @@ function showToast(message, type = 'info') {
 }
 
 // ==========================================
-// CLIPBOARD HELPER
-// Uses the async Clipboard API only. execCommand('copy') was removed because
-// it writes the full Flow JSON into the page DOM where other page scripts
-// (e.g. ISV managed package JS) can read it during the operation.
-// If the Clipboard API is unavailable, the caller surfaces an error toast.
-// ==========================================
-function copyToClipboard(text) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(text);
-    }
-    return Promise.reject(new Error('Clipboard API unavailable'));
-}
-
-// ==========================================
 // DOWNLOAD HELPER
 // Blob URL + anchor click is the correct approach for content scripts in MV3 (Chrome 120+).
 // ==========================================
 function downloadJson(jsonContent, flowApiName, versionNumber) {
-    const filename = `${flowApiName}_Ver${versionNumber ?? 'Active'}.json`;
+    const safeName = String(flowApiName).replace(/[\\/:*?"<>|.\x00-\x1f‮​]/g, '').slice(0, 100) || 'Flow';
+    const safeVer = String(versionNumber ?? 'Active').replace(/[^a-zA-Z0-9]/g, '');
+    const filename = `${safeName}_Ver${safeVer}.json`;
     const blob = new Blob([jsonContent], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -94,6 +82,8 @@ function downloadJson(jsonContent, flowApiName, versionNumber) {
 let _modalObserver = null;
 let _modalDebounceTimer = null;
 let _dropdownListenerController = null;
+let _canvasWaitInterval = null;   // tracked so concurrent calls can cancel the prior wait
+let _navListenerController = null; // AbortController for popstate cleanup across reloads
 
 // Cache defaultAction so the click handler can act synchronously - the async
 // storage.sync.get callback expires the user-gesture window needed for clipboard access.
@@ -124,25 +114,28 @@ function waitForFlowCanvas(callback) {
     const start = Date.now();
     let spinnerSeen = !!document.querySelector('lightning-spinner');
 
-    const interval = setInterval(() => {
+    // Cancel any prior pending wait (rapid navigation / concurrent triggers)
+    if (_canvasWaitInterval) { clearInterval(_canvasWaitInterval); _canvasWaitInterval = null; }
+
+    _canvasWaitInterval = setInterval(() => {
         const spinner = !!document.querySelector('lightning-spinner');
 
         if (!spinnerSeen && spinner) {
             spinnerSeen = true;
         } else if (spinnerSeen && !spinner) {
-            clearInterval(interval);
+            clearInterval(_canvasWaitInterval); _canvasWaitInterval = null;
             callback();
             return;
         }
 
         const elapsed = Date.now() - start;
         if (!spinnerSeen && elapsed >= NO_SPINNER_FAST_PATH_MS) {
-            clearInterval(interval);
+            clearInterval(_canvasWaitInterval); _canvasWaitInterval = null;
             callback();
             return;
         }
         if (elapsed >= TIMEOUT_MS) {
-            clearInterval(interval);
+            clearInterval(_canvasWaitInterval); _canvasWaitInterval = null;
             callback();
         }
     }, 500);
@@ -160,6 +153,7 @@ function startButtonWatchdog() {
         if (!window.location.href.includes('/builder_platform_interaction/flowBuilder')) return;
         if (document.querySelector('#xml-retrieve-builder-btn')) return;
         if (document.querySelector('lightning-spinner')) return;
+        if (_canvasWaitInterval) return; // injection already queued via waitForFlowCanvas
         injectIntoFlowBuilder();
     }, 2000);
 }
@@ -180,10 +174,11 @@ function startButtonWatchdog() {
 // Guard against interval accumulation on extension hot-reload via _fxrNavPatched flag.
 // ==========================================
 function watchForNavigation() {
-    // Clear any prior interval from a stale context before starting a new one
+    // Clear any prior interval and popstate listener (hot-reload safe - no _fxrNavPatched needed
+    // because clearInterval + AbortController already prevent accumulation)
     if (window._fxrNavInterval) { clearInterval(window._fxrNavInterval); window._fxrNavInterval = null; }
-    if (window._fxrNavPatched) return;
-    window._fxrNavPatched = true;
+    if (_navListenerController) { _navListenerController.abort(); }
+    _navListenerController = new AbortController();
 
     let lastUrl = window.location.href;
 
@@ -211,7 +206,7 @@ function watchForNavigation() {
     // in MV3 isolated-world content scripts (pushState/replaceState patching only
     // intercepts calls from the content script's own world, not the page's JS).
     window._fxrNavInterval = setInterval(handleNavigation, 500);
-    window.addEventListener('popstate', handleNavigation);
+    window.addEventListener('popstate', handleNavigation, { signal: _navListenerController.signal });
 }
 
 // ==========================================
@@ -250,6 +245,10 @@ function triggerRetrieve(method, flowId) {
 function injectIntoFlowBuilder() {
     // Guard: deferred setTimeout calls can fire after the user has already navigated away.
     if (!window.location.href.includes('/builder_platform_interaction/flowBuilder')) return;
+    // Disconnect any prior MutationObserver before overwriting the reference - otherwise
+    // the old observer remains rooted by the browser indefinitely (CPU + memory leak).
+    if (_modalObserver) { _modalObserver.disconnect(); _modalObserver = null; }
+    if (_modalDebounceTimer) { clearTimeout(_modalDebounceTimer); _modalDebounceTimer = null; }
     // Remove any stale button from a previous extension context (hot-reload / auto-update).
     // Returning early would leave the old button whose event listeners point to the dead context.
     const existing = document.querySelector('#xml-retrieve-builder-btn');
