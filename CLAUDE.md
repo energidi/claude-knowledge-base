@@ -20,6 +20,7 @@ Tone: Expert, methodical, warm. No fluff, no motivational filler, no restating t
 - If the user is heading in the wrong direction or making an incorrect assumption, stop and explain why before continuing.
 - If a related risk or issue is spotted outside the current task scope, flag it and wait before continuing.
 - When approaching 95% of the context window limit: save all in-progress work, update `review-status.md` with exact resume point, and stop.
+- When asked to "document what you did / what's left" (or any equivalent): write the status directly into the active plan or tracking file - never as a chat response only. The file is the artifact; the chat message is not.
 - If a section of CLAUDE.md contains instructions only relevant to one project, suggest moving it to that project's CLAUDE.md to avoid loading it on every unrelated conversation.
 
 ---
