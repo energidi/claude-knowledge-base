@@ -1,31 +1,56 @@
 /**
  * DependencyOptions
  *
- * Immutable value object passed to IMetadataDependencyService.fetchDependencies().
- * Consolidates per-callout execution context to avoid long parameter lists.
+ * Mutable context object passed to IMetadataDependencyService.fetchDependencies().
+ * Consolidates per-callout execution context and accumulates diagnostic errors.
+ *
+ * Errors are accumulated here rather than thrown so the Tooling API layer can
+ * continue processing other ID batches after a single-batch failure.
  *
  * Ref: ISP-6072
  */
 public class DependencyOptions {
 
     /** ID of the parent Metadata_Scan_Job__c record. */
-    public final String jobId;
+    public String jobId;
 
     /**
      * When true, the service validates Flow version status via a secondary callout
      * and drops inactive versions from results.
      */
-    public final Boolean activeFlowsOnly;
+    public Boolean activeFlowsOnly;
 
     /**
-     * Current recursion depth for HTTP 414/431 split-and-retry logic.
-     * Starts at 0; maximum 5 levels before the batch is skipped with a diagnostic log.
+     * Number of records returned by the most recent Tooling API callout.
+     * Updated by MetadataDependencyService after each parseAndFollowQueryMore() call.
+     * DependencyQueueable reads this to update Last_Result_Count__c on the job record,
+     * which drives the queryMorePossible flag in the guardrail.
      */
-    public final Integer splitDepth;
+    public Integer lastResultCount;
 
-    public DependencyOptions(String jobId, Boolean activeFlowsOnly, Integer splitDepth) {
-        this.jobId = jobId;
-        this.activeFlowsOnly = activeFlowsOnly != null ? activeFlowsOnly : false;
-        this.splitDepth = splitDepth != null ? splitDepth : 0;
+    /** Diagnostic error messages accumulated during fetchDependencies(). */
+    public List<String> errors;
+
+    /**
+     * Set to true by MetadataDependencyService.followQueryMore() when a QueryMore cursor
+     * expires (INVALID_QUERY_LOCATOR). DependencyQueueable checks this flag before marking
+     * a parent batch as Dependencies_Fetched__c = true to prevent premature completion.
+     */
+    public Boolean queryMoreFailed;
+
+    public DependencyOptions() {
+        this.activeFlowsOnly  = false;
+        this.lastResultCount  = 0;
+        this.errors           = new List<String>();
+        this.queryMoreFailed  = false;
+    }
+
+    /**
+     * Adds a timestamped diagnostic message to the errors list.
+     * The caller (DependencyQueueable) appends these to Error_Status_Message__c
+     * after all callouts complete.
+     */
+    public void addError(String message) {
+        errors.add('[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] ' + message);
     }
 }
