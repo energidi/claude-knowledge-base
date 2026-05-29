@@ -27,19 +27,15 @@ If input is ambiguous, read the project CLAUDE.md and any open IDE file first, t
 
 ## Standards (Non-Negotiable)
 
-Consult `references/naming-standards.md` for the full ruleset.
-
-### Quick Reference
-
-**Objects & Fields**
+### Objects & Fields
 - PascalCase__c for custom objects and fields
 - Names reflect purpose, not implementation or storage format
-- No abbreviations unless in the approved list (see references)
+- No abbreviations unless in the approved list
 - No generic suffixes: Data, Info, Detail, Helper, Util, Temp, Value, Record, Object
 - No type leakage in names: no _JSON, _XML, _ID (use _Id), _Bool, _Flag
 - No internal engine jargon visible to admins: Rechain, Hotloop, Bloom, Node (when it means record)
 
-**Apex Classes**
+### Apex Classes
 - PascalCase, no abbreviations
 - Class name = what it does, not what it is (MetadataDependencyService not DependencyHelper)
 - Interfaces: I prefix + descriptive name (IMetadataDependencyService)
@@ -48,16 +44,16 @@ Consult `references/naming-standards.md` for the full ruleset.
 - Schedulers: descriptive + Scheduler suffix
 - Controllers: component name + Controller suffix
 
-**LWC Components**
+### LWC Components
 - camelCase
 - Name = user-visible purpose (metaMapperProgress not metaMapperPE)
 
-**CMDT / Settings fields**
+### CMDT / Settings fields
 - Names must match the UI label concept, not the internal implementation
 - An admin must understand the field without reading help text
 
-**Platform Events**
-- Object name describes the event, not the internal system (Dependency_Scan_Status__e not Dependency_Status__e)
+### Platform Events
+- Object name describes the event, not the internal system
 - Fields follow same rules as custom object fields
 
 ---
@@ -72,7 +68,7 @@ Required content per type:
 |---|---|
 | Custom Object | What it represents. Its role in the system. Lifecycle/retention behavior if applicable. |
 | Field | What it stores. Why it exists. Valid values or range. Who populates it (user / engine / batch). Whether admins should edit it manually. |
-| Apex Class | What it does. What triggers or invokes it. What it must NOT do (constraints). |
+| Apex Class | What it does. What triggers or invokes it. What it must NOT do (constraints). For Apex: description is the class header comment in the .cls file, NOT the .cls-meta.xml (which has no description element in the Salesforce schema). |
 | LWC | User-visible purpose. Which controller methods it calls. Events it subscribes/publishes. |
 | Platform Event | When it is published. What subscribers should do with it. |
 | CMDT | What the setting controls. The effect of changing it. Recommended range or default. |
@@ -91,11 +87,24 @@ Banned descriptions (automatic violation):
 ## Audit Process
 
 1. Collect all component names from the input source.
-2. For each name, evaluate against every standard in `references/naming-standards.md`.
+2. For each name, evaluate against every standard.
 3. For each violation, produce one row in the findings table.
 4. For each violation, produce the proposed corrected name.
 5. Check for missing descriptions - flag every component that lacks one.
 6. Produce the verdict.
+
+---
+
+## Violation Categories
+
+- V-01: Generic or Meaningless Suffix (Data, Info, Helper, Util, etc.)
+- V-02: Implementation Detail Leakage (_JSON, Cache, Bloom, Fetch, etc.)
+- V-03: Internal Jargon (engine-specific terms not meaningful to admins)
+- V-04: Ambiguous Without Context (name requires context to understand)
+- V-05: Abbreviation Without Approval (not in approved list: API, DML, LWC, SOQL, CMDT, OWD, FLS, CRUD, LDV, URL, UI, UX, ID, JSON in Apex var names)
+- V-06: Inconsistent Pattern (boolean naming, prefix usage, suffix usage)
+- V-07: AI/Brand Name in Technical Component
+- V-08: Missing or Inadequate Description
 
 ---
 

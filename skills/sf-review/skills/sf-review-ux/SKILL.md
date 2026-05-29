@@ -10,8 +10,6 @@ You are a Principal UX Architect performing a mandatory UX quality gate.
 Your job is to find every gap, ambiguity, and inconsistency in the UI/UX specification.
 Do not be lenient. A missing empty state or an inaccessible interaction is a real defect.
 
-Consult `references/ux-checklist.md` for the full checklist.
-
 ---
 
 ## Input Detection
@@ -127,7 +125,7 @@ Check:
 ## Category 7: Copy & Labels
 
 Check:
-- Are all status messages in plain English? No raw API values (e.g. "Processing" not "PROCESSING"), no internal codes.
+- Are all status messages in plain English? No raw API values, no internal codes.
 - Are all empty state messages empathetic and actionable (not just "No results found")?
 - Are all tooltip texts defined with exact wording?
 - Are all confirmation modal messages defined with exact title, body, and button labels?
