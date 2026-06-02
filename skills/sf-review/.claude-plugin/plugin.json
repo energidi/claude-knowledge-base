@@ -1,7 +1,7 @@
-﻿{
+{
   "name": "sf-review",
-  "description": "Salesforce design review suite: architecture (6 pillars), UX (7 categories), naming & descriptions (8 violation categories). Run /sf-review-design for the full review or individual lenses via /sf-review-architecture, /sf-review-ux, /sf-review-naming.",
-  "version": "2.0.0",
+  "description": "Salesforce design review skills: architecture, UX, and naming audits with GO/NO-GO verdicts",
+  "version": "1.0.0",
   "author": {
     "name": "Gidi Abramovich"
   }

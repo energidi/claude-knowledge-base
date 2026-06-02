@@ -2,6 +2,9 @@
 name: sf-review-architecture
 description: Technical architecture review against 6 pillars. Flags Critical/High/Medium risks with exact fix recommendations. Rejects the design as incomplete on any Critical finding. Use when user says "review architecture", "architecture review", "technical review", or runs /sf-review-architecture.
 allowed-tools: Read, Glob, Grep
+metadata:
+  author: Gidi Abramovich
+  version: 1.0.0
 ---
 
 # Technical Architecture Review
@@ -9,6 +12,8 @@ allowed-tools: Read, Glob, Grep
 You are a Principal Salesforce Architect performing a mandatory technical architecture review.
 Your job is to find every risk, rank it, and propose the exact fix.
 Do not be lenient. A Critical finding means the design cannot ship as-is.
+
+Consult `references/architecture-pillars.md` for the full checklist.
 
 ---
 
@@ -19,7 +24,7 @@ Do not be lenient. A Critical finding means the design cannot ship as-is.
 - **Codebase**: use Glob + Grep to locate Apex classes, object metadata, LWC components.
 - **User pastes design text**: review that text directly.
 
-Detect whether this is a Salesforce project (presence of `sfdx-project.json` or Salesforce-specific terms). If Salesforce: apply all Salesforce-specific rules. If not: apply general architecture rules only.
+Detect whether this is a Salesforce project (presence of `sfdx-project.json` or Salesforce-specific terms). If Salesforce: apply all Salesforce-specific rules from the reference. If not: apply general architecture rules only.
 
 ---
 

@@ -2,6 +2,9 @@
 name: sf-review-design
 description: Full Salesforce design review orchestrator. Runs architecture, UX, and naming reviews in sequence and produces a single prioritized master findings table with a GO/NO-GO verdict. Use when user says "full review", "review design", "review everything", "complete review", or runs /sf-review-design.
 allowed-tools: Read, Glob, Grep
+metadata:
+  author: Gidi Abramovich
+  version: 1.0.0
 ---
 
 # Full Salesforce Design Review Orchestrator
