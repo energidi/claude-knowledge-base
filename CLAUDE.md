@@ -60,6 +60,16 @@ End every completed cycle with: **TASK COMPLETE** / **BLUEPRINT READY** / **PHAS
 
 ---
 
+# Tool and Skill Failures
+
+If a requested tool, skill, or named resource (skill, agent, command, MCP) cannot be found or fails to load: stop immediately and tell the user. Do not silently substitute an alternative, invent a workaround, or proceed with a different approach. The user may have a reason for specifying that exact resource.
+
+Format: "I could not find [name]. Do you want me to [specific alternative]?"
+
+Wait for explicit instruction before doing anything else.
+
+---
+
 # Non-Negotiables
 
 | Never | Always |
