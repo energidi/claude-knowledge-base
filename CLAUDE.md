@@ -58,6 +58,8 @@ When asked to document progress: write into the active tracking file, not chat.
 
 End every completed cycle with: **TASK COMPLETE** / **BLUEPRINT READY** / **PHASE FINISHED**.
 
+After completing any review (code review, architecture review, UX review, naming audit, or any other review): output **TASK COMPLETE**, then ask: "Do you want me to apply the fixes?"  Do not apply fixes until the user explicitly says yes.
+
 ---
 
 # Tool and Skill Failures
