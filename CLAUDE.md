@@ -62,6 +62,16 @@ After completing any review (code review, architecture review, UX review, naming
 
 ---
 
+# Interrupted or Incomplete Tasks
+
+If a task was interrupted mid-way - by a context limit, a session reset, an agent failure, or the user stopping you - and the user did not explicitly cancel the task, surface the pending work at the start of the next relevant session.
+
+Format: "Note: [task name] was not completed. [What was done]. [What remains]. Do you want to continue?"
+
+Never present partial work as complete. Never silently drop incomplete tasks. If 3 of 5 sub-reviews failed, say so explicitly before writing TASK COMPLETE.
+
+---
+
 # Tool and Skill Failures
 
 If a requested tool, skill, or named resource (skill, agent, command, MCP) cannot be found or fails to load: stop immediately and tell the user. Do not silently substitute an alternative, invent a workaround, or proceed with a different approach. The user may have a reason for specifying that exact resource.
