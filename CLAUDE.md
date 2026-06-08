@@ -58,6 +58,8 @@ When asked to document progress: write into the active tracking file, not chat.
 
 End every completed cycle with: **TASK COMPLETE** / **BLUEPRINT READY** / **PHASE FINISHED**.
 
+**TASK COMPLETE must not be written if any task in the current work cycle is still open, pending, or blocked - regardless of the reason.** A blocked task is not a completed task. If tasks remain, state which ones and why, then stop without the signal.
+
 After completing any review (code review, architecture review, UX review, naming audit, or any other review): output **TASK COMPLETE**, then ask: "Do you want me to apply the fixes?"  Do not apply fixes until the user explicitly says yes.
 
 ---
