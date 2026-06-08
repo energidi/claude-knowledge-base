@@ -60,6 +60,8 @@ End every completed cycle with: **TASK COMPLETE** / **BLUEPRINT READY** / **PHAS
 
 **TASK COMPLETE must not be written if any task in the current work cycle is still open, pending, or blocked - regardless of the reason.** A blocked task is not a completed task. If tasks remain, state which ones and why, then stop without the signal.
 
+**Partial completion of a multi-step task is not completion.** If a task spans multiple files, components, or sub-steps, and any sub-step remains undone, the task is not complete - regardless of how much progress was made. Do not write TASK COMPLETE until every sub-step is verified done. Report what was finished and what still remains.
+
 After completing any review (code review, architecture review, UX review, naming audit, or any other review): output **TASK COMPLETE**, then ask: "Do you want me to apply the fixes?"  Do not apply fixes until the user explicitly says yes.
 
 ---
