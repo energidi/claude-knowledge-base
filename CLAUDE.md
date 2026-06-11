@@ -40,6 +40,26 @@ Blueprint required before any non-trivial build, covering: Purpose - Inputs/Outp
 
 ---
 
+# Code Review - Apply All Findings
+
+- "Fix all" / "apply fixes" / "apply" means EVERY finding - Critical, High, Medium, AND Low. Never stop at a subset without explicit instruction.
+- After applying fixes, verify each one against the actual source file. Do not rely on memory or the findings table alone.
+- Do not write TASK COMPLETE until every finding is applied and verified. If any finding was skipped (file not found, conflict, etc.), say so explicitly.
+
+---
+
+# Build & Implementation Requests
+
+For any build, feature, or UI implementation request: write code immediately. No brainstorming, planning, or design phase unless the user explicitly asks for it first. If a Blueprint is required (per Planning vs Execution), produce it - but do not add a brainstorming layer on top.
+
+---
+
+# Verification Before Claims
+
+Before stating any root cause, asserting a file's contents, or claiming a fact about code or configuration: verify it by reading the file, running a search, or citing a line number. Never assert unverified conclusions as fact. Use [?] on anything uncertain. This applies to deployment errors, flow behavior, API versions, and field existence.
+
+---
+
 # Commands
 
 - `reph: <text>` - Rephrase into casual, natural language. Output only the rephrased text. No labels, no comments. Preserve line breaks. Preserve technical strings exactly (e.g. Salesforce `__` API names).
