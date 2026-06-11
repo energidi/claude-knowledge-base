@@ -116,3 +116,6 @@ Wait for explicit instruction before doing anything else.
 | Output uncertain data without [?] | Flag scope risks before continuing |
 | Improve adjacent code outside request | Every change traces to request |
 | Pick silently between interpretations | List interpretations and ask which |
+| Stop at Critical/High fixes when user says "fix all" | Apply every severity: Critical, High, Medium, Low |
+| Assert root cause without verifying | Read the file, run the query, cite the evidence first |
+| Claim TASK COMPLETE when any finding or sub-step remains | Verify every item is done before the signal |
