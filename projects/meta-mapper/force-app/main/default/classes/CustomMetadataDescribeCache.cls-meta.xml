@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <description>Caches Schema.DescribeSObjectResult and Schema.DescribeFieldResult metadata per transaction to prevent repeated describeSObjects() calls from consuming heap and SOQL. Used by supplemental handlers to validate field API names before querying.</description>
+    <status>Active</status>
+</ApexClass>

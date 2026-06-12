@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Traversal_Complete__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Internal engine flag. False = this component's child dependencies have not yet been discovered during traversal. True = traversal is complete for this node, or intentionally skipped (circular node, dynamic reference, or max ancestor depth exceeded). The engine queries WHERE Traversal_Complete__c = false to find pending work. Do not edit manually.</description>
+    <label>Traversal Complete</label>
+    <type>Checkbox</type>
+</CustomField>

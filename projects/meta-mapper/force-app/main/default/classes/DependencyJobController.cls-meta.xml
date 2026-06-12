@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <description>@AuraEnabled controller for all LWC interactions with scan jobs. Enforces FLS and CRUD via USER_MODE. Delegates all business logic to services - no SOQL or DML directly. Must NOT be called from async contexts (Batch, Future, Queueable). Exposes: createJob(), getJobStatus(), getNodeHierarchy(), cancelJob(), resumeJob(), getObjectList(), getComponentCount(), isCopilotEnabled().</description>
+    <status>Active</status>
+</ApexClass>

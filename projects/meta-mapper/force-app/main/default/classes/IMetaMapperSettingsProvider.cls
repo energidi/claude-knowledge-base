@@ -1,4 +1,4 @@
-/**
+﻿/**
  * IMetaMapperSettingsProvider
  *
  * Interface for reading MetaMapper_Settings__mdt runtime configuration.
@@ -10,7 +10,7 @@
  * Consumers: DependencyQueueable, DependencyCleanupBatch, DependencyNotificationService,
  *            DependencyJobController, all IDependencyTypeHandler implementations
  *
- * Ref: ISP-6072
+ *
  */
 public interface IMetaMapperSettingsProvider {
 

@@ -1,8 +1,8 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Target_Metadata_Type__c</fullName>
-    <description>The type of metadata component being scanned (e.g. CustomField, Flow, ApexClass). Determines which supplemental query handlers run and which batch size setting applies. Required. Cannot be changed after the job starts. Ref: ISP-6072</description>
-    <label>Target Metadata Type</label>
+    <description>The type of metadata component being scanned (e.g. CustomField, Flow, ApexClass). Determines which supplemental query handlers run and which batch size setting applies. Required. Cannot be changed after the job starts.</description>
+    <label>Component Type</label>
     <required>true</required>
     <type>Picklist</type>
     <valueSet>

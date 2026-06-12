@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
+    <description>Interface for the Tooling API callout service. Defines fetchDependencies(), buildContextData(), and computeScore(). Implemented by MetadataDependencyService. Inject this interface (not the concrete class) into DependencyQueueable for testability. Must NOT make callouts outside of async context.</description>
     <status>Active</status>
 </ApexClass>

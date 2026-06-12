@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <description>Factory that returns the correct IDependencyTypeHandler for a given metadata type string. Returns a no-op default handler for unknown types. Invoked by DependencyQueueable after the main Tooling API callout to route supplemental discovery to the correct handler.</description>
+    <status>Active</status>
+</ApexClass>

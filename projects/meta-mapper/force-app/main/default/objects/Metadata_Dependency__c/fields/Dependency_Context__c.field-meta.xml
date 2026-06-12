@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Dependency_Context__c</fullName>
+    <description>Type-specific attributes describing this dependency's role and context within the scan. Stored as versioned JSON (root 'v' key). Values rendered as plain-English badges in the UI — never displayed as raw JSON. Populated by the scan engine only.</description>
+    <label>Component Attributes</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

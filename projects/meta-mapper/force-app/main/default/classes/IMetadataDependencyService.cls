@@ -8,41 +8,47 @@
  * Implementations: MetadataDependencyService
  * Consumers: DependencyQueueable
  *
- * Ref: ISP-6072
+ *
  */
 public interface IMetadataDependencyService {
 
     /**
      * Executes Tooling API callouts for the given list of Metadata IDs and returns
-     * raw dependency results. Handles chunking (100 IDs max per query), QueryMore,
-     * and reactive HTTP 414/431 split-and-retry internally.
+     * dependency results grouped by parent ID (RefMetadataComponentId).
      *
-     * @param ids        List of 18-char Tooling API Metadata IDs to query dependencies for
-     * @param opts       Scan options (activeFlowsOnly, jobId, splitDepth)
-     * @return           List of new Metadata_Dependency__c records (not yet inserted).
-     *                   Each record has Metadata_Id__c, Metadata_Type__c, Metadata_Name__c,
-     *                   Discovery_Source__c = 'ToolingAPI', and Component_Uniqueness_Key__c
-     *                   pre-populated as "jobId:Metadata_Id__c" for upsert by the caller.
+     * Handles chunking (URL-budget-driven), QueryMore pagination, and reactive
+     * HTTP 414/431 split-and-retry internally.
+     *
+     * @param ids          List of 18-char Tooling API Metadata IDs to query dependencies for
+     * @param fetchContext Mutable context object - errors accumulated via fetchContext.addError()
+     * @return           Map<parentMetadataId, List<child Metadata_Dependency__c>>.
+     *                   Each child has Metadata_Id__c, Metadata_Type__c, Metadata_Name__c,
+     *                   Discovery_Source__c = 'ToolingAPI' pre-populated.
+     *                   Parent_Dependency__c is NOT set here - DependencyQueueable sets it
+     *                   after looking up the parent's record ID.
      */
-    List<Metadata_Dependency__c> fetchDependencies(List<String> ids, DependencyOptions opts);
+    Map<String, List<Metadata_Dependency__c>> fetchDependencies(
+        List<String> ids, DependencyFetchContext fetchContext);
 
     /**
-     * Builds the Component_Attributes__c JSON payload for a given node.
+     * Builds the Dependency_Context__c JSON payload for a given node.
      * Output is type-specific (see CLAUDE.md Pills table).
      * Always includes root "v": 1 version key.
-     *
-     * @param node       The dependency record being enriched
-     * @return           Serialized JSON string for Component_Attributes__c
      */
     String buildContextData(Metadata_Dependency__c node);
 
     /**
      * Returns a 0-100 confidence score for supplemental handler matches.
-     * Used to populate Supplemental_Confidence__c.
-     *
-     * @param handlerType    Handler class name (e.g. 'CustomFieldHandler')
-     * @param matchBasis     Match strategy used (e.g. 'regex', 'exact', 'xml')
-     * @return               Score between 0 and 100
      */
     Integer computeScore(String handlerType, String matchBasis);
+
+    /**
+     * When fetchContext.activeFlowsOnly is true, removes Flow nodes from results whose
+     * DeveloperName has no active version in the org (ActiveVersionId = null on FlowDefinition).
+     * Makes one Tooling API callout for all Flow names in the result map.
+     * Fail-open: on any callout failure all Flow nodes are retained and an error is recorded.
+     * No-op when fetchContext.activeFlowsOnly is false.
+     */
+    void filterInactiveFlows(
+        Map<String, List<Metadata_Dependency__c>> results, DependencyFetchContext fetchContext);
 }

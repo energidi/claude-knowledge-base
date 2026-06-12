@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <description>Supplemental handler for CustomField nodes. Finds dependencies not returned by MetadataComponentDependency: WorkflowFieldUpdate references (95%), ValidationRule formula regex matches (65%), FlexiPage XML parses (60%), Custom Metadata Type lookups (85%), and lookup field relationships (95%). Sets Is_Dynamic_Reference__c on nodes that cannot be statically resolved. Implements IDependencyTypeHandler.</description>
+    <status>Active</status>
+</ApexClass>

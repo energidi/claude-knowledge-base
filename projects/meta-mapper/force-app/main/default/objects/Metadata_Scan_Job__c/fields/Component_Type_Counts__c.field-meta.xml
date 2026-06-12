@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Component_Type_Counts__c</fullName>
+    <description>Count of discovered components per metadata type, populated when Status = Completed. Stored as versioned JSON (root 'v' key, e.g. {v:1, ApexClass:5, Flow:3}). Used to build the stats tile and plain-English summary. Populated by the engine only — do not edit manually.</description>
+    <label>Component Counts by Type</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

@@ -6,7 +6,7 @@
  * (DependencyQueueable, DependencyCleanupBatch) that require reliable internal access
  * regardless of the running user's permissions.
  *
- * Ref: ISP-6072
+ *
  */
 public without sharing class DependencyJobSelector {
 
@@ -23,11 +23,14 @@ public without sharing class DependencyJobSelector {
                    Status__c,
                    Active_Flows_Only__c,
                    Components_Analyzed__c,
-                   Total_Processing_Cycles__c,
-                   Last_Successful_Cycle__c,
+                   Processing_Cycle_Count__c,
+                   Last_Progressive_Cycle__c,
                    Batch_Size_Override__c,
-                   Last_Result_Count__c,
-                   Error_Status_Message__c,
+                   Last_Query_Row_Count__c,
+                   Scan_Diagnostic_Log__c,
+                   Target_Metadata_Type__c,
+                   Target_API_Name__c,
+                   Target_Parent_Object__c,
                    OwnerId
             FROM Metadata_Scan_Job__c
             WHERE Id = :jobId
@@ -49,7 +52,8 @@ public without sharing class DependencyJobSelector {
             SELECT Id
             FROM Metadata_Scan_Job__c
             WHERE Status__c IN ('Failed', 'Cancelled')
-            AND Status_Closed_At__c < :threshold
+            AND (Status_Closed_At__c < :threshold
+                 OR (Status_Closed_At__c = null AND CreatedDate < :threshold))
         ]);
     }
 
@@ -61,12 +65,18 @@ public without sharing class DependencyJobSelector {
      * filter) for selectivity on orgs where AsyncApexJob holds millions of rows.
      * Pre-queries the ApexClass Id to enable the indexed filter.
      *
-     * @return  Number of DependencyQueueable jobs currently Queued, Processing, or Preparing
+     * LIMIT is set to maxConcurrent + 1: SELECT COUNT() with LIMIT is silently ignored
+     * by Salesforce - COUNT() aggregates always scan all matching rows regardless of LIMIT,
+     * causing a full-table scan on LDV orgs with millions of AsyncApexJob rows. Using
+     * SELECT Id + results.size() respects the LIMIT and bounds query cost.
+     *
+     * @param maxConcurrent  Max_Concurrent_Jobs__c threshold; LIMIT is set to this + 1
+     * @return               Number of DependencyQueueable jobs currently active
      */
     // Cached once per transaction - ApexClass records are immutable during execution
     private static Id cachedQueueableClassId;
 
-    public Integer countActiveQueueables() {
+    public Integer countActiveQueueables(Integer maxConcurrent) {
         if (cachedQueueableClassId == null) {
             List<ApexClass> classes = [
                 SELECT Id FROM ApexClass
@@ -83,8 +93,9 @@ public without sharing class DependencyJobSelector {
             }
             cachedQueueableClassId = classes[0].Id;
         }
-        return [
-            SELECT COUNT()
+        Integer queryLimit = maxConcurrent + 1;
+        List<AsyncApexJob> results = [
+            SELECT Id
             FROM AsyncApexJob
             WHERE JobType = 'Queueable'
             AND ApexClassId = :cachedQueueableClassId
@@ -92,7 +103,9 @@ public without sharing class DependencyJobSelector {
             // enter Holding status. Omitting it allows createJob() to bypass Max_Concurrent_Jobs__c
             // when the org is under heavy async load, potentially exceeding the 100 Holding limit.
             AND Status IN ('Processing', 'Preparing', 'Queued', 'Holding')
+            LIMIT :queryLimit
         ];
+        return results.size();
     }
 
     /**
@@ -101,7 +114,7 @@ public without sharing class DependencyJobSelector {
      *
      * Two-step lock pattern:
      *   Step 1 - ORDER BY query to get the correct oldest IDs (ORDER BY is incompatible with FOR UPDATE).
-     *   Step 2 - Re-query those IDs WITH FOR UPDATE to serialize concurrent ResultSerializerQueueable
+     *   Step 2 - Re-query those IDs WITH FOR UPDATE to serialize concurrent ScanResultFileQueueable
      *            executions. This prevents two concurrent serializers from independently selecting and
      *            deleting the same oldest job.
      *
@@ -145,10 +158,193 @@ public without sharing class DependencyJobSelector {
      */
     private class StatusClosedAtComparator implements Comparator<Metadata_Scan_Job__c> {
         public Integer compare(Metadata_Scan_Job__c a, Metadata_Scan_Job__c b) {
-            if (a.Status_Closed_At__c == b.Status_Closed_At__c) {
+            DateTime closedA = a.Status_Closed_At__c;
+            DateTime closedB = b.Status_Closed_At__c;
+            // Null-safe: treat null as "most recent" (sorts last in ascending order) to
+            // prevent NPE on legacy Completed records where Status_Closed_At__c was not
+            // stamped (e.g. jobs completed before the field was added). Sorting null last
+            // means legacy records are retained over newer ones rather than being
+            // incorrectly treated as the oldest and deleted first.
+            if (closedA == null && closedB == null) {
                 return a.Id < b.Id ? -1 : (a.Id > b.Id ? 1 : 0);
             }
-            return a.Status_Closed_At__c < b.Status_Closed_At__c ? -1 : 1;
+            if (closedA == null) { return 1; }
+            if (closedB == null) { return -1; }
+            if (closedA == closedB) {
+                return a.Id < b.Id ? -1 : (a.Id > b.Id ? 1 : 0);
+            }
+            return closedA < closedB ? -1 : 1;
         }
+    }
+
+    /**
+     * Returns Status__c only. Used by the three concurrent-status re-verify checks
+     * inside DependencyQueueable.runEngine() (stall guard, cap guard, cancel guard).
+     *
+     * Each call is a fresh, unlocked read - no FOR UPDATE. A TOCTOU race window exists
+     * between the initial status read and any subsequent DML on the job record. This is
+     * an accepted design trade-off for an admin tool: the re-verify only prevents
+     * overwriting a terminal status (Cancelled, Completed, Failed) with a mid-traversal
+     * state update. The window is near-zero in practice.
+     *
+     * @param jobId  ID of the Metadata_Scan_Job__c record
+     * @return       Current Status__c value, or null if the record does not exist
+     */
+    public String getStatusOnly(String jobId) {
+        List<Metadata_Scan_Job__c> rows = [
+            SELECT Status__c FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1
+        ];
+        return rows.isEmpty() ? null : rows[0].Status__c;
+    }
+
+    /**
+     * Returns the fields needed by updateJobFailed() in DependencyQueueable.
+     * No row lock - used outside any locking context.
+     *
+     * @param jobId  ID of the Metadata_Scan_Job__c record
+     * @return       The job record, or null if not found
+     */
+    public Metadata_Scan_Job__c getForFailedUpdate(String jobId) {
+        List<Metadata_Scan_Job__c> rows = [
+            SELECT Id, Status__c, Scan_Diagnostic_Log__c, Components_Analyzed__c
+            FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1
+        ];
+        return rows.isEmpty() ? null : rows[0];
+    }
+
+    /**
+     * Same as getForFailedUpdate but WITH FOR UPDATE to serialize concurrent
+     * ScanResultFileQueueable instances in updateJobFailed().
+     *
+     * @param jobId  ID of the Metadata_Scan_Job__c record
+     * @return       The job record locked FOR UPDATE, or null if not found
+     */
+    public Metadata_Scan_Job__c getForFailedUpdateLocked(String jobId) {
+        List<Metadata_Scan_Job__c> rows = [
+            SELECT Id, Status__c, Scan_Diagnostic_Log__c, Components_Analyzed__c
+            FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1 FOR UPDATE
+        ];
+        return rows.isEmpty() ? null : rows[0];
+    }
+
+    /**
+     * Returns the job record WITH FOR UPDATE lock for ScanResultFileQueueable's
+     * main serialization path. Acquired immediately to serialize concurrent instances.
+     *
+     * @param jobId  ID of the Metadata_Scan_Job__c record
+     * @return       The job record locked FOR UPDATE, or null if not found
+     */
+    public Metadata_Scan_Job__c getByIdForLock(String jobId) {
+        List<Metadata_Scan_Job__c> rows = [
+            SELECT Id, Status__c, Components_Analyzed__c, Scan_Diagnostic_Log__c,
+                   Target_API_Name__c
+            FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1 FOR UPDATE
+        ];
+        return rows.isEmpty() ? null : rows[0];
+    }
+
+    /**
+     * Returns Id and Scan_Diagnostic_Log__c for log-append operations.
+     * Used by DependencyNotificationService, DependencyJobController, ScanSummaryQueueable,
+     * DependencyCleanupBatch, and ScanResultFileQueueable.
+     *
+     * @param jobId  ID of the Metadata_Scan_Job__c record
+     * @return       The job record, or null if not found
+     */
+    public Metadata_Scan_Job__c getByIdForLogAppend(String jobId) {
+        List<Metadata_Scan_Job__c> rows = [
+            SELECT Id, Scan_Diagnostic_Log__c
+            FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1
+        ];
+        return rows.isEmpty() ? null : rows[0];
+    }
+
+    /**
+     * Returns the fields needed by ScanSummaryQueueable to build the plain-English summary.
+     *
+     * @param jobId  ID of the Metadata_Scan_Job__c record
+     * @return       The job record, or null if not found
+     */
+    public Metadata_Scan_Job__c getByIdForSummary(String jobId) {
+        List<Metadata_Scan_Job__c> rows = [
+            SELECT Id, Status__c, Component_Type_Counts__c, Components_Analyzed__c, Target_API_Name__c,
+                   Scan_Diagnostic_Log__c, Scan_Summary_Text__c
+            FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1
+        ];
+        return rows.isEmpty() ? null : rows[0];
+    }
+
+    /**
+     * Counts active Metadata_Scan_Job__c records in Initializing or Processing state.
+     * Used as the secondary soft lock in DependencyJobController.createJob() to narrow
+     * the TOCTOU race window alongside countActiveQueueables().
+     *
+     * Uses SELECT Id + results.size() rather than SELECT COUNT() to respect LIMIT.
+     * SELECT COUNT() with LIMIT is silently ignored in Salesforce - aggregate COUNT()
+     * always scans all matching rows regardless of LIMIT.
+     *
+     * @param maxConcurrent  Max_Concurrent_Jobs__c threshold; LIMIT is set to this + 1
+     * @return               Number of jobs currently in Initializing or Processing state
+     */
+    public Integer countActiveJobRecords(Integer maxConcurrent) {
+        Integer queryLimit = maxConcurrent + 1;
+        List<Metadata_Scan_Job__c> results = [
+            SELECT Id
+            FROM Metadata_Scan_Job__c
+            WHERE Status__c IN ('Initializing', 'Processing')
+            LIMIT :queryLimit
+        ];
+        return results.size();
+    }
+
+    /**
+     * Returns all UI-relevant fields for the progress and results views.
+     * Enforces WITH USER_MODE so FLS and CRUD are respected at the controller boundary.
+     * Used by DependencyJobController.getJobStatus() and getNodeHierarchy().
+     *
+     * @param jobId  ID of the Metadata_Scan_Job__c record
+     * @return       The job record, or null if not found or inaccessible to the running user
+     */
+    public Metadata_Scan_Job__c getByIdForStatusView(String jobId) {
+        List<Metadata_Scan_Job__c> rows = [
+            SELECT Id,
+                   Status__c,
+                   Target_Metadata_Type__c,
+                   Target_API_Name__c,
+                   Components_Analyzed__c,
+                   Scan_Diagnostic_Log__c,
+                   Scan_Summary_Text__c,
+                   Component_Type_Counts__c,
+                   Result_File_Id__c,
+                   Status_Closed_At__c,
+                   Batch_Size_Override__c,
+                   Pause_Reason__c,
+                   Result_Save_Attempted__c,
+                   CreatedDate
+            FROM Metadata_Scan_Job__c
+            WHERE Id = :jobId
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        return rows.isEmpty() ? null : rows[0];
+    }
+
+    /**
+     * Returns the fields needed by DependencyJobController.resumeJob() to validate
+     * the job state and enqueue a new DependencyQueueable instance.
+     * Enforces WITH USER_MODE at the controller boundary.
+     *
+     * @param jobId  ID of the Metadata_Scan_Job__c record
+     * @return       The job record, or null if not found or inaccessible to the running user
+     */
+    public Metadata_Scan_Job__c getByIdForResume(String jobId) {
+        List<Metadata_Scan_Job__c> rows = [
+            SELECT Id, Status__c, Active_Flows_Only__c, Processing_Cycle_Count__c
+            FROM Metadata_Scan_Job__c
+            WHERE Id = :jobId
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        return rows.isEmpty() ? null : rows[0];
     }
 }

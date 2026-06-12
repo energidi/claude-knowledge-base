@@ -1,4 +1,4 @@
-/**
+﻿/**
  * MetaMapperSettingsProvider
  *
  * Implementation of IMetaMapperSettingsProvider.
@@ -18,7 +18,7 @@
  * onto the Metadata_Scan_Job__c record at job creation and reading from the job record
  * in DependencyQueueable) is deferred to the DependencyJobController implementation.
  *
- * Ref: ISP-6072
+ *
  */
 public without sharing class MetaMapperSettingsProvider implements IMetaMapperSettingsProvider {
 

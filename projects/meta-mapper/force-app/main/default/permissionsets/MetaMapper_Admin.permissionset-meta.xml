@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Grants full access to MetaMapper. Assign to admins and developers who need to run dependency scans. Provides CRUD on Metadata_Scan_Job__c and Metadata_Dependency__c, access to the MetaMapper LWC and Apex controller, and Named Credential principal access required for Tooling API callouts. Must be assigned before a user can access or operate MetaMapper. Does not grant access to broader org data beyond what the user's existing profile already permits.</description>
+    <label>MetaMapper Admin</label>
+
+    <!-- Object permissions -->
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>true</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <object>Metadata_Scan_Job__c</object>
+        <viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>true</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <object>Metadata_Dependency__c</object>
+        <viewAllRecords>false</viewAllRecords>
+    </objectPermissions>
+
+    <!-- Apex class access -->
+    <classAccesses>
+        <apexClass>DependencyJobController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DependencyQueueable</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>ScanResultFileQueueable</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>ScanSummaryQueueable</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DependencyCleanupBatch</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>MetadataDependencyDeletionBatch</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DependencyCleanupScheduler</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>ToolingApiHealthCheck</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DependencyNotificationService</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+
+    <!-- Named Credential principal access for Tooling API loopback -->
+    <!-- Admin must also authorize the per-user Named Credential after assignment. -->
+    <!-- See setup/SETUP.md for post-install authorization instructions. -->
+    <externalDataSourceAccesses>
+        <enabled>true</enabled>
+        <externalDataSource>MetaMapper_Tooling_API</externalDataSource>
+    </externalDataSourceAccesses>
+
+    <!-- Custom Permission checked by ToolingApiHealthCheck.verify() before any callout. -->
+    <!-- Without this, all users with this permission set get PERMISSION_SET_MISSING. -->
+    <customPermissions>
+        <enabled>true</enabled>
+        <name>MetaMapper_Application_Access</name>
+    </customPermissions>
+
+    <!-- Metadata_Scan_Job__c field permissions -->
+    <!-- Required for WITH USER_MODE queries, insert as user (createJob), and update as user (cancelJob, resumeJob). -->
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Scan_Job__c.Job_Type__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Active_Flows_Only__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Batch_Size_Override__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Components_Analyzed__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Scan_Job__c.Component_Type_Counts__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Scan_Diagnostic_Log__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Last_Query_Row_Count__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Last_Progressive_Cycle__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Scan_Job__c.Result_File_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Scan_Job__c.Scan_Summary_Text__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Scan_Job__c.Pause_Reason__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Scan_Job__c.Result_Save_Attempted__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Status__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Status_Closed_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Target_API_Name__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Target_Metadata_Type__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Target_Parent_Object__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Scan_Job__c.Processing_Cycle_Count__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+
+    <!-- Metadata_Dependency__c field permissions -->
+    <!-- Required for getNodeHierarchyForJob() WITH USER_MODE and insert as user rootNode in createJob(). -->
+    <!-- Ancestor_Id_Prefix_Index__c and Unique_Component_Key__c are engine-internal and excluded from -->
+    <!-- the USER_MODE SELECT projection. Unique_Component_Key__c needs editable=true for the   -->
+    <!-- root node insert in createJob(); readable is intentionally false (not projected to the LWC).   -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Dependency__c.Ancestor_Path__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Dependency__c.Dependency_Context__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Dependency__c.Dependency_Depth__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Dependency__c.Unique_Component_Key__c</field>
+        <readable>false</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Dependency__c.Traversal_Complete__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Dependency__c.Discovery_Source__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Dependency__c.Is_Circular__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Dependency__c.Is_Dynamic_Reference__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Dependency__c.Metadata_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Dependency__c.Metadata_Name__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Metadata_Dependency__c.Metadata_Type__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Dependency__c.Parent_Dependency__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Dependency__c.Supplemental_Confidence__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+</PermissionSet>

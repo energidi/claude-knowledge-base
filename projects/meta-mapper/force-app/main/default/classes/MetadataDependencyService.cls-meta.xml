@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <description>Executes Tooling API callouts to fetch MetadataComponentDependency records. Handles IN-clause chunking, QueryMore pagination, Active Flows version filtering, cursor expiry restart, and HTTP 414/431 reactive splits with a 5-level depth limit. Checks raw HTTP response body length before JSON.deserializeUntyped() to guard heap.</description>
+    <status>Active</status>
+</ApexClass>

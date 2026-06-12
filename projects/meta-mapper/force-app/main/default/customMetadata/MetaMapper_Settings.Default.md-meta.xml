@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
     <label>Default</label>
+    <description>Default runtime settings for MetaMapper. Read by the scan engine at the start of every Queueable execution. Do not delete this record.</description>
     <protected>false</protected>
     <values>
         <field>Cleanup_Chunk_Size__c</field>
@@ -11,7 +12,7 @@
         <value xsi:type="xsd:boolean">false</value>
     </values>
     <values>
-        <field>Dml_Reserve_Rows__c</field>
+        <field>Dml_Safety_Margin_Rows__c</field>
         <value xsi:type="xsd:double">750</value>
     </values>
     <values>
@@ -39,11 +40,15 @@
         <value xsi:type="xsd:double">50</value>
     </values>
     <values>
-        <field>Stall_Detection_Threshold__c</field>
+        <field>Stall_Pause_Threshold__c</field>
         <value xsi:type="xsd:double">5</value>
     </values>
     <values>
-        <field>Storage_Reserve_MB__c</field>
-        <value xsi:type="xsd:double">50</value>
+        <field>Min_Free_Storage_MB__c</field>
+        <value xsi:type="xsd:double">200</value>
+    </values>
+    <values>
+        <field>Has_Admin_Overrides__c</field>
+        <value xsi:type="xsd:boolean">false</value>
     </values>
 </CustomMetadata>

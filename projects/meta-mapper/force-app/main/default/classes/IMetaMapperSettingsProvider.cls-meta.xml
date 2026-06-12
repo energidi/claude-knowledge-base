@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
+    <description>Interface for reading MetaMapper_Settings__mdt at runtime. Defines getSettings(). Implemented by MetaMapperSettingsProvider. Inject this interface instead of calling the provider directly so tests can substitute a mock settings record without DML.</description>
     <status>Active</status>
 </ApexClass>

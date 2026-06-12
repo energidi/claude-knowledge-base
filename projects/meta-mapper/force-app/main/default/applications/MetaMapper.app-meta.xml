@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>MetaMapper maps Salesforce metadata dependencies using the Tooling API. Traces every dependency of a metadata component - Apex, Flows, Validation Rules, Field Updates, page layouts, and more - across any depth. Run a scan to see what will break when you change or delete a component. All data stays within the Salesforce trust boundary.</description>
+    <formFactors>Large</formFactors>
+    <isNavAutoTempTabsDisabled>false</isNavAutoTempTabsDisabled>
+    <isNavPersonalizationDisabled>false</isNavPersonalizationDisabled>
+    <isNavTabPersistenceDisabled>false</isNavTabPersistenceDisabled>
+    <label>MetaMapper</label>
+    <navType>Standard</navType>
+    <tabs>MetaMapper</tabs>
+    <uiType>Lightning</uiType>
+</CustomApplication>

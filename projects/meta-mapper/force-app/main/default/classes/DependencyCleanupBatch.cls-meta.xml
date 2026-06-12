@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <description>Nightly cleanup batch that discovers expired Failed and Cancelled jobs and fires MetadataDependencyDeletionBatch to remove them. Scheduled at 02:00 by DependencyCleanupScheduler. Implements Database.Stateful to accumulate job IDs across execute() chunks. Must NOT delete Completed, Processing, Initializing, or Paused jobs. Max 5 MetadataDependencyDeletionBatch submissions per finish() call.</description>
+    <status>Active</status>
+</ApexClass>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <description>Supplemental handler for Flow nodes. Finds QuickActionDefinition references, subflow invocations, and WebLink URL references not returned by MetadataComponentDependency. Implements IDependencyTypeHandler.</description>
+    <status>Active</status>
+</ApexClass>
