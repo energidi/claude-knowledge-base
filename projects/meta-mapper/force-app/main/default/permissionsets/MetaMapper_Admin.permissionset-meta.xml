@@ -115,7 +115,7 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
-        <field>Metadata_Scan_Job__c.Last_Progressive_Cycle__c</field>
+        <field>Metadata_Scan_Job__c.Last_Progress_Cycle__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
@@ -171,7 +171,7 @@
 
     <!-- Metadata_Dependency__c field permissions -->
     <!-- Required for getNodeHierarchyForJob() WITH USER_MODE and insert as user rootNode in createJob(). -->
-    <!-- Ancestor_Bloom_Index__c and Unique_Component_Key__c are engine-internal and excluded from -->
+    <!-- Ancestor_Tail_Index__c and Unique_Component_Key__c are engine-internal and excluded from -->
     <!-- the USER_MODE SELECT projection. Unique_Component_Key__c needs editable=true for the   -->
     <!-- root node insert in createJob(); readable is intentionally false (not projected to the LWC).   -->
     <fieldPermissions>
@@ -196,7 +196,7 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
-        <field>Metadata_Dependency__c.Traversal_Complete__c</field>
+        <field>Metadata_Dependency__c.Dependencies_Fetched__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>

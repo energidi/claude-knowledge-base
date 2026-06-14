@@ -20,7 +20,7 @@ private class DependencyJobControllerTest {
             Status__c                  = status,
             Components_Analyzed__c     = 0,
             Processing_Cycle_Count__c = 0,
-            Last_Progressive_Cycle__c   = 0,
+            Last_Progress_Cycle__c   = 0,
             Last_Query_Row_Count__c       = 0
         );
         insert job;
@@ -148,7 +148,7 @@ private class DependencyJobControllerTest {
             Metadata_Type__c            = 'ApexClass',
             Metadata_Name__c            = 'TestClass',
             Dependency_Depth__c         = 0,
-            Traversal_Complete__c     = false,
+            Dependencies_Fetched__c     = false,
             Is_Circular__c              = false,
             Is_Dynamic_Reference__c     = false,
             Discovery_Source__c         = 'ToolingAPI',

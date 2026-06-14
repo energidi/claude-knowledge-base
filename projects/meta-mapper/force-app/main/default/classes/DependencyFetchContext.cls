@@ -35,7 +35,7 @@ public class DependencyFetchContext {
      * Set to true by MetadataDependencyService when a QueryMore cursor expires
      * (INVALID_QUERY_LOCATOR) or when the callout budget is exhausted mid-QueryMore.
      * DependencyQueueable checks this flag before marking a parent batch as
-     * Traversal_Complete__c = true to prevent premature completion.
+     * Dependencies_Fetched__c = true to prevent premature completion.
      */
     public Boolean queryMoreFailed;
 

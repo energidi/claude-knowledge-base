@@ -166,7 +166,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
             // Do NOT add to failedParentMetaIds - that causes an infinite re-queue loop
             // since the same single-node query will always return the same oversized response.
             // Instead, return empty so the parent is treated as having no children and is
-            // marked Traversal_Complete__c = true. Children are dropped with an error log.
+            // marked Dependencies_Fetched__c = true. Children are dropped with an error log.
             fetchContext.addError('MetadataDependencyService: response body ' + bodySize
                 + ' bytes exceeds ' + MAX_RESPONSE_BODY_SIZE + ' byte heap guard for node '
                 + ids[0] + '. Children skipped (cannot split single-node batch further).');
@@ -214,7 +214,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
             // and populates failedParentMetaIds directly, so queryMoreFailed is not needed.
             if (!isFirstPage) {
                 // queryMoreFailed = true prevents Step 15 from marking ANY parent as fully fetched
-                // (Traversal_Complete__c = true) for this execution. The parent will be re-queried
+                // (Dependencies_Fetched__c = true) for this execution. The parent will be re-queried
                 // from scratch on the next execution. Page-1 children already inserted will be
                 // deduplicated via Unique_Component_Key__c External ID upsert - no data loss.
                 // failedParentMetaIds is not populated here because ids is not in scope; the
@@ -271,7 +271,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         // Page cap: one high-fan-out parent must not consume the entire callout budget
         // across recursive pages. Accept partial results and mark the parent as fetched;
         // setting queryMoreFailed here would prevent the parent from ever being marked
-        // Traversal_Complete__c = true, causing an infinite re-queue loop.
+        // Dependencies_Fetched__c = true, causing an infinite re-queue loop.
         if (depth >= MAX_QUERY_MORE_PAGES) {
             fetchContext.addError('MetadataDependencyService: QueryMore page cap ('
                 + MAX_QUERY_MORE_PAGES + ') reached. Remaining pages accepted as partial results.');
@@ -351,7 +351,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         node.Metadata_Name__c        = (String) rawRecord.get('MetadataComponentName');
         node.Metadata_Type__c        = (String) rawRecord.get('MetadataComponentType');
         node.Discovery_Source__c     = 'ToolingAPI';
-        node.Traversal_Complete__c = false;
+        node.Dependencies_Fetched__c = false;
         node.Metadata_Scan_Job__c    = fetchContext.jobId;
         return node;
     }
@@ -577,6 +577,84 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
             fetchContext.addError('MetadataDependencyService.filterInactiveFlows: dropped '
                 + droppedCount + ' inactive Flow version(s) (Active Flows Only mode).');
         }
+    }
+
+    /**
+     * Resolves the Tooling API ID of the scan target component from its developer name and type.
+     * Called on the first Queueable execution when the root node has a blank Metadata_Id__c.
+     * Returns the 18-character component ID, or null when the component is not found or when
+     * the metadata type is not resolvable via a simple name lookup.
+     */
+    public String resolveRootId(String metadataType, String apiName, String parentObject) {
+        String soql = buildRootIdQuery(metadataType, apiName, parentObject);
+        if (String.isBlank(soql)) {
+            return null;
+        }
+        HttpRequest req = new HttpRequest();
+        req.setEndpoint(NAMED_CREDENTIAL + API_PATH + EncodingUtil.urlEncode(soql, 'UTF-8'));
+        req.setMethod('GET');
+        req.setHeader('Content-Type', 'application/json');
+        HttpResponse res;
+        try {
+            res = new Http().send(req);
+        } catch (Exception e) {
+            return null;
+        }
+        if (res.getStatusCode() != 200) {
+            return null;
+        }
+        Blob bodyBlob = res.getBodyAsBlob();
+        if (bodyBlob == null || bodyBlob.size() > MAX_RESPONSE_BODY_SIZE) {
+            return null;
+        }
+        try {
+            Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+            List<Object> records = (List<Object>) result.get('records');
+            if (records == null || records.isEmpty()) {
+                return null;
+            }
+            return (String) ((Map<String, Object>) records[0]).get('Id');
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String buildRootIdQuery(String metadataType, String apiName, String parentObject) {
+        if (String.isBlank(metadataType) || String.isBlank(apiName)) {
+            return null;
+        }
+        String safeName   = String.escapeSingleQuotes(apiName);
+        String safeParent = String.escapeSingleQuotes(parentObject != null ? parentObject : '');
+        if (metadataType == 'ApexClass') {
+            return 'SELECT Id FROM ApexClass WHERE Name = \'' + safeName + '\' LIMIT 1';
+        }
+        if (metadataType == 'ApexTrigger') {
+            return 'SELECT Id FROM ApexTrigger WHERE Name = \'' + safeName + '\' LIMIT 1';
+        }
+        if (metadataType == 'Flow') {
+            return 'SELECT Id FROM Flow WHERE DeveloperName = \'' + safeName + '\' LIMIT 1';
+        }
+        if (metadataType == 'CustomField') {
+            String objName   = safeParent;
+            String fieldName = safeName;
+            if (String.isBlank(objName) && apiName.contains('.')) {
+                List<String> parts = apiName.split('\\.', 2);
+                objName   = String.escapeSingleQuotes(parts[0]);
+                fieldName = String.escapeSingleQuotes(parts[1]);
+            }
+            if (String.isBlank(objName)) {
+                return null;
+            }
+            return 'SELECT Id FROM CustomField WHERE DeveloperName = \'' + fieldName
+                + '\' AND EntityDefinition.DeveloperName = \'' + objName + '\' LIMIT 1';
+        }
+        if (metadataType == 'ValidationRule') {
+            return 'SELECT Id FROM ValidationRule WHERE DeveloperName = \'' + safeName + '\' LIMIT 1';
+        }
+        if (metadataType == 'WorkflowRule') {
+            return 'SELECT Id FROM WorkflowRule WHERE Name = \'' + safeName + '\' LIMIT 1';
+        }
+        return null;
     }
 
     // Merges src into dest (appends to existing lists rather than overwriting).

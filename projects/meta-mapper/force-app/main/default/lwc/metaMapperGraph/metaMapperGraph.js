@@ -452,6 +452,12 @@ export default class MetaMapperGraph extends LightningElement {
         return (this._nodes || []).length > 8000;
     }
 
+    get showFilterEmpty() {
+        return this._chartReady
+            && this._nodes.length > 0
+            && this._getVisibleNodes().length === 0;
+    }
+
     get isMobile() {
         return this._isMobileState;
     }

@@ -31,7 +31,7 @@
  *   custom field appearing at multiple depths in the tree receives supplemental results
  *   for all its occurrences in the current batch.
  *
- * Traversal_Complete__c = false on all supplemental nodes: the engine continues
+ * Dependencies_Fetched__c = false on all supplemental nodes: the engine continues
  *   traversal of their own transitive dependencies via the Tooling API main path.
  *
  * CPU safety: ValidationRule and CMT scans check Limits.getCpuTime() before and during
@@ -746,7 +746,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             ? parent.Metadata_Id__c
             : parent.Ancestor_Path__c + '|' + parent.Metadata_Id__c;
 
-        // H2: Ancestor_Bloom_Index__c - pipe-delimited 6-char tails (.right(6)) of each ancestor ID.
+        // H2: Ancestor_Tail_Index__c - pipe-delimited 6-char tails (.right(6)) of each ancestor ID.
         // Uses the auto-number suffix (last 6 chars), which is unique per component, matching
         // DependencyQueueable's construction so the bloom-filter pre-screen works on supplemental nodes.
         String cycleIndex = '';
@@ -781,12 +781,12 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
                                             ? parent.Dependency_Depth__c + 1 : 1),
             // false: supplemental nodes are queued for Tooling API traversal so the engine
             // continues fetching their own transitive dependencies in subsequent executions.
-            Traversal_Complete__c     = false,
+            Dependencies_Fetched__c     = false,
             Is_Dynamic_Reference__c     = isDynamicReference,
             Discovery_Source__c         = 'Supplemental',
             Supplemental_Confidence__c  = confidence,
             Ancestor_Path__c            = ancestorPath,
-            Ancestor_Bloom_Index__c      = cycleIndex,
+            Ancestor_Tail_Index__c      = cycleIndex,
             Unique_Component_Key__c = uniquenessKey
         );
     }

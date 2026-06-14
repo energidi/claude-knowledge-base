@@ -15,7 +15,7 @@
  *
  * Confidence: 85 (CMT field lookup - high confidence but not exact metadata reference)
  *
- * Traversal_Complete__c = false on all supplemental nodes: the engine continues
+ * Dependencies_Fetched__c = false on all supplemental nodes: the engine continues
  * traversal of their own transitive dependencies via the Tooling API main path.
  *
  * N+1 guard: SOQL count, query row budget, and CPU percentage are checked before

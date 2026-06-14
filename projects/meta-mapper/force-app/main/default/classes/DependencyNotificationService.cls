@@ -220,6 +220,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
                 job.Scan_Diagnostic_Log__c = String.isBlank(existing)
                     ? notice
                     : (existing + '\n' + notice).right(32768);
+                job.PE_Suppressed_This_Execution__c = true;
                 update job;
             }
         } catch (Exception e) {

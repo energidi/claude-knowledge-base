@@ -26,12 +26,12 @@ public without sharing class MetadataDependencySelector {
                    Metadata_Name__c,
                    Dependency_Depth__c,
                    Ancestor_Path__c,
-                   Ancestor_Bloom_Index__c,
+                   Ancestor_Tail_Index__c,
                    Dependency_Context__c,
                    Unique_Component_Key__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :jobId
-            AND Traversal_Complete__c = false
+            AND Dependencies_Fetched__c = false
             ORDER BY CreatedDate ASC, Id ASC
             LIMIT :queryLimit
         ];
@@ -132,7 +132,7 @@ public without sharing class MetadataDependencySelector {
             MAX_NODE_QUERY_LIMIT,
             Math.max(1, limitRows != null ? limitRows : MAX_NODE_QUERY_LIMIT)
         );
-        // Engine-internal fields (Unique_Component_Key__c, Ancestor_Bloom_Index__c) are
+        // Engine-internal fields (Unique_Component_Key__c, Ancestor_Tail_Index__c) are
         // intentionally included here. This method runs SYSTEM_MODE in trusted engine paths only
         // (ScanResultFileQueueable serialization) and is never exposed to the LWC.
         return [
@@ -141,7 +141,7 @@ public without sharing class MetadataDependencySelector {
                    Metadata_Type__c,
                    Metadata_Name__c,
                    Dependency_Depth__c,
-                   Traversal_Complete__c,
+                   Dependencies_Fetched__c,
                    Is_Circular__c,
                    Is_Dynamic_Reference__c,
                    Discovery_Source__c,
@@ -166,7 +166,7 @@ public without sharing class MetadataDependencySelector {
      * @return       All dependency records ordered by depth then creation date, up to MAX_NODE_QUERY_LIMIT
      */
     public List<Metadata_Dependency__c> getNodeHierarchyForJob(String jobId) {
-        // Unique_Component_Key__c and Ancestor_Bloom_Index__c are intentionally excluded:
+        // Unique_Component_Key__c and Ancestor_Tail_Index__c are intentionally excluded:
         // engine-internal fields not consumed by the LWC. Including them would require FLS
         // grants in the permission set for non-sysadmin users, creating an unnecessary
         // WITH USER_MODE failure surface.
@@ -176,7 +176,7 @@ public without sharing class MetadataDependencySelector {
                    Metadata_Type__c,
                    Metadata_Name__c,
                    Dependency_Depth__c,
-                   Traversal_Complete__c,
+                   Dependencies_Fetched__c,
                    Is_Circular__c,
                    Is_Dynamic_Reference__c,
                    Dependency_Context__c,

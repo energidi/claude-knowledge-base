@@ -178,7 +178,7 @@ public with sharing class DependencyJobController {
             Job_Type__c             = 'Dependency_Map',
             Components_Analyzed__c  = 0,
             Processing_Cycle_Count__c = 0,
-            Last_Progressive_Cycle__c   = 0,
+            Last_Progress_Cycle__c   = 0,
             Last_Query_Row_Count__c       = 0
         );
         insert as user job;
@@ -199,7 +199,7 @@ public with sharing class DependencyJobController {
             Metadata_Type__c            = metadataType,
             Metadata_Name__c            = fullApiName,
             Dependency_Depth__c         = 0,
-            Traversal_Complete__c     = false,
+            Dependencies_Fetched__c   = false,
             Is_Circular__c              = false,
             Is_Dynamic_Reference__c     = false,
             Discovery_Source__c         = 'ToolingAPI',
@@ -292,7 +292,8 @@ public with sharing class DependencyJobController {
             throw new DependencyJobException('Scan job not found: ' + jobId);
         }
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
-        Boolean platformEventsDisabled = settings.Disable_Platform_Events__c == true;
+        Boolean platformEventsDisabled = settings.Disable_Platform_Events__c == true
+            || statusJob.PE_Suppressed_This_Execution__c == true;
         Integer batchSizeInUse = statusJob.Batch_Size_Override__c != null
             ? (Integer) statusJob.Batch_Size_Override__c
             : (settings.Scan_Batch_Size__c != null ? (Integer) settings.Scan_Batch_Size__c : 50);
@@ -481,10 +482,10 @@ public with sharing class DependencyJobController {
             Schema.sObjectType.Metadata_Scan_Job__c.fields.getMap();
         if (!fieldMap.get('Status__c').getDescribe().isUpdateable()
             || !fieldMap.get('Batch_Size_Override__c').getDescribe().isUpdateable()
-            || !fieldMap.get('Last_Progressive_Cycle__c').getDescribe().isUpdateable()) {
+            || !fieldMap.get('Last_Progress_Cycle__c').getDescribe().isUpdateable()) {
             throw new DependencyJobException(
                 'Unable to resume: your permission set lacks field-level edit access to '
-                + 'Status__c, Batch_Size_Override__c, or Last_Progressive_Cycle__c. '
+                + 'Status__c, Batch_Size_Override__c, or Last_Progress_Cycle__c. '
                 + 'Ask your admin to verify these fields are editable in the MetaMapper_Admin permission set.'
             );
         }
@@ -496,7 +497,7 @@ public with sharing class DependencyJobController {
         // by stall detection has (Total - LastSuccess) >= threshold already; the
         // next execution increments Total by 1 and the check fires instantly, causing
         // an infinite pause loop on every resume attempt.
-        job.Last_Progressive_Cycle__c = job.Processing_Cycle_Count__c;
+        job.Last_Progress_Cycle__c = job.Processing_Cycle_Count__c;
         update as user job;
 
         System.enqueueJob(new DependencyQueueable(

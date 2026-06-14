@@ -145,6 +145,13 @@
                             alternative-text="Loading graph..."
                         ></lightning-spinner>
                     </template>
+                    <template if:true={showFilterEmpty}>
+                        <div class="filter-empty-state" role="status">
+                            <lightning-icon icon-name="utility:filter" size="medium" aria-hidden="true"></lightning-icon>
+                            <p class="filter-empty-title">No components match your current filters.</p>
+                            <p class="filter-empty-body">Try adjusting your type, level, or confidence filters to see results.</p>
+                        </div>
+                    </template>
                 </template>
             </div>
 

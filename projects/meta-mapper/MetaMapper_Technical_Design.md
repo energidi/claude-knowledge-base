@@ -1,7 +1,7 @@
 # MetaMapper - Technical Design
 
-**Version:** 14.0  
-**Date:** May 31, 2026  
+**Version:** 14.1  
+**Date:** June 14, 2026  
 **Status:** Phase 3 implementation in progress
 
 ---
@@ -19,7 +19,7 @@ MetaMapper is an open-source, 100% native Salesforce application that maps reach
 The core challenge: enterprise org metadata trees are too large for synchronous Apex (10s CPU, 6MB synchronous heap). Async Queueable context provides 12MB heap and no CPU hard timeout - but governor limits still apply per execution. The solution is a Queueable chain + Custom Object state machine:
 
 1. User submits a search via LWC. An `@AuraEnabled` controller creates a `Metadata_Scan_Job__c` record, inserts the root `Metadata_Dependency__c`, and enqueues `DependencyQueueable`.
-2. Each `DependencyQueueable` execution queries a batch of unprocessed nodes (`Traversal_Complete__c = false`), calls the Tooling API via Named Credential, inserts new child nodes, marks current nodes processed, and checks limit proximity.
+2. Each `DependencyQueueable` execution queries a batch of unprocessed nodes (`Dependencies_Fetched__c = false`), calls the Tooling API via Named Credential, inserts new child nodes, marks current nodes processed, and checks limit proximity.
 3. When the remaining callout budget drops below a safe threshold, it self-enqueues a fresh instance and exits. The guardrail uses a remaining-callout budget model (not percentage alone): reserve explicit headroom for QueryMore follow-ups, Flow status validation, and retry splits. Chain when `remaining < headroom`.
 4. When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFileQueueable` and exits. The serializer serializes all node records to a Salesforce File, deletes the node records to free Data Storage, enforces the ring buffer, transitions the job to `Completed`, and fires notifications.
 
@@ -49,7 +49,7 @@ Each `Metadata_Dependency__c` stores a pipe-delimited `Ancestor_Path__c` chain. 
 
 - **Root node:** `Ancestor_Path__c = ''` (empty string).
 - **Path building:** `child.Ancestor_Path__c = (String.isBlank(parent.Ancestor_Path__c) ? '' : parent.Ancestor_Path__c + '|') + parent.Metadata_Id__c`
-- **Circular node:** keep full `Ancestor_Path__c`, set `Is_Circular__c = true`, `Traversal_Complete__c = true`. Append `{"cycleClosesAt": "<parentMetadataId>"}` to `Dependency_Context__c`.
+- **Circular node:** keep full `Ancestor_Path__c`, set `Is_Circular__c = true`, `Dependencies_Fetched__c = true`. Append `{"cycleClosesAt": "<parentMetadataId>"}` to `Dependency_Context__c`.
 - **Depth guard:** before building path for any child, check if `(parent.Ancestor_Path__c?.length() ?? 0) + 20 > 32000`. If true, mark child as circular and log to `Engine_Diagnostic_Log__c`.
 
 ### Cancellation
@@ -138,7 +138,7 @@ When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFile
 | `Component_Type_Counts__c` | Long Text 32768 | JSON map `{"v": 1, MetadataType: count}` - populated on Completed by `ScanResultFileQueueable` before status transition. Null until Completed. |
 | `Status_Closed_At__c` | DateTime | Set when Status = Completed, Failed, or Cancelled. Not set on Paused. Used by cleanup batch. |
 | `Processing_Cycle_Count__c` | Number | Incremented on every Queueable execution |
-| `Last_Progressive_Cycle__c` | Number | Value of `Processing_Cycle_Count__c` at last execution where `Components_Analyzed__c` increased. Persisted (survives Queueable self-chain boundaries). Stall condition: `Total - Last >= Stall_Pause_Threshold__c`. |
+| `Last_Progress_Cycle__c` | Number | Value of `Processing_Cycle_Count__c` at last execution where `Components_Analyzed__c` increased. Persisted (survives Queueable self-chain boundaries). Stall condition: `Total - Last >= Stall_Pause_Threshold__c`. |
 | `Scan_Summary_Text__c` | Long Text 32768 | Plain-English summary populated by `ScanSummaryQueueable` after Completed. Null until populated. |
 | `Result_File_Id__c` | Text 18 | ContentDocumentId of completed scan result JSON. Null during active scans. |
 | `Batch_Size_Override__c` | Number | Job-specific batch size override set by `resumeJob()`. Not reset after use. |
@@ -166,7 +166,7 @@ When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFile
 | `Ancestor_Path__c` | Long Text 32768 | Pipe-delimited ancestor `Metadata_Id__c` chain. Excludes self. Used for true cycle detection. |
 | `Supplemental_Confidence__c` | Number (3,0) | 0-100 confidence score. Null for ToolingAPI nodes. Nodes < 70 show warning badge. |
 | `Unique_Component_Key__c` | Text 80 (External ID, Unique) | Composite key: `JobId + ':' + Metadata_Id__c`. Used for upsert dedup. |
-| `Ancestor_Bloom_Index__c` | Long Text 32768 | Internal engine field. Pipe-delimited 6-char tails (`.right(6)`, auto-number suffix) of ancestor `Metadata_Id__c` values. Used as a fast bloom-filter pre-screen before the expensive full `Ancestor_Path__c` string search. A match triggers the conclusive `Ancestor_Path__c` confirmation; no match skips it. Do not edit manually. |
+| `Ancestor_Tail_Index__c` | Long Text 32768 | Internal engine field. Pipe-delimited 6-char tails (`.right(6)`, auto-number suffix) of ancestor `Metadata_Id__c` values. Used as a fast bloom-filter pre-screen before the expensive full `Ancestor_Path__c` string search. A match triggers the conclusive `Ancestor_Path__c` confirmation; no match skips it. Do not edit manually. |
 
 ### Dependency_Context__c Payloads by Type
 
@@ -236,7 +236,7 @@ When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFile
 | Field | Purpose |
 |---|---|
 | `Processing_Cycle_Count__c` | Incremented on every execution |
-| `Last_Progressive_Cycle__c` | Reset to `Total` whenever `Components_Analyzed__c` increases |
+| `Last_Progress_Cycle__c` | Reset to `Total` whenever `Components_Analyzed__c` increases |
 
 If `Total - Last >= Stall_Pause_Threshold__c` (default 5), transition to `Status__c = 'Paused'`. LWC surfaces: "MetaMapper paused because it encountered a component with extremely deep or wide dependencies."
 
@@ -271,7 +271,7 @@ Follow `nextRecordsUrl` iteratively until `done = true`. Wrap each `nextRecordsU
 
 ### Reactive HTTP 414 Handling
 
-Split batch in half, retry both halves. Track `splitDepth` through retries. Maximum depth: 5 levels. At depth 5, if still 414: mark affected nodes `Traversal_Complete__c = true`, log, continue. Do not fail the job.
+Split batch in half, retry both halves. Track `splitDepth` through retries. Maximum depth: 5 levels. At depth 5, if still 414: mark affected nodes `Dependencies_Fetched__c = true`, log, continue. Do not fail the job.
 
 ### Limit Guardrails (Remaining-Budget Model)
 
@@ -549,7 +549,7 @@ Every Apex class must carry a file-level header comment answering: purpose, what
 - **Serializer ceiling:** `ScanResultFileQueueable` serializes all nodes in one heap-bound JSON operation. Safe ceiling ~2,000-3,000 nodes for deep trees. Default `Max_Components__c = 5,000` works for most dev sandbox metadata. Raising above 5,000 without a chunked serializer will hit the heap failure path.
 - `Scan_Summary_Text__c` populated only on Completed. Agentforce Actions should check `Status__c = 'Completed'` before reading.
 - **Storage model during active scans:** nodes temporarily occupy Data Storage (~5KB/node). A 5,000-node scan peaks at ~25MB. `Min_Free_Storage_MB__c = 50` ensures headroom.
-- `Ancestor_Bloom_Index__c` 6-char tail has negligible false-positive probability. `Ancestor_Path__c` always used to confirm before setting `Is_Circular__c = true`.
+- `Ancestor_Tail_Index__c` 6-char tail has negligible false-positive probability. `Ancestor_Path__c` always used to confirm before setting `Is_Circular__c = true`.
 - **`getNodeHierarchy()` pagination:** results are returned in pages (default 500 nodes per call). The LWC accumulates pages client-side before rendering. For completed jobs, the design prefers returning the `ContentDocumentId` for direct file fetch over server-side slicing to avoid repeated heap cost across pagination calls.
 
 ---

@@ -24,7 +24,7 @@ public without sharing class DependencyJobSelector {
                    Active_Flows_Only__c,
                    Components_Analyzed__c,
                    Processing_Cycle_Count__c,
-                   Last_Progressive_Cycle__c,
+                   Last_Progress_Cycle__c,
                    Batch_Size_Override__c,
                    Last_Query_Row_Count__c,
                    Scan_Diagnostic_Log__c,
@@ -319,6 +319,7 @@ public without sharing class DependencyJobSelector {
                    Batch_Size_Override__c,
                    Pause_Reason__c,
                    Result_Save_Attempted__c,
+                   PE_Suppressed_This_Execution__c,
                    CreatedDate
             FROM Metadata_Scan_Job__c
             WHERE Id = :jobId

@@ -32,7 +32,7 @@
  * keyed by lowercase Flow API name. Flow API names are org-unique so no List wrapper
  * is required.
  *
- * Traversal_Complete__c = false on all supplemental nodes: the engine continues
+ * Dependencies_Fetched__c = false on all supplemental nodes: the engine continues
  * traversal of their own transitive dependencies via the Tooling API main path.
  *
  *

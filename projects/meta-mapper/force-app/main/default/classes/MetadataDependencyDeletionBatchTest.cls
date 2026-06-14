@@ -26,7 +26,7 @@ private class MetadataDependencyDeletionBatchTest {
                 Metadata_Type__c            = 'ApexClass',
                 Metadata_Name__c            = 'Class' + i,
                 Unique_Component_Key__c = job.Id + ':class' + i,
-                Traversal_Complete__c     = true
+                Dependencies_Fetched__c     = true
             ));
         }
         insert nodes;

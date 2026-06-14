@@ -164,11 +164,18 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         cycles += 1;
         job.Processing_Cycle_Count__c = cycles;
 
-        Decimal lastSuccess = job.Last_Progressive_Cycle__c != null
-            ? job.Last_Progressive_Cycle__c : 0;
+        Decimal lastSuccess = job.Last_Progress_Cycle__c != null
+            ? job.Last_Progress_Cycle__c : 0;
         Integer stallThreshold = settings.Stall_Pause_Threshold__c != null
             ? ((Decimal) settings.Stall_Pause_Threshold__c).intValue() : DEFAULT_STALL_THRESHOLD;
 
+        // Known edge case: this check runs before Step 8's empty-batch detection. On the final
+        // execution of a fully-traversed scan, if the last batch produced no new Components_Analyzed__c
+        // increment (e.g. only leaf nodes were processed), the stall counter may fire here and
+        // transition to Paused instead of handing off to ScanResultFileQueueable. The user sees a
+        // brief spurious Pause banner; resuming immediately completes the scan via Step 8. Fixing
+        // this requires reordering Steps 5 and 8, which would change the empty-batch short-circuit
+        // path - deferred to a future round.
         if ((cycles - lastSuccess) >= stallThreshold) {
             // Re-verify the job is still Processing before transitioning to Paused.
             // A concurrent cancel between the step 2 check and here must not be overwritten.
@@ -177,7 +184,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                 return;
             }
             job.Status__c = 'Paused';
-            job.Pause_Reason__c = 'EmptyCycleLimitReached';
+            job.Pause_Reason__c = 'StallDetected';
             job.Scan_Diagnostic_Log__c = appendToLog(
                 job.Scan_Diagnostic_Log__c,
                 'Scan paused: ' + stallThreshold + ' consecutive processing cycles with no '
@@ -417,20 +424,20 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                 }
 
                 String parentPath  = parent.Ancestor_Path__c;
-                String parentIndex = parent.Ancestor_Bloom_Index__c;
+                String parentIndex = parent.Ancestor_Tail_Index__c;
 
                 // Ancestor path depth guard - capacity protection before building the path.
                 Integer parentPathLen = parentPath != null ? parentPath.length() : 0;
                 if ((parentPathLen + ANCESTOR_PATH_MARGIN) > ANCESTOR_PATH_MAX) {
                     child.Ancestor_Path__c              = parentPath;
-                    child.Ancestor_Bloom_Index__c  = parentIndex;
+                    child.Ancestor_Tail_Index__c  = parentIndex;
                     // Is_Circular__c is intentionally NOT set: depth overflow is a traversal
                     // ceiling, not an ancestry cycle. Setting it would cause the UI to render
                     // these nodes with dashed "circular dependency" styling, which is incorrect.
-                    // Traversal_Complete__c = true stops further traversal from this node.
+                    // Dependencies_Fetched__c = true stops further traversal from this node.
                     // The maxDepthExceeded flag in Dependency_Context__c is the authoritative
                     // signal for distinguishing depth-truncated nodes from genuine cycles.
-                    child.Traversal_Complete__c   = true;
+                    child.Dependencies_Fetched__c   = true;
                     child.Dependency_Context__c   = '{"v":1,"maxDepthExceeded":true}';
                     depthExceededCount++;
                     if (depthErrors.size() < 10) {
@@ -451,20 +458,20 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     (String.isBlank(parentPath) ? '' : parentPath + '|')
                     + parent.Metadata_Id__c;
 
-                // Build child's Ancestor_Bloom_Index__c (append parent's 6-char suffix).
+                // Build child's Ancestor_Tail_Index__c (append parent's 6-char suffix).
                 // right(6) uses the auto-number portion of the 18-char ID, which is unique
                 // per component - unlike left(6) which is the entity key prefix (identical for
                 // all same-type components in an org, making it useless as a bloom-filter key).
                 String parentPrefix = parent.Metadata_Id__c != null
                     ? parent.Metadata_Id__c.right(6) : '';
-                child.Ancestor_Bloom_Index__c =
+                child.Ancestor_Tail_Index__c =
                     (String.isBlank(parentIndex) ? '' : parentIndex + '|')
                     + parentPrefix;
 
                 // Tier 2 - bloom-filter pre-screen then authoritative confirmation.
                 String childPrefix = childId.right(6);
-                Boolean possibleCycle = String.isNotBlank(child.Ancestor_Bloom_Index__c)
-                    && ('|' + child.Ancestor_Bloom_Index__c + '|')
+                Boolean possibleCycle = String.isNotBlank(child.Ancestor_Tail_Index__c)
+                    && ('|' + child.Ancestor_Tail_Index__c + '|')
                         .contains('|' + childPrefix + '|');
 
                 if (possibleCycle) {
@@ -472,7 +479,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     if (authoritativePath.contains('|' + childId + '|')) {
                         // Confirmed true ancestry cycle - insert with flags, do not traverse.
                         child.Is_Circular__c          = true;
-                        child.Traversal_Complete__c = true;
+                        child.Dependencies_Fetched__c = true;
                         child.Dependency_Context__c = mergeCycleAttribute(
                             child.Dependency_Context__c, parent.Metadata_Id__c);
                     }
@@ -587,18 +594,18 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             for (Metadata_Dependency__c parent : batch) {
                 // Blank Metadata_Id__c nodes cannot be queried via Tooling API and are never
                 // added to parentIds, so they never enter fullyProcessedParentMetaIds. Without
-                // the explicit blank check they stay at Traversal_Complete__c = false and are
+                // the explicit blank check they stay at Dependencies_Fetched__c = false and are
                 // re-queried every execution until stall detection pauses the job permanently.
                 if (String.isBlank(parent.Metadata_Id__c)
                     || fullyProcessedParentMetaIds.contains(parent.Metadata_Id__c)) {
-                    parent.Traversal_Complete__c = true;
+                    parent.Dependencies_Fetched__c = true;
                     parentsToMark.add(parent);
                 }
             }
             if (!parentsToMark.isEmpty()) {
                 // Partial-success: a locked or validation-failed parent must not abort the
                 // entire batch and crash the job. A failed mark leaves the parent with
-                // Traversal_Complete__c = false so it is re-queried next execution.
+                // Dependencies_Fetched__c = false so it is re-queried next execution.
                 List<Database.SaveResult> markResults = Database.update(parentsToMark, false);
                 List<String> markErrors = new List<String>();
                 for (Integer i = 0; i < markResults.size(); i++) {
@@ -620,21 +627,21 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         // Step 16 - update job progress + accumulated callout errors
         // Count only successfully upserted nodes: if all upserts failed, the stall counter
         // must increment so hot-loop detection can fire. Using toUpsert.size() would reset
-        // Last_Progressive_Cycle__c even when zero nodes were actually inserted, masking a
+        // Last_Progress_Cycle__c even when zero nodes were actually inserted, masking a
         // persistent failure loop that would never trigger the stall threshold.
         Decimal newAnalyzed = analyzed + successfulUpserts;
         job.Components_Analyzed__c = newAnalyzed;
 
-        // Update Last_Progressive_Cycle__c only when real work was committed to the DB.
+        // Update Last_Progress_Cycle__c only when real work was committed to the DB.
         // successfulUpserts > 0: real child nodes were inserted.
         // successfulMarks > 0: parents were committed as fetched (leaf-batch case).
         // Using fullyProcessedParentMetaIds.isEmpty() here would be wrong: those parents
         // are in-memory candidates; some may have failed the Step 15 DB update (e.g. row lock).
-        // A failed parent mark means the DB still shows Traversal_Complete__c = false, so
+        // A failed parent mark means the DB still shows Dependencies_Fetched__c = false, so
         // the next execution re-queries the same parent - no real progress was made. Resetting
         // the stall counter on a failed mark defeats stall detection entirely.
         if (successfulUpserts > 0 || successfulMarks > 0) {
-            job.Last_Progressive_Cycle__c = cycles;
+            job.Last_Progress_Cycle__c = cycles;
         }
 
         job.Last_Query_Row_Count__c = fetchContext.lastResultCount != null ? fetchContext.lastResultCount : 0;
@@ -659,11 +666,14 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         }
 
         // Step 17 - supplemental handlers (grouped by type)
+        // Runs on batch (the parent nodes being processed this execution), not toUpsert.
+        // toUpsert are the newly discovered children; handlers must query supplemental
+        // dependencies of the parents so they receive the correct input node context.
         Map<String, List<Metadata_Dependency__c>> byType =
             new Map<String, List<Metadata_Dependency__c>>();
-        for (Metadata_Dependency__c n : toUpsert) {
-            if (n.Id == null) {
-                continue; // skip nodes whose Step 14 upsert failed; handlers would produce orphaned supplemental children
+        for (Metadata_Dependency__c n : batch) {
+            if (String.isBlank(n.Metadata_Id__c)) {
+                continue; // skip unresolved root nodes (no Tooling API ID yet)
             }
             if (n.Is_Circular__c == true) {
                 continue; // do not run supplemental scans on cycle-closing nodes
@@ -800,18 +810,17 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     // Without this, a scan making exclusively supplemental discoveries
                     // (main upserts all fail) would hit Stall_Pause_Threshold__c and
                     // pause incorrectly despite real nodes being inserted.
-                    if (suppSuccessCount > 0 && job.Last_Progressive_Cycle__c != cycles) {
-                        job.Last_Progressive_Cycle__c = cycles;
+                    if (suppSuccessCount > 0 && job.Last_Progress_Cycle__c != cycles) {
+                        job.Last_Progress_Cycle__c = cycles;
                     }
                 } else {
                     // DML row budget too low to upsert supplemental nodes safely.
-                    // The previous un-mark of parent nodes was a no-op: sn.Parent_Dependency__c
-                    // points to toUpsert items (newly inserted children of the current batch),
-                    // which already have Traversal_Complete__c = false by default and have not
-                    // yet been marked true by Step 15 (Step 15 marks the batch parents, not their
-                    // children). Supplemental data loss in the DML-low path is acknowledged; the
-                    // correct fix (running handlers on batch nodes instead of toUpsert) is a larger
-                    // architectural change deferred to a future round.
+                    // Supplemental data loss in the DML-low path is acknowledged; the engine
+                    // will re-process these batch nodes on the next self-chain execution only
+                    // if their Dependencies_Fetched__c remains false. Step 15 marks batch parent
+                    // nodes as Dependencies_Fetched__c = true AFTER this block, so supplemental
+                    // nodes dropped here will not be retried. This is an accepted trade-off
+                    // for the DML-low path - the diagnostic log captures the drop.
                     job.Scan_Diagnostic_Log__c = appendToLog(
                         job.Scan_Diagnostic_Log__c,
                         'WARNING: supplemental upsert skipped - insufficient DML row budget ('
@@ -827,7 +836,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         Metadata_Scan_Job__c jobUpdate = new Metadata_Scan_Job__c(Id = job.Id);
         jobUpdate.Processing_Cycle_Count__c = job.Processing_Cycle_Count__c;
         jobUpdate.Components_Analyzed__c     = job.Components_Analyzed__c;
-        jobUpdate.Last_Progressive_Cycle__c   = job.Last_Progressive_Cycle__c;
+        jobUpdate.Last_Progress_Cycle__c   = job.Last_Progress_Cycle__c;
         jobUpdate.Last_Query_Row_Count__c       = job.Last_Query_Row_Count__c;
         jobUpdate.Scan_Diagnostic_Log__c    = job.Scan_Diagnostic_Log__c;
         update jobUpdate;
@@ -835,6 +844,17 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         // Step 19 - one Platform Event per execution (after final commit)
         publishSafe('Processing', intOf(job.Components_Analyzed__c),
             'Analyzing metadata... ' + intOf(job.Components_Analyzed__c) + ' components found so far');
+
+        // Drain any PE publish failure notices accumulated during this execution.
+        // These cannot be written inside the EventBus callback (DML restriction), so
+        // DependencyNotificationService queues them here for safe log-append after the PE section.
+        List<String> peNotices = DependencyNotificationService.getAndClearPendingNotices();
+        if (!peNotices.isEmpty()) {
+            String combined = String.join(peNotices, '\n');
+            job.Scan_Diagnostic_Log__c = String.isBlank(job.Scan_Diagnostic_Log__c)
+                ? combined
+                : (job.Scan_Diagnostic_Log__c + '\n' + combined).right(LOG_FIELD_MAX);
+        }
 
         // Step 20 - self-chain to process the next batch
         System.enqueueJob(new DependencyQueueable(jobId, activeFlowsOnly, overrideBatchSize));

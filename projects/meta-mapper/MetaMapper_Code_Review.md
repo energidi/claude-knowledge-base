@@ -793,6 +793,38 @@ All 4 review lenses run (Architecture, UX, Naming, Full Design). Three parallel 
 
 ---
 
+### Round 47 - sf-orchestrator: Architecture + UX + Naming (13 findings)
+
+**June 14, 2026** - Full 3-lens review via sf-orchestrator. All 13 findings applied (Critical through Low).
+
+**Architecture fixes:**
+- `PE_Suppressed_This_Execution__c` (new Checkbox on `Metadata_Scan_Job__c`): set synchronously in `DependencyNotificationService.appendNoticeToJob()` so `getJobStatus()` detects PE auto-suppression immediately without waiting for the async CMDT write. `DependencyJobController.getJobStatus()` derives `peSuppressionActive` from `Disable_Platform_Events__c || PE_Suppressed_This_Execution__c`.
+- PE failure notices drained in `DependencyQueueable` after `publishSafe()` using inline log-append (no external method call). Static `List<String>` accumulated in `DependencyNotificationService`, drained into `Scan_Diagnostic_Log__c` at Step 19.
+- Supplemental handler loop in `DependencyQueueable` Step 17 corrected: handlers now receive `batch` (parent nodes) instead of `toUpsert` (newly discovered children). Safety check changed from `n.Id == null` to `String.isBlank(n.Metadata_Id__c)`.
+- Known stall-detection edge case documented via inline comment in `DependencyQueueable`: stall fires before empty-batch check (Step 5 before Step 8), causing a brief spurious Pause when a scan naturally completes on a boundary cycle.
+
+**Field renames (new XML created, old XML retained for destructive changes):**
+- `Ancestor_Bloom_Index__c` → `Ancestor_Tail_Index__c` (`Metadata_Dependency__c`) - removes bloom-filter jargon; new name describes content (pipe-delimited 6-char ancestor ID tails)
+- `Last_Progressive_Cycle__c` → `Last_Progress_Cycle__c` (`Metadata_Scan_Job__c`) - removes redundant "ive" suffix
+- `Traversal_Complete__c` → `Dependencies_Fetched__c` (`Metadata_Dependency__c`) - removes traversal jargon; new name states what the flag means to an admin
+
+**Picklist value rename:** `Pause_Reason__c.EmptyCycleLimitReached` → `StallDetected` - admin-facing label, plain English.
+
+**UX/spec fixes (CLAUDE.md only):**
+- Filter-empty state defined for both Tree View and Graph View (when nodes exist but active filters eliminate all visible rows - distinct from zero-result empty state).
+- Spinner-vs-paused interaction specified: when `Max_Components__c = 0` (spinner replaces bar), `Status__c = 'Paused'` must hide the spinner and show the pause banner instead.
+- AI Summary Card collapsed height simplified: sentence-boundary detection replaced with 300-char word-boundary truncation.
+- Mobile tour focus: on close, restore to first focusable element in `metaMapperSearch` (not `document.activeElement` which is `document.body` on touch).
+- Known Limitations: added `DependencyCleanupBatch` backlog notice limitation (best-effort, not guaranteed delivery if > 5 expired jobs).
+
+**Apex classes updated:** `DependencyQueueable`, `DependencyJobController`, `DependencyJobSelector`, `DependencyNotificationService`, `MetadataDependencySelector`, `MetadataDependencyService`, `CustomFieldDependencyHandler`, `ApexClassDependencyHandler`, `FlowDependencyHandler`, `DependencyFetchContext`.
+
+**Test classes updated:** `DependencyQueueableTest`, `DependencyJobControllerTest`, `MetadataDependencyServiceTest`, `ScanResultFileQueueableTest`, `MetadataDependencyDeletionBatchTest`.
+
+**New field XMLs created:** `PE_Suppressed_This_Execution__c`, `Ancestor_Tail_Index__c`, `Last_Progress_Cycle__c`, `Dependencies_Fetched__c`.
+
+---
+
 ### Round 46 - Field Renames (XML + Apex)
 
 4 field API names renamed across XML field definition files and all 14 affected Apex classes. No business logic changed.

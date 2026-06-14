@@ -211,6 +211,10 @@ export default class MetaMapperTree extends LightningElement {
         return !!this._searchTerm;
     }
 
+    get showFilterEmpty() {
+        return this._flatRows.length === 0 && this._effectiveNodes.length > 0;
+    }
+
     get contextMenuStyle() {
         if (!this._contextMenu) return '';
         return `left: ${this._contextMenu.x}px; top: ${this._contextMenu.y}px;`;

@@ -16,7 +16,7 @@ private class DependencyQueueableTest {
             Active_Flows_Only__c       = false,
             Components_Analyzed__c     = 0,
             Processing_Cycle_Count__c = 0,
-            Last_Progressive_Cycle__c   = 0,
+            Last_Progress_Cycle__c   = 0,
             Last_Query_Row_Count__c       = 0
         );
         insert job;
@@ -30,7 +30,7 @@ private class DependencyQueueableTest {
             Metadata_Type__c            = 'ApexClass',
             Metadata_Name__c            = 'TestClass',
             Unique_Component_Key__c = jobId + ':' + metaId,
-            Traversal_Complete__c     = fetched
+            Dependencies_Fetched__c     = fetched
         );
         insert node;
         return node;
@@ -74,7 +74,7 @@ private class DependencyQueueableTest {
     static void execute_stallDetected_pausesJob() {
         Metadata_Scan_Job__c job = makeJob('Processing');
         job.Processing_Cycle_Count__c = 10;
-        job.Last_Progressive_Cycle__c   = 0;
+        job.Last_Progress_Cycle__c   = 0;
         update job;
 
         makeNode(job.Id, 'a001000000000001AAA', false);
@@ -102,13 +102,13 @@ private class DependencyQueueableTest {
         Test.stopTest();
 
         Metadata_Dependency__c node = [
-            SELECT Traversal_Complete__c
+            SELECT Dependencies_Fetched__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :job.Id
             LIMIT 1
         ];
-        Assert.isTrue(node.Traversal_Complete__c,
-            'Processed node should be marked Traversal_Complete__c = true');
+        Assert.isTrue(node.Dependencies_Fetched__c,
+            'Processed node should be marked Dependencies_Fetched__c = true');
     }
 
     // ---- new tests for Round 18 fixes ----
@@ -125,12 +125,12 @@ private class DependencyQueueableTest {
         Test.stopTest();
 
         Metadata_Dependency__c node = [
-            SELECT Traversal_Complete__c
+            SELECT Dependencies_Fetched__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :job.Id
             LIMIT 1
         ];
-        Assert.isFalse(node.Traversal_Complete__c,
+        Assert.isFalse(node.Dependencies_Fetched__c,
             'Parent node must NOT be marked fetched when the Tooling API call fails');
 
         Metadata_Scan_Job__c refreshed = [
@@ -143,10 +143,10 @@ private class DependencyQueueableTest {
     @IsTest
     static void execute_leafOnlyBatch_updatesLastSuccessfulCycle() {
         // Finding #5: processing leaf nodes (API returns no children) must update
-        // Last_Progressive_Cycle__c to prevent false stall detection.
+        // Last_Progress_Cycle__c to prevent false stall detection.
         Metadata_Scan_Job__c job = makeJob('Processing');
         job.Processing_Cycle_Count__c = 3;
-        job.Last_Progressive_Cycle__c   = 3; // in sync - no stall yet
+        job.Last_Progress_Cycle__c   = 3; // in sync - no stall yet
         update job;
 
         makeNode(job.Id, 'a001000000000001AAA', false);
@@ -158,11 +158,11 @@ private class DependencyQueueableTest {
         Test.stopTest();
 
         Metadata_Scan_Job__c refreshed = [
-            SELECT Last_Progressive_Cycle__c, Processing_Cycle_Count__c
+            SELECT Last_Progress_Cycle__c, Processing_Cycle_Count__c
             FROM Metadata_Scan_Job__c WHERE Id = :job.Id
         ];
-        Assert.areEqual(refreshed.Processing_Cycle_Count__c, refreshed.Last_Progressive_Cycle__c,
-            'Last_Progressive_Cycle__c should be updated after a leaf-only batch to prevent false stall');
+        Assert.areEqual(refreshed.Processing_Cycle_Count__c, refreshed.Last_Progress_Cycle__c,
+            'Last_Progress_Cycle__c should be updated after a leaf-only batch to prevent false stall');
     }
 
     @IsTest
@@ -203,7 +203,7 @@ private class DependencyQueueableTest {
         Test.stopTest();
 
         List<Metadata_Dependency__c> nodes = [
-            SELECT Metadata_Id__c, Traversal_Complete__c
+            SELECT Metadata_Id__c, Dependencies_Fetched__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :job.Id
             ORDER BY CreatedDate
@@ -211,7 +211,7 @@ private class DependencyQueueableTest {
         Assert.areEqual(2, nodes.size(), 'Parent + child node should exist after processing');
 
         Metadata_Dependency__c parent = nodes[0];
-        Assert.isTrue(parent.Traversal_Complete__c,
+        Assert.isTrue(parent.Dependencies_Fetched__c,
             'Parent should be marked fetched after successful child discovery');
 
         Metadata_Scan_Job__c refreshed = [
@@ -252,7 +252,7 @@ private class DependencyQueueableTest {
             Metadata_Type__c        = 'CustomField',
             Metadata_Name__c        = 'Account.MyField__c',
             Unique_Component_Key__c = job.Id + ':',
-            Traversal_Complete__c   = false
+            Dependencies_Fetched__c   = false
         );
         insert root;
         Test.setMock(HttpCalloutMock.class, new RootIdResolveMock());
