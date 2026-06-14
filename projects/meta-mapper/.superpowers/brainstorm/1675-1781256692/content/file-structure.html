@@ -1,0 +1,80 @@
+<h2>Complete File Inventory</h2>
+<p class="subtitle">Every file to be created across both phases. Does this look right?</p>
+
+<div style="display:flex; gap:24px; flex-wrap:wrap;">
+
+  <div style="flex:1; min-width:280px;">
+    <div class="label" style="color:#0176d3;">Phase 1 — Core Journey</div>
+    <div style="font-family:monospace; font-size:13px; margin-top:12px; line-height:1.8;">
+      <div style="color:#888;">force-app/main/default/lwc/</div>
+      <div style="margin-left:12px;">
+        <div style="color:#0176d3; font-weight:600;">metaMapperApp/</div>
+        <div style="margin-left:16px; color:#444;">metaMapperApp.html<br/>metaMapperApp.js<br/>metaMapperApp.css<br/>metaMapperApp.js-meta.xml</div>
+
+        <div style="color:#0176d3; font-weight:600; margin-top:8px;">metaMapperSearch/</div>
+        <div style="margin-left:16px; color:#444;">metaMapperSearch.html<br/>metaMapperSearch.js<br/>metaMapperSearch.css<br/>metaMapperSearch.js-meta.xml</div>
+
+        <div style="color:#0176d3; font-weight:600; margin-top:8px;">metaMapperProgress/</div>
+        <div style="margin-left:16px; color:#444;">metaMapperProgress.html<br/>metaMapperProgress.js<br/>metaMapperProgress.css<br/>metaMapperProgress.js-meta.xml</div>
+
+        <div style="color:#0176d3; font-weight:600; margin-top:8px;">metaMapperResults/</div>
+        <div style="margin-left:16px; color:#444;">metaMapperResults.html<br/>metaMapperResults.js<br/>metaMapperResults.css<br/>metaMapperResults.js-meta.xml</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1; min-width:280px;">
+    <div class="label" style="color:#2e844a;">Phase 2 — Rich UI</div>
+    <div style="font-family:monospace; font-size:13px; margin-top:12px; line-height:1.8;">
+      <div style="color:#888;">force-app/main/default/lwc/</div>
+      <div style="margin-left:12px;">
+        <div style="color:#2e844a; font-weight:600;">metaMapperTree/</div>
+        <div style="margin-left:16px; color:#444;">metaMapperTree.html<br/>metaMapperTree.js<br/>metaMapperTree.css<br/>metaMapperTree.js-meta.xml</div>
+
+        <div style="color:#2e844a; font-weight:600; margin-top:8px;">metaMapperGraph/</div>
+        <div style="margin-left:16px; color:#444;">metaMapperGraph.html<br/>metaMapperGraph.js<br/>metaMapperGraph.css<br/>metaMapperGraph.js-meta.xml</div>
+
+        <div style="color:#2e844a; font-weight:600; margin-top:8px;">metaMapperComponentDetailsPanel/</div>
+        <div style="margin-left:16px; color:#444;">(same 4 files)</div>
+
+        <div style="color:#2e844a; font-weight:600; margin-top:8px;">metaMapperExport/</div>
+        <div style="margin-left:16px; color:#444;">(same 4 files)</div>
+      </div>
+    </div>
+
+    <div style="font-family:monospace; font-size:13px; margin-top:16px; line-height:1.8;">
+      <div style="color:#888;">force-app/main/default/staticresources/</div>
+      <div style="margin-left:12px;">
+        <div style="color:#2e844a; font-weight:600;">ECharts/</div>
+        <div style="margin-left:16px; color:#444;">echarts.min.js<br/>ECharts.resource-meta.xml</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1; min-width:280px;">
+    <div class="label" style="color:#dd7a01;">Shared Service Modules (Both Phases)</div>
+    <div style="font-family:monospace; font-size:13px; margin-top:12px; line-height:1.8;">
+      <div style="color:#888;">force-app/main/default/lwc/</div>
+      <div style="margin-left:12px;">
+        <div style="color:#dd7a01; font-weight:600;">metaMapperFilters/</div>
+        <div style="margin-left:16px; color:#444;">metaMapperFilters.js<br/><span style="color:#888; font-size:12px;">sessionStorage schema, serialize/<br/>deserialize, validate filter state</span></div>
+
+        <div style="color:#dd7a01; font-weight:600; margin-top:8px;">metaMapperUtils/</div>
+        <div style="margin-left:16px; color:#444;">metaMapperUtils.js<br/><span style="color:#888; font-size:12px;">elapsed time, filename sanitize,<br/>namespace detect, pill rendering</span></div>
+
+        <div style="color:#dd7a01; font-weight:600; margin-top:8px;">metaMapperNodeUtils/</div>
+        <div style="margin-left:16px; color:#444;">metaMapperNodeUtils.js<br/><span style="color:#888; font-size:12px;">applyFilters(), buildNodeMap(),<br/>resolveSetupUrl() - shared by<br/>Tree, Graph, and Panel</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px; padding:12px; background:#fff3cd; border-radius:6px; font-size:13px;">
+      <strong>Pre-implementation gate:</strong><br/>
+      <code>setup/CONTRAST_MATRIX.md</code> — WCAG AA contrast ratios for all 8 node colors. Created before any LWC work begins (CLAUDE.md requirement).
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px; padding:12px; background:#f0f0f0; border-radius:6px; font-size:13px;">
+  <strong>Total: ~47 new files</strong> across 3 service modules, 8 LWC components, 1 static resource, and 1 pre-gate doc.
+</div>

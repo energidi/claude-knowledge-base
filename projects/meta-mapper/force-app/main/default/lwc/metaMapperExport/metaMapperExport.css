@@ -1,0 +1,43 @@
+.export-container {
+    padding: 0.5rem 0;
+}
+
+.export-primary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.export-count {
+    font-size: 0.75rem;
+    color: #706e6b;
+    margin: 0.5rem 0 0;
+}
+
+.export-advanced {
+    margin-top: 1rem;
+}
+
+.toggle-advanced {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+}
+
+.advanced-content {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #f3f2f2;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.advanced-note {
+    font-size: 0.75rem;
+    color: #706e6b;
+    margin: 0;
+}

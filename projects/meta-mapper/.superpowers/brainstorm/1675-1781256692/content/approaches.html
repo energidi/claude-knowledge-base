@@ -1,0 +1,34 @@
+<h2>Architecture Approach</h2>
+<p class="subtitle">One key decision isn't specified in CLAUDE.md: where does shared logic live? Multiple components need the same utilities (filter serialization, elapsed time, node filtering, namespace detection for export).</p>
+
+<div class="options">
+  <div class="option" data-choice="shared-service" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Shared LWC Service Modules (Recommended)</h3>
+      <p>Create 2-3 <code>@salesforce/lwc</code> service modules (no HTML, JS-only) alongside the main components:</p>
+      <ul style="font-size:13px; margin:8px 0 0 16px; color:#444;">
+        <li><code>metaMapperFilters.js</code> — sessionStorage schema, serialize/deserialize, validate</li>
+        <li><code>metaMapperUtils.js</code> — elapsed time, filename sanitization, namespace detection</li>
+        <li><code>metaMapperNodeUtils.js</code> — filter application logic shared by Tree + Graph</li>
+      </ul>
+      <p style="font-size:13px; margin-top:8px;"><strong>Why:</strong> Tree and Graph share filter state. If the logic lives in each, a bug fix needs two edits. Service modules also make unit testing the filter logic trivial - no component mount needed.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="results-owned" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>All Logic in metaMapperResults</h3>
+      <p><code>metaMapperResults</code> owns all shared state and exposes filtered node arrays to children via props. Tree and Graph receive pre-filtered data - they don't filter themselves.</p>
+      <p style="font-size:13px; margin-top:8px;"><strong>Simpler</strong> - fewer files, no module boundary to maintain. <strong>Risk:</strong> metaMapperResults becomes very large (filter logic + serialization + tab state + PE handling + node selection). CLAUDE.md already gives it a lot of responsibilities.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="inline" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Inline in Each Component</h3>
+      <p>Each component handles its own filtering, serialization, and utilities inline. Simpler to read in isolation.</p>
+      <p style="font-size:13px; margin-top:8px;"><strong>Problem:</strong> Filter validation logic (discard stale types) must live in one place to stay consistent. Duplicating sessionStorage read/write across Tree and Graph leads to silent divergence. Not recommended.</p>
+    </div>
+  </div>
+</div>

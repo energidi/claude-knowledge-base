@@ -1,0 +1,56 @@
+<template>
+    <div class="export-container">
+        <!-- Primary exports -->
+        <div class="export-primary">
+            <button
+                class="slds-button slds-button_neutral"
+                onclick={handleDownloadCsv}
+                disabled={exportDisabled}
+                title="Flat row-per-node format for analysis in Excel / Sheets"
+            >
+                <lightning-icon icon-name="utility:download" size="x-small" alternative-text="Download"></lightning-icon>
+                Download as CSV
+            </button>
+
+            <button
+                class="slds-button slds-button_neutral"
+                onclick={handleDownloadJson}
+                disabled={exportDisabled}
+                title="Nested tree with all dependency context fields. Useful for scripting, auditing, or custom tooling."
+            >
+                <lightning-icon icon-name="utility:download" size="x-small" alternative-text="Download"></lightning-icon>
+                Download Complete Hierarchy (for developers)
+            </button>
+        </div>
+
+        <!-- Node count -->
+        <p class="export-count">{nodeCount} components</p>
+
+        <!-- Advanced section (collapsible) -->
+        <div class="export-advanced">
+            <button class="slds-button slds-button_neutral toggle-advanced" onclick={handleToggleAdvanced}>
+                <lightning-icon
+                    icon-name={advancedChevronIcon}
+                    size="x-small"
+                    alternative-text="Toggle advanced"
+                ></lightning-icon>
+                Advanced
+            </button>
+
+            <template if:true={_advancedOpen}>
+                <div class="advanced-content">
+                    <button
+                        class="slds-button slds-button_neutral"
+                        onclick={handleDownloadPackageXml}
+                        disabled={exportDisabled}
+                        title="Use this to deploy or retrieve the components found in this scan using Salesforce CLI or VS Code. Includes only components from this scan. Namespace-prefixed components (managed package members) are excluded automatically."
+                    >
+                        <lightning-icon icon-name="utility:download" size="x-small" alternative-text="Download"></lightning-icon>
+                        Download Deployment Manifest
+                    </button>
+                    <p class="advanced-note">Generates package.xml. Excludes managed package components (namespace-prefixed).</p>
+                </div>
+            </template>
+        </div>
+    </div>
+</template>

@@ -1,0 +1,167 @@
+<template>
+    <!-- Loading state -->
+    <template lwc:if={isLoading}>
+        <div class="slds-align_absolute-center slds-var-p-around_large">
+            <lightning-spinner variant="brand" size="large" alternative-text="Loading results..."></lightning-spinner>
+        </div>
+    </template>
+
+    <!-- Error state -->
+    <template lwc:if={loadError}>
+        <div class="slds-notify slds-notify_alert slds-theme_error" role="alert">
+            <h2 class="slds-text-heading_small">Results unavailable</h2>
+            <p>{loadError}</p>
+            <template lwc:if={showResultFileDeletedHelp}>
+                <p class="slds-var-m-top_x-small slds-text-body_small">The result file may have been deleted.</p>
+            </template>
+            <lightning-button label="Retry" variant="inverse" onclick={loadResults}
+                class="slds-var-m-top_small"></lightning-button>
+        </div>
+    </template>
+
+    <!-- Results loaded -->
+    <template lwc:if={hasResults}>
+
+        <!-- Scan complete reload banner -->
+        <template lwc:if={showReloadBanner}>
+            <div class="slds-notify slds-notify_alert slds-theme_success slds-var-m-bottom_small" role="status">
+                <p>Scan complete! <a onclick={reloadResults}>Reload results</a> to see the final dependency map.</p>
+            </div>
+        </template>
+
+        <!-- Partial results banner -->
+        <template lwc:if={showPartialBanner}>
+            <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-bottom_small" role="status">
+                <p>This scan has stopped. These results are partial.
+                    <a onclick={handleExportPartial}> Download partial results</a> or
+                    <a onclick={handleStartNew}> Start a new scan</a>.
+                </p>
+            </div>
+        </template>
+
+        <!-- Serializer failure state -->
+        <template lwc:if={isSerializerFailure}>
+            <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-bottom_small" role="alert">
+                <p>Scan analysis is complete but results could not be saved. Your data is available for export for
+                    {retentionHours} hours before it is automatically deleted.</p>
+                <template lwc:if={hasPartialNodes}>
+                    <lightning-button label="Download Partial Results (CSV)" variant="neutral"
+                        onclick={handleDownloadPartialCsv} class="slds-var-m-top_x-small"></lightning-button>
+                    <lightning-button label="Download Partial Results (JSON)" variant="neutral"
+                        onclick={handleDownloadPartialJson} class="slds-var-m-left_x-small slds-var-m-top_x-small"></lightning-button>
+                </template>
+                <template lwc:else>
+                    <p class="slds-text-body_small slds-var-m-top_x-small">
+                        Scan analysis completed but the results could not be recovered. The dependency data has been deleted. Start a new scan.
+                    </p>
+                </template>
+            </div>
+        </template>
+
+        <!-- AI Summary Card -->
+        <template lwc:if={showSummaryCard}>
+            <lightning-card title="Scan Summary" class="slds-var-m-bottom_small">
+                <div class="slds-var-p-around_medium">
+                    <template lwc:if={summaryLoading}>
+                        <div class="slds-skeleton slds-skeleton__text" style="width:100%;height:18px;margin-bottom:6px;"></div>
+                        <div class="slds-skeleton slds-skeleton__text" style="width:80%;height:18px;"></div>
+                    </template>
+                    <template lwc:if={summaryFailed}>
+                        <p class="slds-text-color_weak">Summary could not be generated.
+                            <a onclick={dismissSummary}> Dismiss</a>
+                        </p>
+                    </template>
+                    <template lwc:if={summaryText}>
+                        <p class="summary-body">{summaryDisplayText}</p>
+                        <template lwc:if={summaryTruncated}>
+                            <a onclick={toggleSummaryExpanded}>{summaryToggleLabel}</a>
+                        </template>
+                        <div class="slds-var-m-top_small">
+                            <lightning-button label={copyLabel} variant="neutral" onclick={handleCopySummary}></lightning-button>
+                            <span class="slds-assistive-text" aria-live="polite" lwc:ref="copyLiveRegion"></span>
+                            <template lwc:if={copilotEnabled}>
+                                <lightning-button label="Ask Copilot" variant="neutral"
+                                    class="slds-var-m-left_x-small" onclick={handleAskCopilot}></lightning-button>
+                            </template>
+                            <template lwc:else>
+                                <span class="slds-text-body_small slds-text-color_weak slds-var-m-left_small">
+                                    Einstein Copilot not available in this org.
+                                </span>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </lightning-card>
+        </template>
+
+        <!-- Stats tile -->
+        <template lwc:if={showStatsTile}>
+            <lightning-card class="slds-var-m-bottom_small">
+                <div class="slds-var-p-around_medium stats-grid">
+                    <template for:each={typeCounts} for:item="tc">
+                        <div key={tc.type} class="stat-cell">
+                            <lightning-icon icon-name={tc.icon} size="small"></lightning-icon>
+                            <span class="slds-var-m-left_x-small">{tc.label} ({tc.count})</span>
+                        </div>
+                    </template>
+                </div>
+            </lightning-card>
+        </template>
+
+        <!-- Zero results -->
+        <template lwc:if={isZeroResults}>
+            <div class="slds-illustration slds-illustration_small slds-var-p-around_large">
+                <div class="slds-illustration__figure">
+                    <lightning-icon icon-name="utility:search" size="large"></lightning-icon>
+                </div>
+                <div class="slds-illustration__body">
+                    <p class="slds-text-body_regular">No dependencies found for {targetApiName}.
+                        This metadata type may not have trackable dependencies, or the component may not exist.</p>
+                </div>
+            </div>
+        </template>
+
+        <!-- Tab container -->
+        <template lwc:if={showTabs}>
+            <lightning-tabset onactive={handleTabActivate}>
+                <lightning-tab label="Tree View" value="tree">
+                    <div class={tabContentClass}>
+                        <c-meta-mapper-tree
+                            nodes={filteredNodes}
+                            filters={filters}
+                            selected-node-id={selectedNodeId}
+                            ontabready={handleTabReady}
+                            onnodeselected={handleNodeSelected}>
+                        </c-meta-mapper-tree>
+                    </div>
+                </lightning-tab>
+                <lightning-tab label="Graph View" value="graph">
+                    <div class={tabContentClass}>
+                        <c-meta-mapper-graph
+                            nodes={filteredNodes}
+                            filters={filters}
+                            selected-node-id={selectedNodeId}
+                            ontabready={handleTabReady}
+                            onnodeselected={handleNodeSelected}>
+                        </c-meta-mapper-graph>
+                    </div>
+                </lightning-tab>
+            </lightning-tabset>
+
+            <!-- Node Details Panel -->
+            <c-meta-mapper-component-details-panel
+                selected-node-id={selectedNodeId}
+                node-map={nodeMap}
+                job-id={jobId}
+                org-id={orgId}
+                onpanelclosed={handlePanelClosed}>
+            </c-meta-mapper-component-details-panel>
+
+            <!-- Export controls -->
+            <c-meta-mapper-export
+                nodes={filteredNodes}
+                job-record={job}>
+            </c-meta-mapper-export>
+        </template>
+    </template>
+</template>

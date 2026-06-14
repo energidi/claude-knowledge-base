@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** 2026-06-11 (Round 47 - sf-review full pass: Apex code fixes, class renames, field renames, CLAUDE.md UX spec, CONTRAST_MATRIX.md)
+**Last Updated:** 2026-06-14 (Round 48 - sf-review-design: Phase 2 LWC review + 13 findings applied)
 **Date:** 2026-05-23
 
 ---
@@ -698,6 +698,28 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 48 - sf-review-design: Phase 2 LWC Review + Fixes
+
+Full design review (Architecture + UX + Naming) across Phase 2 LWC components: metaMapperTree, metaMapperGraph, metaMapperComponentDetailsPanel, metaMapperExport, metaMapperResults. 14 findings applied. No Critical issues; 6 High, 5 Medium, 2 Low addressed. No renames.
+
+| # | Component | Severity | Fix |
+|---|---|---|---|
+| 1 | `metaMapperResults` / `metaMapperExport` | High | `handleDownloadPartialCsv` and `handleDownloadPartialJson` were stub no-ops. Added `@api exportCsv()` and `@api exportJson()` to `metaMapperExport`; results component now calls these via `querySelector`. |
+| 2 | `metaMapperGraph` | High | `handleRetryLoad()` reset flags but did not re-trigger ECharts loading — Retry button was broken. Changed to call `loadScript` directly in the handler. |
+| 3 | `metaMapperResults` | High | `filteredNodes` getter called `applyFilters` 3× per render; `nodeMap` called `buildNodeMap` 2× per render. Added `_filteredNodesCache` and `_nodeMapCache` fields with `_invalidateCaches()` call-site invalidation on every `allNodes` and `filters` change. |
+| 4 | `metaMapperGraph` | High | "Expand All" guard modal: "Keep Collapsed" button did not receive focus on open (WCAG 2.4.3). `expandAriaLabel` on the destructive button was undefined (missing property on modal object). Added `setTimeout` focus call and `expandAriaLabel` field. |
+| 5 | `metaMapperGraph` | High | Context menu `role="menuitem"` divs had `onkeydown` bound to action handlers directly — any keydown (Tab, Escape, Arrow) triggered the action. Added `handleCtxMenuItemKeyDown` that gates on Enter/Space only; updated all three items in HTML. |
+| 6 | All 4 Phase 2 js-meta.xml | High | No `<description>` tag present on any Phase 2 component. Added descriptions matching the LWC component table in CLAUDE.md. |
+| 7 | `metaMapperGraph` | Medium | `_initChart()` body outside any try/catch — `echarts.init()` failure propagated uncaught. Wrapped full body in try/catch that sets `_loadError = true` and fires `tabready`. |
+| 8 | `metaMapperGraph` | Medium | 3-second hard tabready timeout had no stored reference — could not be cancelled in `disconnectedCallback`. Added `_tabReadyTimeout` field; stored in `_initChart`; cancelled in `disconnectedCallback`. |
+| 9 | `metaMapperGraph` | Medium | `handleCtxCopyName`, `handleCtxFocusPath`, `handleCtxCollapseSubtree` set `_contextMenu = null` directly, bypassing `closeContextMenu()`. Focus was not returned to canvas wrapper after menu item selection. Changed all three to call `closeContextMenu()`. |
+| 10 | `metaMapperGraph` | Medium | `get isMobile()` read `window.innerWidth` directly — not reactive to resize. Added `_isMobileState` field, initialized in `connectedCallback`, updated in `_handleResize`. |
+| 11 | `metaMapperResults` | Medium | `handleCopySummary()` clipboard failure dispatched `showerror` event; all other copy errors dispatch `showtoast`. Changed to `showtoast` with matching detail shape. |
+| 12 | `metaMapperResults` | Medium | `filtersreset` event — verified consumed by `metaMapperApp`; no change needed. |
+| 13 | `metaMapperTree` | Low | Dead ternary `forSearch ? (depth * 20) : (depth * 20)` — both branches identical. Simplified to `depth * 20`. |
 
 ---
 

@@ -1,0 +1,6 @@
+.progress-container { padding: 1rem; }
+.status-label { font-size: 0.875rem; margin-bottom: 0.5rem; }
+.elapsed-row { display: flex; justify-content: flex-end; font-size: 0.75rem; color: #706e6b; }
+@media (max-width: 767px) {
+    .elapsed-row { flex-direction: column; align-items: flex-end; }
+}

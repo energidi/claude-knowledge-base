@@ -1,0 +1,69 @@
+<h2>8 LWC Components — Build Strategy</h2>
+<p class="subtitle">How do you want to approach building all 8 components? Each has a large spec in CLAUDE.md.</p>
+
+<div class="options">
+  <div class="option" data-choice="all-at-once" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>All 8 in One Pass</h3>
+      <p>Build every component in a single session. One implementation plan, one review cycle, one deployment approval. Fastest to "done" if nothing blocks mid-build. Risk: a single review finding in a deep component could delay the whole batch.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="two-phases" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Two Phases (Recommended)</h3>
+      <p><strong>Phase 1:</strong> Core journey — App shell + Search + Progress + Results container<br/>
+      <strong>Phase 2:</strong> Rich UI — Tree + Graph + Details Panel + Export<br/>
+      Phase 1 is deployable and functional on its own. Each phase gets its own review and approval gate. Slower overall but lower risk per step.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="three-phases" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Three Phases (Safest)</h3>
+      <p><strong>Phase 1:</strong> Shell + Search + Progress (can submit and track a scan)<br/>
+      <strong>Phase 2:</strong> Results container + Tree + Export (can view and export)<br/>
+      <strong>Phase 3:</strong> Graph + Details Panel (full interactive visualization)<br/>
+      Most granular review gates. Longest overall timeline.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:32px; padding:16px; background:#f8f9fa; border-radius:8px; font-size:14px;">
+  <div class="label">Component Dependency Map</div>
+  <div style="margin-top:12px; display:flex; gap:24px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:200px;">
+      <strong>metaMapperApp</strong> (root shell)<br/>
+      <span style="color:#666; font-size:13px;">↳ owns jobId, empApi subscription, routing</span>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <strong>metaMapperSearch</strong><br/>
+      <span style="color:#666; font-size:13px;">↳ fires jobcreated → App</span>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <strong>metaMapperProgress</strong><br/>
+      <span style="color:#666; font-size:13px;">↳ receives scanstatuschange from App</span>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <strong>metaMapperResults</strong><br/>
+      <span style="color:#666; font-size:13px;">↳ owns filter/selection state, hosts Tree+Graph+Panel+Export</span>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <strong>metaMapperTree</strong><br/>
+      <span style="color:#666; font-size:13px;">↳ fires nodeselected, tabready → Results</span>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <strong>metaMapperGraph</strong><br/>
+      <span style="color:#666; font-size:13px;">↳ fires nodeselected, tabready → Results</span>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <strong>metaMapperComponentDetailsPanel</strong><br/>
+      <span style="color:#666; font-size:13px;">↳ receives selectedNode prop from Results</span>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <strong>metaMapperExport</strong><br/>
+      <span style="color:#666; font-size:13px;">↳ receives nodeList + jobMeta props from Results</span>
+    </div>
+  </div>
+</div>

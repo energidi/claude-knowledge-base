@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Edit(*.cls)",
+            "command": "@{hookSpecificOutput=@{hookEventName='PostToolUse';additionalContext='Check if the test class for this file needs updating.'}} | ConvertTo-Json -Compress",
+            "shell": "powershell",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Write(*.cls)",
+            "command": "@{hookSpecificOutput=@{hookEventName='PostToolUse';additionalContext='Check if the test class for this file needs updating.'}} | ConvertTo-Json -Compress",
+            "shell": "powershell",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python \"c:/Users/GidiAbramovich/AppData/Local/Temp/metamapper_doc_gen.py\")",
+      "Bash(python \"c:/Users/GidiAbramovich/AppData/Local/Temp/metamapper_doc_gen_v4.py\")",
+      "Bash(python metamapper_doc_gen_v7.py)",
+      "Bash(mkdir -p \"C:/Users/GidiAbramovich/.claude/plugins/cache/local/review-naming/1.0.0/.claude-plugin\")",
+      "Bash(mkdir -p \"C:/Users/GidiAbramovich/.claude/plugins/cache/local/review-naming/1.0.0/commands\")",
+      "Bash(mkdir -p \"C:/Users/GidiAbramovich/.claude/plugins/cache/local/review-naming/1.0.0/references\")",
+      "Bash(cp -r C:/Users/GidiAbramovich/.claude/plugins/cache/local/sf-review-architecture/1.0.0/. C:/Users/GidiAbramovich/AppData/Local/Temp/claude-kb-deploy-skills/skills/sf-review-architecture/)",
+      "Bash(cp -r C:/Users/GidiAbramovich/.claude/plugins/cache/local/sf-review-ux/1.0.0/. C:/Users/GidiAbramovich/AppData/Local/Temp/claude-kb-deploy-skills/skills/sf-review-ux/)",
+      "Bash(cp -r C:/Users/GidiAbramovich/.claude/plugins/cache/local/sf-review-design/1.0.0/. C:/Users/GidiAbramovich/AppData/Local/Temp/claude-kb-deploy-skills/skills/sf-review-design/)",
+      "Bash(python \"C:/Users/GidiAbramovich/AppData/Local/Temp/metamapper_doc_gen_v14.py\")"
+    ]
+  }
+}

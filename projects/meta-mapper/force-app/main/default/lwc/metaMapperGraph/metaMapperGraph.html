@@ -1,0 +1,308 @@
+<template>
+    <!-- Large graph warning (desktop only, dismissible) -->
+    <template if:true={showLargeGraphWarningBanner}>
+        <div class="large-graph-warning" role="alert">
+            <span
+                >Large graph detected ({_nodes.length} components). For best performance, use Tree
+                View or apply filters to reduce scope.</span
+            >
+            <lightning-button
+                label="Switch to Tree View"
+                onclick={handleSwitchToTree}
+                class="large-graph-tree-btn"
+            ></lightning-button>
+            <button
+                class="large-graph-dismiss"
+                aria-label="Dismiss large graph warning"
+                onclick={dismissLargeGraphWarning}
+            >
+                &times;
+            </button>
+        </div>
+    </template>
+
+    <!-- Mobile banner -->
+    <template if:true={isMobile}>
+        <div class="mobile-banner" role="status">For best results, use a desktop browser.</div>
+    </template>
+
+    <!-- Main layout: legend + canvas column -->
+    <div class="graph-layout">
+        <!-- Legend sidebar -->
+        <div class="graph-legend" aria-label="Graph legend">
+            <!-- Spanning tree notice -->
+            <template if:true={showSpanningNotice}>
+                <div role="status" aria-live="polite" class="spanning-notice">
+                    <span class="spanning-notice-text"
+                        >Showing the first-discovered path to each component. A node reachable via
+                        multiple paths appears once.</span
+                    >
+                    <button
+                        class="spanning-notice-dismiss"
+                        aria-label="Dismiss spanning tree notice"
+                        onclick={dismissSpanningNotice}
+                    >
+                        &times;
+                    </button>
+                </div>
+            </template>
+
+            <!-- Type legend items -->
+            <ul class="legend-items" aria-label="Node type legend">
+                <template for:each={legendItems} for:item="item">
+                    <li key={item.type} class="legend-item">
+                        <span
+                            class="legend-swatch"
+                            style={item.swatchStyle}
+                            aria-hidden="true"
+                        ></span>
+                        <lightning-icon
+                            icon-name={item.icon}
+                            size="xx-small"
+                            aria-hidden="true"
+                            class="legend-icon"
+                        ></lightning-icon>
+                        <span class="legend-label">{item.label}</span>
+                    </li>
+                </template>
+            </ul>
+        </div>
+
+        <!-- Graph column: toolbar + canvas -->
+        <div class="graph-column">
+            <!-- Toolbar -->
+            <div class="graph-toolbar" role="toolbar" aria-label="Graph controls">
+                <div class="graph-search-wrapper">
+                    <input
+                        type="search"
+                        class="graph-search-input"
+                        placeholder="Search nodes in this graph..."
+                        aria-label="Search graph nodes"
+                        value={_graphSearchTerm}
+                        oninput={handleGraphSearch}
+                    />
+                    <span class="slds-assistive-text"
+                        >Search applies to Graph view only - highlights nodes without hiding
+                        non-matches</span
+                    >
+                </div>
+
+                <template if:true={_showClearFocus}>
+                    <button class="clear-focus-btn slds-button" onclick={handleClearFocus}>
+                        Clear Focus
+                    </button>
+                </template>
+
+                <button class="slds-button" onclick={handleCollapseAll} aria-label="Collapse all branches">
+                    Collapse All
+                </button>
+                <button
+                    class="slds-button"
+                    onclick={handleExpandAll}
+                    aria-label="Expand all branches"
+                >
+                    Expand All
+                </button>
+                <button
+                    class="shortcut-legend-btn slds-button"
+                    aria-label="Show keyboard shortcuts (Shift+?)"
+                    title="Keyboard shortcuts (Shift+?)"
+                    onclick={handleShowShortcuts}
+                >
+                    ?
+                </button>
+
+                <!-- Graph live region for announcements -->
+                <span
+                    class="slds-assistive-text"
+                    aria-live="polite"
+                    role="status"
+                ></span>
+            </div>
+
+            <!-- Canvas wrapper -->
+            <div
+                class="graph-canvas-wrapper"
+                tabindex="0"
+                role="img"
+                aria-label={canvasAriaLabel}
+                onkeydown={handleCanvasKeyDown}
+                oncontextmenu={handleCanvasContextMenu}
+            >
+                <template if:true={_loadError}>
+                    <div class="load-error">
+                        <span>Graph could not be loaded.</span>
+                        <button class="slds-button slds-button_brand" onclick={handleRetryLoad}>
+                            Retry
+                        </button>
+                    </div>
+                </template>
+                <template if:false={_loadError}>
+                    <template if:false={_chartReady}>
+                        <lightning-spinner
+                            variant="brand"
+                            size="large"
+                            alternative-text="Loading graph..."
+                        ></lightning-spinner>
+                    </template>
+                </template>
+            </div>
+
+            <!-- Off-screen ARIA table for screen readers -->
+            <table class="slds-assistive-text" aria-hidden="false" aria-label="Dependency graph nodes">
+                <caption>Dependency graph nodes</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Flags</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template for:each={ariaTableRows} for:item="r">
+                        <tr key={r.id}>
+                            <td>{r.name}</td>
+                            <td>{r.type}</td>
+                            <td>{r.flags}</td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Context menu -->
+    <template if:true={_contextMenu}>
+        <div class="ctx-backdrop" onclick={closeContextMenu}></div>
+        <div
+            class="ctx-menu"
+            style={contextMenuStyle}
+            role="menu"
+            aria-label="Node actions"
+            onkeydown={handleCtxMenuKeyDown}
+        >
+            <div
+                role="menuitem"
+                tabindex="0"
+                class="ctx-item"
+                data-action="copy"
+                onclick={handleCtxCopyName}
+                onkeydown={handleCtxMenuItemKeyDown}
+            >
+                Copy API Name
+            </div>
+            <div
+                role="menuitem"
+                tabindex="-1"
+                class="ctx-item"
+                data-action="focus"
+                onclick={handleCtxFocusPath}
+                onkeydown={handleCtxMenuItemKeyDown}
+            >
+                Focus path to root
+            </div>
+            <div
+                role="menuitem"
+                tabindex="-1"
+                class="ctx-item"
+                data-action="collapse"
+                onclick={handleCtxCollapseSubtree}
+                onkeydown={handleCtxMenuItemKeyDown}
+            >
+                {ctxCollapseLabel}
+            </div>
+        </div>
+    </template>
+
+    <!-- Keyboard shortcut legend modal -->
+    <template if:true={_showShortcutLegend}>
+        <div
+            class="modal-backdrop"
+            role="dialog"
+            aria-label="Keyboard shortcuts"
+            aria-modal="true"
+            onkeydown={handleShortcutModalKeyDown}
+        >
+            <div class="modal-panel">
+                <div class="modal-header">
+                    <h2 class="modal-title">Keyboard Shortcuts</h2>
+                    <button
+                        class="modal-close slds-button"
+                        aria-label="Close"
+                        onclick={handleCloseShortcuts}
+                    >
+                        &times;
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <ul class="shortcut-list">
+                        <li>
+                            <kbd>Ctrl+K</kbd>
+                            <span>Search graph (canvas focus only)</span>
+                        </li>
+                        <li>
+                            <kbd>Shift+?</kbd>
+                            <span>Open keyboard legend (canvas focus only)</span>
+                        </li>
+                        <li>
+                            <kbd>Esc</kbd>
+                            <span>Clear focus / search</span>
+                        </li>
+                        <li>
+                            <kbd>Arrow keys</kbd>
+                            <span>Traverse nodes</span>
+                        </li>
+                        <li>
+                            <kbd>Enter</kbd>
+                            <span>Select node (open Node Details Panel)</span>
+                        </li>
+                        <li>
+                            <kbd>Right-click</kbd>
+                            <span>Context menu</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Expand All guard modal -->
+    <template if:true={_expandAllModal}>
+        <div
+            class="modal-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Large graph warning"
+            onkeydown={handleExpandModalKeyDown}
+        >
+            <div class="modal-panel">
+                <div class="modal-header">
+                    <h2 class="modal-title">Large Graph Warning</h2>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        This graph contains {_expandAllModal.count} nodes. Expanding all levels may
+                        slow or freeze your browser. Consider using the Level Filter or exporting to
+                        CSV instead.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button
+                        class="slds-button slds-button_neutral"
+                        aria-label="Cancel. Do not expand all nodes - return to filtered view."
+                        onclick={handleExpandAllCancel}
+                    >
+                        Keep Collapsed
+                    </button>
+                    <button
+                        class="slds-button slds-button_destructive"
+                        aria-label={_expandAllModal.expandAriaLabel}
+                        onclick={handleExpandAllConfirm}
+                    >
+                        Expand All ({_expandAllModal.count} nodes)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+</template>

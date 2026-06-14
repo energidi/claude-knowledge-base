@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <isExposed>false</isExposed>
+    <description>ECharts force-directed graph for visualizing dependency trees. Receives node list as a prop from metaMapperResults. No direct Apex calls. Fires nodeselected and tabready events. Loads ECharts from the ECharts Static Resource (no CDN). Supports focus path, collapse/expand, context menu, keyboard shortcuts, and dark mode.</description>
+</LightningComponentBundle>

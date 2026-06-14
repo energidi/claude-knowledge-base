@@ -1,0 +1,9 @@
+.full-height { min-height: 60vh; }
+.toast-overlay {
+    position: fixed; bottom: 1rem; right: 1rem;
+    z-index: 9999; min-width: 300px; max-width: 500px;
+    border-radius: 4px; padding: 0.75rem 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+.tour-modal .slds-modal__container { max-width: 600px; }
+.setup-modal-content ol { margin-left: 1.5rem; line-height: 1.8; }
