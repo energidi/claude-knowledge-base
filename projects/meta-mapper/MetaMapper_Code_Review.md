@@ -2,8 +2,8 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** 2026-06-14 (Round 49 - sf-review full pass: 11 findings applied, 4 renames)
-**Date:** 2026-05-23
+**Last Updated:** June 14, 2026 (Round 49 - sf-review full pass: 11 findings applied, 4 renames)
+**Date:** May 23, 2026
 
 ---
 

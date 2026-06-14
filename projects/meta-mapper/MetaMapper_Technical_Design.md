@@ -1,7 +1,7 @@
 # MetaMapper - Technical Design
 
 **Version:** 14.0  
-**Date:** 2026-05-31  
+**Date:** May 31, 2026  
 **Status:** Phase 3 implementation in progress
 
 ---
