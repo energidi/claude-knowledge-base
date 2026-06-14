@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** 2026-06-14 (Round 48 - sf-review-design: Phase 2 LWC review + 13 findings applied)
+**Last Updated:** 2026-06-14 (Round 49 - sf-review full pass: 11 findings applied, 4 renames)
 **Date:** 2026-05-23
 
 ---
@@ -698,6 +698,26 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 49 - sf-review Full Pass: 11 Findings Applied
+
+All 4 review lenses run in parallel (Architecture, UX, Naming, Full Design). 11 findings applied across Apex classes, LWC components, field XML, and CLAUDE.md spec.
+
+| # | ID | Component | Severity | Fix |
+|---|---|---|---|---|
+| 1 | U1 | `metaMapperProgress` / `metaMapperApp` / `DependencyJobController` | High | `Max_Components__c` is a CMDT field — never on `Metadata_Scan_Job__c`. Progress bar was permanently hidden and value always 0. Added `maxComponentsCap: Integer` to `JobStatusResult` wrapper (read from settings); passed as dedicated `@api maxComponentsCap` prop from `metaMapperApp` to `metaMapperProgress`; fixed `showProgressBar` and `progressValue` getters to use the prop. |
+| 2 | U2 | `metaMapperProgress.html` | Medium | Long-running banner used invalid `role="status" aria-live="assertive"` combination. Changed to `role="alert"`. |
+| 3 | U3 | `metaMapperProgress.html` | Medium | Paused banner used `role="status"` — does not trigger assertive announcement. Changed to `role="alert"`. |
+| 4 | U4 | `metaMapperProgress.html` | Medium | Cancel modal header missing explicit X close button (WCAG modal requirement). Added `<button class="slds-modal__close">` with `aria-label="Close"` and `utility:close` icon. |
+| 5 | A1 | `DependencyJobSelector` | Low | `getClosedJobsBefore()` had `OR (Status_Closed_At__c = null AND CreatedDate < :threshold)` fallback — violates rule that cleanup must never use `CreatedDate` to avoid deleting in-progress jobs. Removed the fallback entirely. |
+| 6 | A2 | `DependencyQueueable` | Low | `updateJobFailed()` called `getForFailedUpdate(jobId)` (no lock) instead of `getForFailedUpdateLocked(jobId)` (`FOR UPDATE`). Fixed. |
+| 7 | A3 | `ScanResultFileQueueable` | Low | Call site at line 353 used `appendWarningToJob(warn)` (1-arg, re-queries) when `job` was already in scope. Changed to `appendWarningToJob(job, warn)` (2-arg). |
+| 8 | N1 | `Metadata_Dependency__c.Ancestor_Id_Prefix_Index__c` | Medium | Field stores 6-char tails (`.right(6)`, auto-number suffix) not prefixes. Renamed to `Ancestor_Id_Tail_Index__c`. Updated `DependencyQueueable`, `MetadataDependencySelector`, `CustomFieldDependencyHandler` (also fixed logic from `substring(0,6)` to `.right(6)`), `MetaMapper_Admin.permissionset-meta.xml`, and CLAUDE.md. Old XML deleted. |
+| 9 | N2 | `metaMapperUtils` LWC service module | Low | Generic "Utils" suffix. Renamed to `metaMapperFormatters`. New module written; 6 import statements updated across `metaMapperExport`, `metaMapperResults`, `metaMapperGraph`, `metaMapperProgress`, `metaMapperSearch`, `metaMapperComponentDetailsPanel`. Old directory deleted. |
+| 10 | N3 | `metaMapperNodeUtils` LWC service module | Low | Generic "Utils" suffix and name misleads (does more than filtering). Renamed to `metaMapperNodeFilters`. New module written; 5 import statements updated across `metaMapperTree`, `metaMapperExport`, `metaMapperResults`, `metaMapperGraph`, `metaMapperComponentDetailsPanel`. Old directory deleted. |
+| 11 | N4 | `MetaMapper_Settings__mdt.Has_Admin_Overrides__c` | Low | Internal jargon ("overrides"). Renamed to `Admin_Settings_Configured__c`. Updated `DependencyJobController`, `MetaMapper_Settings.Default.md-meta.xml`, and CLAUDE.md. Old XML deleted. |
 
 ---
 

@@ -2,7 +2,7 @@ import { LightningElement, api, track } from 'lwc';
 import cancelJob from '@salesforce/apex/DependencyJobController.cancelJob';
 import resumeJob from '@salesforce/apex/DependencyJobController.resumeJob';
 import getJobStatus from '@salesforce/apex/DependencyJobController.getJobStatus';
-import { formatElapsed } from 'c/metaMapperUtils';
+import { formatElapsed } from 'c/metaMapperFormatters';
 
 const POLL_INTERVAL_PROCESSING = 5000;
 const POLL_INTERVAL_PAUSED     = 10000;
@@ -14,6 +14,7 @@ const RESUME_TIMEOUT           = 30000;
 export default class MetaMapperProgress extends LightningElement {
     @api jobId;
     @api job;
+    @api maxComponentsCap;
 
     @track cancelDisabled = false;
     @track cancelLabel = 'Cancel';
@@ -71,7 +72,7 @@ export default class MetaMapperProgress extends LightningElement {
 
     get showProgressBar() {
         if (!this.job) return false;
-        const cap = this.job.Max_Components__c || 0;
+        const cap = this.maxComponentsCap || 0;
         return cap > 0 && this.isProcessing;
     }
 
@@ -80,7 +81,7 @@ export default class MetaMapperProgress extends LightningElement {
 
     get progressValue() {
         if (!this.job) return 0;
-        const cap = this.job.Max_Components__c || 0;
+        const cap = this.maxComponentsCap || 0;
         if (cap <= 0) return 0;
         if (this.status === 'Completed') return 100;
         return Math.min(Math.round((this.job.Components_Analyzed__c || 0) / cap * 100), 95);

@@ -1,5 +1,5 @@
 import { LightningElement, api, track } from 'lwc';
-import { applyFilters, buildNodeMap } from 'c/metaMapperNodeUtils';
+import { applyFilters, buildNodeMap } from 'c/metaMapperNodeFilters';
 
 const ROW_HEIGHT = 40;
 const BUFFER = 15;

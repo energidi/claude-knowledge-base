@@ -350,7 +350,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
                 System.debug(LoggingLevel.WARN,
                     'ScanResultFileQueueable: could not set fallback Scan_Summary_Text__c for job '
                     + jobId + ': ' + fallbackEx.getMessage());
-                appendWarningToJob(warn);
+                appendWarningToJob(job, warn);
             }
         }
     }

@@ -3,8 +3,8 @@ import getNodeHierarchy from '@salesforce/apex/DependencyJobController.getNodeHi
 import getJobStatus from '@salesforce/apex/DependencyJobController.getJobStatus';
 import isCopilotEnabled from '@salesforce/apex/DependencyJobController.isCopilotEnabled';
 import { loadFilters, saveFilters, validateFilters, DEFAULT_FILTERS } from 'c/metaMapperFilters';
-import { buildTypeCounts, applyFilters, buildNodeMap, extractTypes } from 'c/metaMapperNodeUtils';
-import { truncateAt } from 'c/metaMapperUtils';
+import { buildTypeCounts, applyFilters, buildNodeMap, extractTypes } from 'c/metaMapperNodeFilters';
+import { truncateAt } from 'c/metaMapperFormatters';
 
 const SUMMARY_POLL_INTERVAL = 5000;
 const SUMMARY_MAX_POLLS = 6;

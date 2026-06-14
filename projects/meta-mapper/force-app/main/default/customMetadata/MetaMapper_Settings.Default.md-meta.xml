@@ -48,7 +48,7 @@
         <value xsi:type="xsd:double">200</value>
     </values>
     <values>
-        <field>Has_Admin_Overrides__c</field>
+        <field>Admin_Settings_Configured__c</field>
         <value xsi:type="xsd:boolean">false</value>
     </values>
 </CustomMetadata>

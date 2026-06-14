@@ -746,18 +746,18 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             ? parent.Metadata_Id__c
             : parent.Ancestor_Path__c + '|' + parent.Metadata_Id__c;
 
-        // H2: Ancestor_Id_Prefix_Index__c - pipe-delimited 6-char prefixes of each ancestor ID.
-        // Matches the main engine's (DependencyQueueable) node construction so the fast
-        // bloom-filter pre-screen works correctly on supplemental nodes.
+        // H2: Ancestor_Id_Tail_Index__c - pipe-delimited 6-char tails (.right(6)) of each ancestor ID.
+        // Uses the auto-number suffix (last 6 chars), which is unique per component, matching
+        // DependencyQueueable's construction so the bloom-filter pre-screen works on supplemental nodes.
         String cycleIndex = '';
         if (String.isNotBlank(ancestorPath)) {
-            List<String> prefixes = new List<String>();
+            List<String> tails = new List<String>();
             for (String part : ancestorPath.split('\\|')) {
                 if (part.length() >= 6) {
-                    prefixes.add(part.substring(0, 6));
+                    tails.add(part.right(6));
                 }
             }
-            cycleIndex = String.join(prefixes, '|');
+            cycleIndex = String.join(tails, '|');
         }
 
         // Guard: Unique_Component_Key__c is Text 80. Namespace-prefixed field API names
@@ -786,7 +786,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             Discovery_Source__c         = 'Supplemental',
             Supplemental_Confidence__c  = confidence,
             Ancestor_Path__c            = ancestorPath,
-            Ancestor_Id_Prefix_Index__c    = cycleIndex,
+            Ancestor_Id_Tail_Index__c      = cycleIndex,
             Unique_Component_Key__c = uniquenessKey
         );
     }

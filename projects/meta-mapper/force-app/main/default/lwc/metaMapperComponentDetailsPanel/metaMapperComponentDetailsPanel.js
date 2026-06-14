@@ -1,6 +1,6 @@
 import { LightningElement, api, track } from 'lwc';
-import { resolveSetupUrl } from 'c/metaMapperNodeUtils';
-import { renderPills } from 'c/metaMapperUtils';
+import { resolveSetupUrl } from 'c/metaMapperNodeFilters';
+import { renderPills } from 'c/metaMapperFormatters';
 
 export default class MetaMapperComponentDetailsPanel extends LightningElement {
     @api selectedNodeId = null;

@@ -34,11 +34,13 @@ public with sharing class DependencyJobController {
         @AuraEnabled public Metadata_Scan_Job__c job;
         @AuraEnabled public Boolean peSuppressionActive;
         @AuraEnabled public Integer batchSizeInUse;
+        @AuraEnabled public Integer maxComponentsCap;
 
-        public JobStatusResult(Metadata_Scan_Job__c job, Boolean platformEventsDisabled, Integer batchSize) {
+        public JobStatusResult(Metadata_Scan_Job__c job, Boolean platformEventsDisabled, Integer batchSize, Integer maxCap) {
             this.job                = job;
             this.peSuppressionActive = platformEventsDisabled;
             this.batchSizeInUse     = batchSize;
+            this.maxComponentsCap   = maxCap;
         }
     }
 
@@ -107,12 +109,12 @@ public with sharing class DependencyJobController {
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
 
         // ---- Sandbox detection: apply conservative first-install defaults when no admin
-        //      has explicitly saved settings (Has_Admin_Overrides__c = false). ----
+        //      has explicitly saved settings (Admin_Settings_Configured__c = false). ----
         // Developer Sandbox has a 200MB hard Data Storage limit. Concurrent active scans
         // can simultaneously peak storage; one at a time keeps the peak bounded.
         // These overrides apply only in memory for this job submission - CMDT is not mutated.
         Boolean sandboxOverrideActive = false;
-        if (settings.Has_Admin_Overrides__c != true) {
+        if (settings.Admin_Settings_Configured__c != true) {
             try {
                 if (isSandboxCached == null) {
                     Organization org = [SELECT IsSandbox FROM Organization LIMIT 1];
@@ -294,7 +296,8 @@ public with sharing class DependencyJobController {
         Integer batchSizeInUse = statusJob.Batch_Size_Override__c != null
             ? (Integer) statusJob.Batch_Size_Override__c
             : (settings.Scan_Batch_Size__c != null ? (Integer) settings.Scan_Batch_Size__c : 50);
-        return new JobStatusResult(statusJob, platformEventsDisabled, batchSizeInUse);
+        Integer maxComponentsCap = settings.Max_Components__c != null ? (Integer) settings.Max_Components__c : 0;
+        return new JobStatusResult(statusJob, platformEventsDisabled, batchSizeInUse, maxComponentsCap);
     }
 
     // -----------------------------------------------------------------------

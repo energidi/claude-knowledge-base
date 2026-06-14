@@ -52,8 +52,7 @@ public without sharing class DependencyJobSelector {
             SELECT Id
             FROM Metadata_Scan_Job__c
             WHERE Status__c IN ('Failed', 'Cancelled')
-            AND (Status_Closed_At__c < :threshold
-                 OR (Status_Closed_At__c = null AND CreatedDate < :threshold))
+            AND Status_Closed_At__c < :threshold
         ]);
     }
 

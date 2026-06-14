@@ -3,7 +3,7 @@
 
         <!-- Long-running scan banner (> 15 min) -->
         <template lwc:if={showLongRunningBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="status" aria-live="assertive">
+            <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="alert">
                 <p>This scan is taking longer than usual.
                     <a onclick={handleViewPartialResults}> View partial results so far</a> — this will not cancel the scan.
                 </p>
@@ -26,7 +26,7 @@
 
         <!-- Paused warning banner -->
         <template lwc:if={isPaused}>
-            <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-bottom_small" role="status">
+            <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-bottom_small" role="alert">
                 <p>Analysis paused — encountered a complex component. You can resume at a slower speed or with current settings.</p>
                 <div class="slds-var-m-top_x-small">
                     <lightning-button label="Resume at slower speed" variant="neutral"
@@ -94,6 +94,10 @@
                 aria-modal="true" class="slds-modal slds-fade-in-open">
                 <div class="slds-modal__container">
                     <header class="slds-modal__header">
+                        <button class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse"
+                            aria-label="Close" onclick={handleKeepRunning}>
+                            <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
+                        </button>
                         <h2 id="cancelModalTitle" class="slds-modal__title">Stop this analysis?</h2>
                     </header>
                     <div class="slds-modal__content slds-var-p-around_medium">

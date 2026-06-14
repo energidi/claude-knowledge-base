@@ -2,7 +2,7 @@ import { LightningElement, track } from 'lwc';
 import createJob from '@salesforce/apex/DependencyJobController.createJob';
 import getObjectList from '@salesforce/apex/DependencyJobController.getObjectList';
 import getComponentCount from '@salesforce/apex/DependencyJobController.getComponentCount';
-import { countToBucket } from 'c/metaMapperUtils';
+import { countToBucket } from 'c/metaMapperFormatters';
 
 const TYPE_OPTIONS = [
     { label: 'Apex Class',       value: 'ApexClass' },

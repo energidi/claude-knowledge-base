@@ -165,9 +165,10 @@ export default class MetaMapperApp extends LightningElement {
 
     // --- Computed getters ---
 
-    get isSearchView()   { return this.view === 'search'; }
-    get isProgressView() { return this.view === 'progress'; }
-    get isResultsView()  { return this.view === 'results'; }
+    get isSearchView()      { return this.view === 'search'; }
+    get isProgressView()    { return this.view === 'progress'; }
+    get isResultsView()     { return this.view === 'results'; }
+    get maxComponentsCap()  { return (this.job && this.job.maxComponentsCap) || 0; }
     get showApp() {
         return !this.isCheckingHealth && !this.isDeepLinkLoading && !this.showPreflightError;
     }

@@ -1,8 +1,8 @@
 import { LightningElement, api } from 'lwc';
 import { loadScript } from 'lightning/platformResourceLoader';
 import ECHARTS from '@salesforce/resourceUrl/ECharts';
-import { applyFilters } from 'c/metaMapperNodeUtils';
-import { renderPills } from 'c/metaMapperUtils';
+import { applyFilters } from 'c/metaMapperNodeFilters';
+import { renderPills } from 'c/metaMapperFormatters';
 
 const TYPE_COLORS = {
     ApexClass: '#0176d3',
