@@ -3423,6 +3423,21 @@ The following findings from the Round 15 external review were assessed and rejec
 
 ---
 
+## Round 19 Fixes Applied
+
+Full design review (Architecture + UX + Naming lenses). 11 findings applied across all severities (Critical through Low).
+
+- C1 (`DependencyQueueable.cls`): Added Step 7a - root node Tooling API ID resolution on first execution. `DependencyQueueableTest.cls`: added `execute_blankRootNodeId_resolvesMetadataId()` test + `RootIdResolveMock`.
+- C2/C3/H1/H2/M1 (`metaMapperApp.js`): Fixed `JobStatusResult` wrapper unpacking (`_storeJobResult` helper); fixed PE event flow to call `_refreshJob().then()` before transitioning to results view; fixed `handleStatusEvent` to forward `peSuppressionActive`; fixed `maxComponentsCap` getter; added `tourNextAriaLabel` computed getter.
+- M1/L1 (`metaMapperApp.html`): Added `aria-label="Loading scan result..."` to deep-link spinner; added `aria-label={tourNextAriaLabel}` to tour Next button; passed `batch-size-in-use={_batchSizeInUse}` to `metaMapperProgress`.
+- H3 (`metaMapperProgress.js`): Added `@api batchSizeInUse`; fixed `resumeCurrentLabel` to prefer `batchSizeInUse` over raw field; fixed `_poll()` safe-navigation on `result.job.Status__c`.
+- H3 (`metaMapperResults.js`): Fixed `_pollSummary()` safe-navigation on `result.job.Scan_Summary_Text__c`.
+- M2: Renamed `CustomMetadataDescribeCache` to `MetadataTypeDescribeService`. Old class retained as deprecated delegation stub. All consumers (`CustomFieldDependencyHandler`, `ApexClassDependencyHandler`) updated.
+- M3 (`CLAUDE.md`): Added `DependencyFetchContext` and `SupplementalScanResult` to the Key Apex Classes table.
+- L2: Renamed `Ancestor_Id_Tail_Index__c` to `Ancestor_Bloom_Index__c`. New field XML created. All Apex references updated (`DependencyQueueable`, `MetadataDependencySelector`, `CustomFieldDependencyHandler`). Comment in `MetaMapper_Admin.permissionset-meta.xml` updated. `CLAUDE.md` and `MetaMapper_Technical_Design.md` updated. **Note:** old field XML `Ancestor_Id_Tail_Index__c.field-meta.xml` must be manually deleted from the repo before deploying to avoid a duplicate field conflict.
+
+---
+
 ## Round 18 Fixes Applied
 
 Full design review (Architecture + UX + Naming lenses). 19 findings; 5 Critical (3 LWC/docs deferred), 3 High, 8 Medium, 3 Low. All applicable code fixes applied.

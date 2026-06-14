@@ -42,12 +42,12 @@ public without sharing class ApexClassDependencyHandler implements IDependencyTy
     // Maximum CMT field conditions per SOQL query (SOQL 20,000-char limit guard).
     private static final Integer MAX_CMT_FIELDS_PER_QUERY = 20;
 
-    // Single source of truth for class-reference suffixes - defined in CustomMetadataDescribeCache
+    // Single source of truth for class-reference suffixes - defined in MetadataTypeDescribeService
     // so CustomFieldDependencyHandler (field-reference suffixes) and any future handler share definitions.
     private static final Set<String> CMT_FIELD_SUFFIXES =
-        CustomMetadataDescribeCache.CMT_CLASS_REF_SUFFIXES;
+        MetadataTypeDescribeService.CMT_CLASS_REF_SUFFIXES;
 
-    // Describe data is served from CustomMetadataDescribeCache to avoid duplicate
+    // Describe data is served from MetadataTypeDescribeService to avoid duplicate
     // getGlobalDescribe() and EntityDefinition queries when both ApexClassDependencyHandler
     // and CustomFieldDependencyHandler run in the same Queueable execution.
 
@@ -83,9 +83,9 @@ public without sharing class ApexClassDependencyHandler implements IDependencyTy
             return result;
         }
 
-        // Describe data served from CustomMetadataDescribeCache to avoid duplicate
+        // Describe data served from MetadataTypeDescribeService to avoid duplicate
         // getGlobalDescribe() and EntityDefinition queries per transaction.
-        List<EntityDefinition> cmtEntities = CustomMetadataDescribeCache.getCmtEntities();
+        List<EntityDefinition> cmtEntities = MetadataTypeDescribeService.getCmtEntities();
 
         if (cmtEntities.isEmpty()) {
             return result;
@@ -97,8 +97,8 @@ public without sharing class ApexClassDependencyHandler implements IDependencyTy
         for (EntityDefinition e : cmtEntities) {
             entityApiNames.add(e.QualifiedApiName);
         }
-        CustomMetadataDescribeCache.preloadFieldMaps(entityApiNames);
-        for (String descErr : CustomMetadataDescribeCache.drainDescribeErrors()) {
+        MetadataTypeDescribeService.preloadFieldMaps(entityApiNames);
+        for (String descErr : MetadataTypeDescribeService.drainDescribeErrors()) {
             result.addError(descErr);
         }
 
@@ -129,7 +129,7 @@ public without sharing class ApexClassDependencyHandler implements IDependencyTy
             result.errors.addAll(entityResult.errors);
         }
         // Drain any per-entity describe failures collected during the entity loop.
-        for (String descErr : CustomMetadataDescribeCache.drainDescribeErrors()) {
+        for (String descErr : MetadataTypeDescribeService.drainDescribeErrors()) {
             result.addError(descErr);
         }
 
@@ -145,7 +145,7 @@ public without sharing class ApexClassDependencyHandler implements IDependencyTy
 
         List<String> relevantFields = new List<String>();
         Map<String, Schema.SObjectField> fieldMap =
-            CustomMetadataDescribeCache.getFieldMap(entityName);
+            MetadataTypeDescribeService.getFieldMap(entityName);
 
         if (fieldMap == null) {
             return result;

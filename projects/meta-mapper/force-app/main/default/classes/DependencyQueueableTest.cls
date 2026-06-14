@@ -240,6 +240,36 @@ private class DependencyQueueableTest {
             'Job must not remain in Initializing after the engine starts executing');
     }
 
+    @IsTest
+    static void execute_blankRootNodeId_resolvesMetadataId() {
+        // Step 7a fix: root node inserted with blank Metadata_Id__c must have its Tooling API ID
+        // resolved on the first Queueable execution. Without Step 7a the engine silently skips
+        // the root node and the scan never fetches any children.
+        Metadata_Scan_Job__c job = makeJob('Processing');
+        Metadata_Dependency__c root = new Metadata_Dependency__c(
+            Metadata_Scan_Job__c    = job.Id,
+            Metadata_Id__c          = '',
+            Metadata_Type__c        = 'CustomField',
+            Metadata_Name__c        = 'Account.MyField__c',
+            Unique_Component_Key__c = job.Id + ':',
+            Traversal_Complete__c   = false
+        );
+        insert root;
+        Test.setMock(HttpCalloutMock.class, new RootIdResolveMock());
+
+        Test.startTest();
+        System.enqueueJob(new DependencyQueueable(job.Id, false, null));
+        Test.stopTest();
+
+        Metadata_Dependency__c refreshed = [
+            SELECT Metadata_Id__c FROM Metadata_Dependency__c WHERE Id = :root.Id
+        ];
+        Assert.isNotNull(refreshed.Metadata_Id__c,
+            'Root node Metadata_Id__c must not be null after Step 7a resolution');
+        Assert.areNotEqual('', refreshed.Metadata_Id__c,
+            'Root node Metadata_Id__c must be populated after Step 7a resolution');
+    }
+
     // ---- mocks ----
 
     private class EmptyToolingApiMock implements HttpCalloutMock {
@@ -268,6 +298,23 @@ private class DependencyQueueableTest {
             HttpResponse res = new HttpResponse();
             res.setStatusCode(code);
             res.setBody(body);
+            return res;
+        }
+    }
+
+    // Returns a resolved root ID on the first callout (resolveRootId), then empty results
+    // on subsequent callouts (fetchDependencies). Used by execute_blankRootNodeId_resolvesMetadataId.
+    private class RootIdResolveMock implements HttpCalloutMock {
+        private Integer callCount = 0;
+        public HttpResponse respond(HttpRequest req) {
+            callCount++;
+            HttpResponse res = new HttpResponse();
+            res.setStatusCode(200);
+            if (callCount == 1) {
+                res.setBody('{"done":true,"totalSize":1,"records":[{"Id":"a001000000000099AAA"}]}');
+            } else {
+                res.setBody('{"done":true,"totalSize":0,"records":[]}');
+            }
             return res;
         }
     }

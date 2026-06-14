@@ -12,7 +12,7 @@
     <!-- Deep-link loading state -->
     <template lwc:if={isDeepLinkLoading}>
         <div class="slds-align_absolute-center full-height">
-            <lightning-spinner variant="brand" size="large" alternative-text="Loading scan..."></lightning-spinner>
+            <lightning-spinner variant="brand" size="large" aria-label="Loading scan result..." alternative-text="Loading scan..."></lightning-spinner>
         </div>
     </template>
 
@@ -95,7 +95,7 @@
                         <lightning-button label={tourPrevLabel} variant="neutral"
                             onclick={handleTourPrev}></lightning-button>
                     </template>
-                    <lightning-button label={tourNextLabel} variant="brand"
+                    <lightning-button label={tourNextLabel} aria-label={tourNextAriaLabel} variant="brand"
                         class="slds-var-m-left_x-small" onclick={handleTourNext}></lightning-button>
                 </footer>
             </div>
@@ -126,6 +126,7 @@
                 job-id={jobId}
                 job={job}
                 max-components-cap={maxComponentsCap}
+                batch-size-in-use={_batchSizeInUse}
                 onviewpartialresults={handleViewPartialResults}
                 onstartnew={handleStartNew}
                 onjobstatuspolled={handleJobStatusPolled}

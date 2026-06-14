@@ -217,6 +217,25 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         // Step 7 - fetch unprocessed batch
         List<Metadata_Dependency__c> batch = nodeSelector.nextUnprocessed(jobId, batchSize);
 
+        // Step 7a - resolve root node Tooling API ID on first execution
+        // The root node is inserted with Metadata_Id__c = '' at job creation. Without this
+        // step the Step 10 isNotBlank filter silently skips it, leaving the scan target with
+        // no children ever fetched from the Tooling API.
+        for (Metadata_Dependency__c node : batch) {
+            if (String.isBlank(node.Metadata_Id__c)) {
+                String resolvedId = new MetadataDependencyService().resolveRootId(
+                    job.Target_Metadata_Type__c,
+                    job.Target_API_Name__c,
+                    job.Target_Parent_Object__c
+                );
+                if (String.isNotBlank(resolvedId)) {
+                    node.Metadata_Id__c = resolvedId;
+                    update node;
+                }
+                break; // at most one root node per job
+            }
+        }
+
         // Step 8 - empty batch: hand off to serializer
         if (batch.isEmpty()) {
             // Re-verify cancel status before enqueuing the serializer. A concurrent cancel
@@ -398,13 +417,13 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                 }
 
                 String parentPath  = parent.Ancestor_Path__c;
-                String parentIndex = parent.Ancestor_Id_Tail_Index__c;
+                String parentIndex = parent.Ancestor_Bloom_Index__c;
 
                 // Ancestor path depth guard - capacity protection before building the path.
                 Integer parentPathLen = parentPath != null ? parentPath.length() : 0;
                 if ((parentPathLen + ANCESTOR_PATH_MARGIN) > ANCESTOR_PATH_MAX) {
                     child.Ancestor_Path__c              = parentPath;
-                    child.Ancestor_Id_Tail_Index__c  = parentIndex;
+                    child.Ancestor_Bloom_Index__c  = parentIndex;
                     // Is_Circular__c is intentionally NOT set: depth overflow is a traversal
                     // ceiling, not an ancestry cycle. Setting it would cause the UI to render
                     // these nodes with dashed "circular dependency" styling, which is incorrect.
@@ -432,20 +451,20 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     (String.isBlank(parentPath) ? '' : parentPath + '|')
                     + parent.Metadata_Id__c;
 
-                // Build child's Ancestor_Id_Tail_Index__c (append parent's 6-char suffix).
+                // Build child's Ancestor_Bloom_Index__c (append parent's 6-char suffix).
                 // right(6) uses the auto-number portion of the 18-char ID, which is unique
                 // per component - unlike left(6) which is the entity key prefix (identical for
                 // all same-type components in an org, making it useless as a bloom-filter key).
                 String parentPrefix = parent.Metadata_Id__c != null
                     ? parent.Metadata_Id__c.right(6) : '';
-                child.Ancestor_Id_Tail_Index__c =
+                child.Ancestor_Bloom_Index__c =
                     (String.isBlank(parentIndex) ? '' : parentIndex + '|')
                     + parentPrefix;
 
                 // Tier 2 - bloom-filter pre-screen then authoritative confirmation.
                 String childPrefix = childId.right(6);
-                Boolean possibleCycle = String.isNotBlank(child.Ancestor_Id_Tail_Index__c)
-                    && ('|' + child.Ancestor_Id_Tail_Index__c + '|')
+                Boolean possibleCycle = String.isNotBlank(child.Ancestor_Bloom_Index__c)
+                    && ('|' + child.Ancestor_Bloom_Index__c + '|')
                         .contains('|' + childPrefix + '|');
 
                 if (possibleCycle) {

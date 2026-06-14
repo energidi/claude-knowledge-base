@@ -56,6 +56,9 @@ export default class MetaMapperApp extends LightningElement {
     @track view = 'loading';
     @track jobId = null;
     @track job = null;
+    @track _peSuppressionActive = false;
+    @track _batchSizeInUse = null;
+    @track _maxComponentsCap = 0;
     @track isCheckingHealth = true;
     @track isDeepLinkLoading = false;
     @track preflightErrorCode = null;
@@ -106,11 +109,11 @@ export default class MetaMapperApp extends LightningElement {
         if (deepJobId) {
             this.isDeepLinkLoading = true;
             try {
-                const jobData = await getJobStatus({ jobId: deepJobId });
-                if (jobData) {
+                const wrapper = await getJobStatus({ jobId: deepJobId });
+                if (wrapper) {
                     this.jobId = deepJobId;
-                    this.job = jobData;
-                    const s = jobData.Status__c;
+                    this._storeJobResult(wrapper);
+                    const s = this.job && this.job.Status__c;
                     this.view = ['Initializing', 'Processing', 'Paused'].includes(s) ? 'progress' : 'results';
                 } else {
                     this.view = 'search';
@@ -144,23 +147,35 @@ export default class MetaMapperApp extends LightningElement {
     _handlePEEvent(payload) {
         const newStatus = payload.Status__c;
         if (['Completed', 'Failed', 'Cancelled'].includes(newStatus)) {
-            this._refreshJob();
+            // C3: transition to results view once the refreshed job record is available
+            this._refreshJob().then(() => { this.view = 'results'; });
         }
         if (['Initializing', 'Processing'].includes(newStatus) && this.view !== 'progress') {
             this.view = 'progress';
         }
         const prog = this.template.querySelector('c-meta-mapper-progress');
-        if (prog) prog.handleStatusEvent(payload);
+        // H1: include peSuppressionActive so the progress component can activate polling fallback
+        if (prog) prog.handleStatusEvent({ ...payload, peSuppressionActive: this._peSuppressionActive });
         const res = this.template.querySelector('c-meta-mapper-results');
         if (res) res.notifyStatusChange(this.job);
     }
 
     async _refreshJob() {
         try {
-            this.job = await getJobStatus({ jobId: this.jobId });
+            const wrapper = await getJobStatus({ jobId: this.jobId });
+            this._storeJobResult(wrapper);
         } catch {
             // ignore - job state will be corrected by next poll
         }
+    }
+
+    // C2: extract the raw job record and wrapper scalars from the JobStatusResult wrapper
+    _storeJobResult(wrapper) {
+        if (!wrapper) return;
+        this.job = wrapper.job || null;
+        this._peSuppressionActive = wrapper.peSuppressionActive === true;
+        this._batchSizeInUse = wrapper.batchSizeInUse != null ? wrapper.batchSizeInUse : null;
+        this._maxComponentsCap = wrapper.maxComponentsCap != null ? wrapper.maxComponentsCap : 0;
     }
 
     // --- Computed getters ---
@@ -168,7 +183,7 @@ export default class MetaMapperApp extends LightningElement {
     get isSearchView()      { return this.view === 'search'; }
     get isProgressView()    { return this.view === 'progress'; }
     get isResultsView()     { return this.view === 'results'; }
-    get maxComponentsCap()  { return (this.job && this.job.maxComponentsCap) || 0; }
+    get maxComponentsCap()  { return this._maxComponentsCap || 0; }
     get showApp() {
         return !this.isCheckingHealth && !this.isDeepLinkLoading && !this.showPreflightError;
     }
@@ -193,7 +208,12 @@ export default class MetaMapperApp extends LightningElement {
     get tourSlideTitle() { return (TOUR_SLIDES[this.tourSlide - 1] || {}).title || ''; }
     get tourSlideBody()  { return (TOUR_SLIDES[this.tourSlide - 1] || {}).body  || ''; }
     get showTourPrev()   { return this.tourSlide > 1; }
-    get tourNextLabel()  { return this.tourSlide === 3 ? 'Got it' : 'Next'; }
+    get tourNextLabel()      { return this.tourSlide === 3 ? 'Got it' : 'Next'; }
+    get tourNextAriaLabel()  {
+        return this.tourSlide === 3
+            ? 'Got it - close tour'
+            : `Next (slide ${this.tourSlide + 1} of 3)`;
+    }
     get tourPrevLabel()  { return `Previous (slide ${this.tourSlide - 1} of 3)`; }
 
     get toastClass() {
@@ -208,7 +228,7 @@ export default class MetaMapperApp extends LightningElement {
     }
 
     handleJobStatusPolled(event) {
-        this.job = event.detail;
+        this._storeJobResult(event.detail);
         const s = this.job && this.job.Status__c;
         if (s === 'Completed' || s === 'Failed' || s === 'Cancelled') {
             this.view = 'results';

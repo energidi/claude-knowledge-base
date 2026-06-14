@@ -126,8 +126,9 @@ export default class MetaMapperResults extends LightningElement {
             try {
                 const result = await getJobStatus({ jobId: this.jobId });
                 if (!this._isMounted) return;
-                if (result && result.Scan_Summary_Text__c) {
-                    this.summaryText = result.Scan_Summary_Text__c;
+                // getJobStatus returns a JobStatusResult wrapper; the raw record is result.job
+                if (result && result.job && result.job.Scan_Summary_Text__c) {
+                    this.summaryText = result.job.Scan_Summary_Text__c;
                     this.summaryLoading = false;
                 } else {
                     this._pollSummary();

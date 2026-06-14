@@ -15,6 +15,7 @@ export default class MetaMapperProgress extends LightningElement {
     @api jobId;
     @api job;
     @api maxComponentsCap;
+    @api batchSizeInUse;
 
     @track cancelDisabled = false;
     @track cancelLabel = 'Cancel';
@@ -94,7 +95,11 @@ export default class MetaMapperProgress extends LightningElement {
     }
 
     get resumeCurrentLabel() {
-        const size = (this.job && this.job.Batch_Size_Override__c) || 50;
+        // Prefer the server-computed batchSizeInUse (accounts for CMDT default vs override).
+        // Fall back to Batch_Size_Override__c on the raw record, then to 50.
+        const size = this.batchSizeInUse != null
+            ? this.batchSizeInUse
+            : ((this.job && this.job.Batch_Size_Override__c) || 50);
         return `Resume with current settings (batch size: ${size})`;
     }
 
@@ -159,14 +164,17 @@ export default class MetaMapperProgress extends LightningElement {
         try {
             const result = await getJobStatus({ jobId: this.jobId });
             if (!this._isMounted) return;
+            // Dispatch the full wrapper so metaMapperApp._storeJobResult() can extract
+            // the raw job record, peSuppressionActive, batchSizeInUse, and maxComponentsCap.
             this.dispatchEvent(new CustomEvent('jobstatuspolled', {
                 detail: result, bubbles: true, composed: true
             }));
-            if (result && result.Status__c === 'Cancelled' && this._cancelPhase === 'cancelling') {
+            const status = result && result.job && result.job.Status__c;
+            if (status === 'Cancelled' && this._cancelPhase === 'cancelling') {
                 this._cancelPhase = 'cancelled';
                 clearTimeout(this._cancelTimeoutTimer);
             }
-            if (result && !['Completed', 'Failed', 'Cancelled'].includes(result.Status__c)) {
+            if (status && !['Completed', 'Failed', 'Cancelled'].includes(status)) {
                 this._startPolling();
             } else {
                 this.showPollingNotice = false;

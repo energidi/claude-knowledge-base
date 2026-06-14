@@ -58,12 +58,12 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
     // multiple queries per entity when relevantFields exceeds this value.
     private static final Integer MAX_CMT_FIELDS_PER_QUERY = 20;
 
-    // Single source of truth for field-reference suffixes - defined in CustomMetadataDescribeCache
+    // Single source of truth for field-reference suffixes - defined in MetadataTypeDescribeService
     // so ApexClassDependencyHandler (class-reference suffixes) and any future handler share one definition.
     private static final Set<String> CMT_FIELD_SUFFIXES =
-        CustomMetadataDescribeCache.CMT_FIELD_REF_SUFFIXES;
+        MetadataTypeDescribeService.CMT_FIELD_REF_SUFFIXES;
 
-    // Describe data is served from CustomMetadataDescribeCache to avoid duplicate
+    // Describe data is served from MetadataTypeDescribeService to avoid duplicate
     // getGlobalDescribe() and EntityDefinition queries when both CustomFieldDependencyHandler
     // and ApexClassDependencyHandler run in the same Queueable execution.
 
@@ -460,7 +460,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
         // It supports both full qualified name ("Account.My_Field__c") and field-only ("My_Field__c")
         // lookups. Built once in findSupplemental to avoid a third redundant map allocation here.
 
-        List<EntityDefinition> cmtEntities = CustomMetadataDescribeCache.getCmtEntities();
+        List<EntityDefinition> cmtEntities = MetadataTypeDescribeService.getCmtEntities();
 
         // Warm the field map cache for ALL CMT entities in one batched describe call
         // (ceil(N/100) calls instead of N individual calls). Must run before the entity
@@ -469,8 +469,8 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
         for (EntityDefinition e : cmtEntities) {
             entityApiNames.add(e.QualifiedApiName);
         }
-        CustomMetadataDescribeCache.preloadFieldMaps(entityApiNames);
-        for (String descErr : CustomMetadataDescribeCache.drainDescribeErrors()) {
+        MetadataTypeDescribeService.preloadFieldMaps(entityApiNames);
+        for (String descErr : MetadataTypeDescribeService.drainDescribeErrors()) {
             result.addError(descErr);
         }
 
@@ -506,7 +506,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
                 continue;
             }
             Map<String, Schema.SObjectField> fieldMap =
-                CustomMetadataDescribeCache.getFieldMap(entityName);
+                MetadataTypeDescribeService.getFieldMap(entityName);
             if (fieldMap == null) {
                 continue;
             }
@@ -657,7 +657,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             }
         }
         // Drain any per-entity describe failures collected during the entity loop.
-        for (String descErr : CustomMetadataDescribeCache.drainDescribeErrors()) {
+        for (String descErr : MetadataTypeDescribeService.drainDescribeErrors()) {
             result.addError(descErr);
         }
         return result;
@@ -746,7 +746,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             ? parent.Metadata_Id__c
             : parent.Ancestor_Path__c + '|' + parent.Metadata_Id__c;
 
-        // H2: Ancestor_Id_Tail_Index__c - pipe-delimited 6-char tails (.right(6)) of each ancestor ID.
+        // H2: Ancestor_Bloom_Index__c - pipe-delimited 6-char tails (.right(6)) of each ancestor ID.
         // Uses the auto-number suffix (last 6 chars), which is unique per component, matching
         // DependencyQueueable's construction so the bloom-filter pre-screen works on supplemental nodes.
         String cycleIndex = '';
@@ -786,7 +786,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             Discovery_Source__c         = 'Supplemental',
             Supplemental_Confidence__c  = confidence,
             Ancestor_Path__c            = ancestorPath,
-            Ancestor_Id_Tail_Index__c      = cycleIndex,
+            Ancestor_Bloom_Index__c      = cycleIndex,
             Unique_Component_Key__c = uniquenessKey
         );
     }
