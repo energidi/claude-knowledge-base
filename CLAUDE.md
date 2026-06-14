@@ -2,6 +2,7 @@
 
 - Respond in English unless asked otherwise.
 - Use hyphens (-) only. Never em or en dashes.
+- Dates in code, docs, and output must use "Month DD, YYYY" format (e.g. June 14, 2026). Never numeric-only formats (2026-06-14, 06/14/2026, etc.).
 - No filler. No restating the prompt. No motivational text.
 - **Yes/No questions: answer "Yes" or "No" only. Stop. No follow-up unless asked.**
 - Prefer tables > bullets > prose. Diffs over full rewrites. Start short.
