@@ -738,6 +738,32 @@ All 4 review lenses run in parallel (Architecture, UX, Naming, Full Design). 7 f
 
 ---
 
+### Round 50 - sf-orchestrator Full Pass: 13 Findings Applied (June 15, 2026)
+
+All 4 review lenses run in parallel via sf-orchestrator with Phase 0 prior-round deduplication (47 prior rounds reviewed). 17 total findings; 2 SKIPPED (known limitations), 1 DROPPED (reversed rename). 13 CLAUDE.md spec fixes applied. No code or XML changes this round.
+
+| # | Status | Severity | Component / Area | Fix Applied |
+|---|---|---|---|---|
+| 1 | NEW | High | `metaMapperProgress` / polling error recovery | Added `_pollFailCount` counter: at 3 failures show warning banner "Progress updates are having trouble reaching the server. Still retrying..."; at 5 failures stop polling and show "Progress updates have stopped. [Retry polling]" non-dismissible error. Successful poll resets counter and removes banner. |
+| 2 | PARTIAL-FIX | High | `metaMapperGraph` / mobile double-tap | Added `touch-action: manipulation` CSS requirement on graph canvas wrapper. Documented JS timestamp-delta detection (two taps within 300ms = double-tap select). Resolves 300ms browser tap delay on single-tap pan. |
+| 3 | PARTIAL-FIX | Medium | `SupplementalScanResult` / `Scan_Diagnostic_Log__c` writes | Added cross-cutting rule: `appendErrorsSafe()` is the ONLY permitted write path to `Scan_Diagnostic_Log__c` across ALL classes. Direct string concatenation to the log field is forbidden. |
+| 5 | NEW | Medium | `metaMapperResults` / tablet landscape animation | Added opacity continuity spec: incoming animation reads `getComputedStyle(el).opacity` and starts from current value via `--anim-start-opacity` CSS custom property. Prevents flash on rapid queued/discarded animations. |
+| 6 | PARTIAL-FIX | Medium | `metaMapperTree` / "View path in Graph" | Added tabready sequencing: store nodeId as `pendingFocusNodeId`; activate Focus Path only after `tabready` event fires, not immediately on tab switch. Never apply focus while `isTransitioning === true`. |
+| 7 | NEW | Medium | `metaMapperResults` / tab transition reconciliation | Added reconciliation spec: after `isTransitioning` clears (via `tabready` or 3s timeout), issue a single `getJobStatus()` call to catch any PE events discarded during transition. One-time poll only; not the start of the polling loop. |
+| 8 | NEW | Medium | `metaMapperProgress` / `empApi.subscribe()` failure | Added failure recovery: wrap `subscribe()` in try/catch; on failure, silently start polling fallback; show Streaming API quota banner only when error string contains a recognizable quota-limit message. |
+| 9 | NEW | Medium | `metaMapperSearch` / complexity preview loading | Added loading state: show "Estimating scope..." + `lightning-spinner` size="x-small" inline while `getComponentCount()` is in flight (after 300ms debounce). Replace with bucket label on success; suppress slot on exception. |
+| 10 | REGRESSION | Medium | `metaMapperResults` / tablet landscape filter panel | Fixed: replaced `aria-busy="true"` with `inert` attribute + `aria-disabled="true"` during `isTransitioning`. `aria-busy` does not block interaction; `inert` removes element and descendants from the accessibility tree and blocks keyboard. |
+| 11 | PARTIAL-FIX | Medium | `Ancestor_Tail_Index__c` rename | Renamed to `Ancestor_Id_Shortkeys__c` across all 4 CLAUDE.md occurrences (data model table, field descriptions table, Known Limitations, DML multi-gen propagation rule). Code and XML rename deferred to next code round. |
+| 13 | NEW | Low | `DependencyNotificationService` / `enqueueDeployment()` | Added rate-limit guard: check `Disable_Platform_Events__c` on the cached CMDT record before calling `enqueueDeployment()`. If already `true`, skip the deployment call to avoid one unnecessary Metadata API deployment per Queueable execution after auto-suppress fires. |
+| 15 | NEW | Low | Cancel state machine copy | Fixed "Analysis cancelled. Partial results are available below." → "Analysis cancelled. Partial results are available." + "[View partial results]" link button calling `getNodeHierarchy()`. Fixed in both the cancel state machine table and the status labels table. |
+| 16 | NEW | Low | `metaMapperTree` / Tree right-click root-node label | Added: when right-clicked node is root (`Dependency_Depth__c = 0`), "Collapse subtree" label changes to "Collapse all children" - consistent with Graph View behavior. |
+| 17 | NEW | Low | `metaMapperGraph` / spanning tree notice ARIA | Fixed: removed redundant `aria-live="polite"` from `<div role="status">`. `role="status"` implies `aria-live="polite"` natively; explicit attribute causes double-announcement. |
+
+SKIPPED (not fixed): #4 heap ceiling known limitation (documented trade-off), #14 ring buffer FOR UPDATE race advisory.
+DROPPED: #12 (Stall_Pause_Threshold__c rename - Round 46 already renamed Empty_Cycle_Pause_Threshold__c → Stall_Pause_Threshold__c deliberately).
+
+---
+
 ### Round 49 - sf-review Full Pass: 11 Findings Applied
 
 All 4 review lenses run in parallel (Architecture, UX, Naming, Full Design). 11 findings applied across Apex classes, LWC components, field XML, and CLAUDE.md spec.
