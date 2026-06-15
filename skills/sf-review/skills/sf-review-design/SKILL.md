@@ -72,7 +72,7 @@ If the same underlying issue is flagged by more than one lens (e.g. a field name
 ```
 FULL DESIGN REVIEW
 Source: <file or project>
-Date: <today>
+Date: <today as "Month DD, YYYY", e.g. June 14, 2026>
 
 OVERALL VERDICT: GO / NO-GO
 
