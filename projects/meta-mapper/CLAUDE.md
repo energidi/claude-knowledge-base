@@ -228,7 +228,7 @@ if (activeJobRecords >= maxConcurrent) {
 
 ### Live Progress (Platform Events)
 
-`DependencyQueueable` publishes **exactly one** `Dependency_Scan_Status__e` event per Queueable execution - after the final DML commit of that execution, not after each inner batch loop iteration. The `metaMapperProgress` LWC subscribes via `lightning/empApi` on mount and unsubscribes on destroy - no polling. Do not publish events inside a try-catch that swallows the exception.
+`DependencyQueueable` publishes **exactly one** `Dependency_Scan_Status__e` event per Queueable execution - after the final DML commit of that execution, not after each inner batch loop iteration. `metaMapperApp` owns the `empApi` subscription and distributes payloads to `metaMapperProgress` via `scanstatuschange` custom events - `metaMapperProgress` does NOT subscribe to `empApi` directly. Do not publish events inside a try-catch that swallows the exception.
 
 > **Why one event per execution?** Salesforce enforces a daily org-wide Platform Event delivery limit (50,000 for Standard Volume). At 50 nodes per Queueable execution, a 10,000-node job generates ~200 executions = ~200 events - well within limits. Publishing per inner batch loop (e.g., once per IN-chunk callout) would multiply this by 5-10x and could exhaust the org's daily allocation during concurrent admin scans.
 
@@ -765,7 +765,7 @@ When surfacing `MetaMapper_Settings__mdt` fields in any admin UI, use human-read
 | `Max_Stored_Jobs__c` | "Keep last N completed scans" | "How many completed scan results to keep as files in your org. When the limit is reached, the oldest result is deleted automatically. Completed scans use File Storage (not Data Storage). Default 5." |
 | `Max_Components__c` | "Maximum components per scan" | "The scan pauses automatically when this many components are found. Default 5,000. Do not raise above 5,000 without testing - the result serializer may hit memory limits on large scans with deeply nested metadata. Set to 0 to disable (not recommended)." |
 | `Min_Free_Storage_MB__c` | "Minimum free storage required (MB)" | "MetaMapper checks that your org has at least this much free data storage before starting a new scan. Increase this value if you see storage-related errors during active scans. Default 50MB." |
-| `Admin_Settings_Configured__c` | "Admin Settings Configured" | Not surfaced in Settings UI - set automatically by the save action. |
+| `Custom_Settings_Saved__c` | "Custom Settings Saved" | Not surfaced in Settings UI - set automatically by the save action. |
 
 **Admin-only controls (Settings UI):**
 - "Reset First-Time Tour" button: clears the `metaMapper_tourSeen_v1` localStorage flag for the current browser session. Useful for admins demoing the tour to new team members. Implemented as a client-side JS action - no Apex required.
@@ -901,7 +901,7 @@ All tunable runtime parameters are stored in `MetaMapper_Settings__mdt` Custom M
 | `Max_Components__c` | Number | 5000 | Hard cap on `Components_Analyzed__c` per job. When reached, the engine pauses the job and surfaces a warning. Default 5,000 (safe for Developer Sandbox data storage during active scan). **Serializer ceiling:** `ScanResultFileQueueable` serializes all nodes in a single heap-bound JSON operation. At ~2KB per node, the 12MB async heap supports approximately 5,000-6,000 nodes. Raising `Max_Components__c` beyond this ceiling without redesigning the serializer for chunked streaming will cause the "results too large" failure path. Set to 0 to disable the cap (not recommended without a chunked serializer). |
 | `Min_Free_Storage_MB__c` | Number | 50 | Minimum free data storage in MB required before `createJob()` accepts a new scan. Checked via `OrgLimits` on submission. Applies to the transient peak - during an active scan nodes live in Data Storage before serialization to File Storage on Completed. Default 50MB ensures sufficient headroom during the scan peak. |
 | `Max_Stored_Jobs__c` | Number | 5 | Maximum number of completed scan results retained org-wide as Salesforce Files. When a new job completes and this limit is reached, the oldest completed job (and its result file) is deleted automatically. This bounds File Storage consumption regardless of how many scans are run. Default 5 (keeps ~5-15MB of file storage). Raise to 10-20 for production orgs or teams needing longer result history. |
-| `Admin_Settings_Configured__c` | Checkbox | false | Set to true when an admin explicitly saves the Settings UI. Used by `createJob()` to decide whether to apply sandbox/production default profiles. When false (first-install state), profile overrides apply at runtime without mutating the CMDT record. |
+| `Custom_Settings_Saved__c` | Checkbox | false | Set to true when an admin explicitly saves the Settings UI. Used by `createJob()` to decide whether to apply sandbox/production default profiles. When false (first-install state), profile overrides apply at runtime without mutating the CMDT record. |
 
 > Hard-coding batch size and DML reserve is inappropriate for an enterprise tool. A highly-connected org may need `Flow_Scan_Batch_Size__c = 15` and `Dml_Safety_Margin_Rows__c = 1500`. Admins tune without a code deploy.
 

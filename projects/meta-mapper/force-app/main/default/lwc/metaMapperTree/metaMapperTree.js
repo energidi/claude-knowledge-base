@@ -59,10 +59,6 @@ export default class MetaMapperTree extends LightningElement {
             // sessionStorage unavailable
         }
         this._rebuild();
-        if (!this._flatRows || this._flatRows.length === 0) {
-            this.dispatchEvent(new CustomEvent('tabready'));
-            this._hasRendered = true;
-        }
     }
 
     disconnectedCallback() {
@@ -71,7 +67,11 @@ export default class MetaMapperTree extends LightningElement {
     }
 
     renderedCallback() {
-        if (!this._hasRendered && this._flatRows && this._flatRows.length > 0) {
+        // Fire tabready after the first render with settled data (populated or empty).
+        // Guarded by _hasRendered so it fires exactly once per mount, after nodes prop
+        // has been set by the parent - not on the initial connectedCallback firing when
+        // props are not yet available.
+        if (!this._hasRendered) {
             this._hasRendered = true;
             this.dispatchEvent(new CustomEvent('tabready'));
         }

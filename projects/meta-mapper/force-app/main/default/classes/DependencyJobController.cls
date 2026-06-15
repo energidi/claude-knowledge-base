@@ -109,12 +109,12 @@ public with sharing class DependencyJobController {
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
 
         // ---- Sandbox detection: apply conservative first-install defaults when no admin
-        //      has explicitly saved settings (Admin_Settings_Configured__c = false). ----
+        //      has explicitly saved settings (Custom_Settings_Saved__c = false). ----
         // Developer Sandbox has a 200MB hard Data Storage limit. Concurrent active scans
         // can simultaneously peak storage; one at a time keeps the peak bounded.
         // These overrides apply only in memory for this job submission - CMDT is not mutated.
         Boolean sandboxOverrideActive = false;
-        if (settings.Admin_Settings_Configured__c != true) {
+        if (settings.Custom_Settings_Saved__c != true) {
             try {
                 if (isSandboxCached == null) {
                     Organization org = [SELECT IsSandbox FROM Organization LIMIT 1];
@@ -130,7 +130,7 @@ public with sharing class DependencyJobController {
         }
 
         // ---- Concurrency guard (two-check TOCTOU narrowing) ----
-        DependencyJobSelector jobSelector = new DependencyJobSelector();
+        MetadataScanJobSelector jobSelector = new MetadataScanJobSelector();
         // Sandbox: limit to 1 concurrent job to bound peak Data Storage.
         Integer maxConcurrent = sandboxOverrideActive ? 1
             : (settings.Max_Concurrent_Jobs__c != null ? (Integer) settings.Max_Concurrent_Jobs__c : 2);
@@ -287,7 +287,7 @@ public with sharing class DependencyJobController {
      */
     @AuraEnabled(cacheable=false)
     public static JobStatusResult getJobStatus(Id jobId) {
-        Metadata_Scan_Job__c statusJob = new DependencyJobSelector().getByIdForStatusView(jobId);
+        Metadata_Scan_Job__c statusJob = new MetadataScanJobSelector().getByIdForStatusView(jobId);
         if (statusJob == null) {
             throw new DependencyJobException('Scan job not found: ' + jobId);
         }
@@ -320,7 +320,7 @@ public with sharing class DependencyJobController {
      */
     @AuraEnabled(cacheable=false)
     public static List<Metadata_Dependency__c> getNodeHierarchy(Id jobId) {
-        Metadata_Scan_Job__c job = new DependencyJobSelector().getByIdForStatusView(jobId);
+        Metadata_Scan_Job__c job = new MetadataScanJobSelector().getByIdForStatusView(jobId);
         if (job == null) {
             throw new DependencyJobException('Scan job not found: ' + jobId);
         }
@@ -362,7 +362,7 @@ public with sharing class DependencyJobController {
         // Append a diagnostic notice so admins have visibility without requiring debug logs.
         if (nodes.size() == MetadataDependencySelector.MAX_NODE_QUERY_LIMIT) {
             try {
-                Metadata_Scan_Job__c logTruncJob = new DependencyJobSelector().getByIdForLogAppend(jobId);
+                Metadata_Scan_Job__c logTruncJob = new MetadataScanJobSelector().getByIdForLogAppend(jobId);
                 if (logTruncJob != null) {
                     String notice = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] '
                         + 'WARNING: result set hit the query cap of '
@@ -466,7 +466,7 @@ public with sharing class DependencyJobController {
      */
     @AuraEnabled
     public static void resumeJob(Id jobId, Integer overrideBatchSize) {
-        Metadata_Scan_Job__c job = new DependencyJobSelector().getByIdForResume(jobId);
+        Metadata_Scan_Job__c job = new MetadataScanJobSelector().getByIdForResume(jobId);
         if (job == null) {
             throw new DependencyJobException('Scan job not found: ' + jobId);
         }

@@ -28,18 +28,18 @@
         <template lwc:if={isPaused}>
             <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-bottom_small" role="alert">
                 <p>Analysis paused — encountered a complex component. You can resume at a slower speed or with current settings.</p>
-                <div class="slds-var-m-top_x-small">
+                <div class="slds-var-m-top_x-small slds-grid slds-grid_vertical-align-center">
                     <lightning-button label="Resume at slower speed" variant="neutral"
                         disabled={resumeLoading} onclick={handleResumeSlower}></lightning-button>
+                    <template lwc:if={resumeSlowerActive}>
+                        <lightning-spinner size="small" alternative-text="Resuming..." class="slds-var-m-left_x-small"></lightning-spinner>
+                    </template>
                     <lightning-button label={resumeCurrentLabel} variant="neutral" class="slds-var-m-left_x-small"
                         disabled={resumeLoading} onclick={handleResumeCurrent}></lightning-button>
-                    <template lwc:if={resumeLoading}>
-                        <lightning-spinner size="small" alternative-text="Resuming..."></lightning-spinner>
+                    <template lwc:if={resumeCurrentActive}>
+                        <lightning-spinner size="small" alternative-text="Resuming..." class="slds-var-m-left_x-small"></lightning-spinner>
                     </template>
                 </div>
-                <template lwc:if={resumeError}>
-                    <p class="slds-text-color_error slds-var-m-top_x-small">{resumeError}</p>
-                </template>
             </div>
         </template>
 
@@ -77,7 +77,7 @@
         <!-- Cancel button -->
         <template lwc:if={showCancelButton}>
             <div class="slds-var-m-top_medium">
-                <lightning-button variant="destructive-text" label={cancelLabel}
+                <lightning-button class="cancel-btn" variant="destructive-text" label={cancelLabel}
                     disabled={cancelDisabled} onclick={handleCancelClick}>
                 </lightning-button>
                 <template lwc:if={showCancellingSubtext}>

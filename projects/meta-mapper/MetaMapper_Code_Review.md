@@ -701,6 +701,27 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 
 ---
 
+### Round 51 - sf-orchestrator Full Pass: 12 Findings Applied
+
+All 4 review lenses run in parallel (Architecture, UX, Naming, Full Design). 12 findings applied across LWC components, Apex classes, field XML, and CLAUDE.md spec.
+
+| # | Lens | Component | Severity | Fix |
+|---|---|---|---|---|
+| 1 | Arch + UX | `metaMapperProgress.js` `_resume()` | High | `_resume()` sent `Batch_Size_Override__c \|\| 50` to `resumeJob()` instead of `batchSizeInUse`. Replaced hardcoded fallback with `_effectiveBatchSize()` helper that prefers the server-computed `batchSizeInUse` prop. |
+| 2 | UX | `metaMapperProgress.js` `showProgressBar` | High | Progress bar returned false when `isPaused`, causing it to disappear instead of freezing. Changed getter to include `\|\| this.isPaused` so the bar stays visible and frozen during Paused state. |
+| 3 | UX | `metaMapperProgress.js` `_resume()` finally block | High | `resumeLoading = false` in `finally` re-enabled buttons immediately on success, before the next poll confirmed status left Paused. Removed from `finally`; loading now cleared inside `_poll()` when status leaves Paused, or in the `catch` block on error. |
+| 4 | UX | `metaMapperProgress.js` `showCancelButton` | Medium | Cancel button remained visible when `isPaused`. Added `&& !this.isPaused` to the getter. |
+| 5 | UX | `metaMapperProgress.js` `handleKeepRunning()` | Medium | No focus return to Cancel button after closing the confirmation modal. Added `setTimeout` focus call targeting `.cancel-btn` class. |
+| 6 | UX | `metaMapperProgress.html` resume spinner | Medium | Single spinner appeared below both resume buttons, not inline next to the clicked button. Replaced with two separate spinners conditioned on `resumeSlowerActive` and `resumeCurrentActive` respectively. Added `resumeSlowerActive` tracking property and `resumeCurrentActive` getter. |
+| 7 | UX | `metaMapperProgress.js` resume timeout | Medium | 30s resume timeout was set once from RPC-success, not reset on each Paused-confirming poll. Added reset logic inside `_poll()` when `resumeLoading && status === 'Paused'`. |
+| 8 | UX | `metaMapperProgress.js` / `.html` resume error | Medium | Resume error written to `resumeError` (inline `<p>`) instead of dispatching `showerror` event (toast) as spec requires. Removed `@track resumeError` and HTML `<p>` block; catch now dispatches `showerror` event. |
+| 9 | Arch | `CLAUDE.md` Live Progress section | Medium | Description stated `metaMapperProgress` subscribes to `empApi` directly - contradicted the correct implementation. Updated to accurately describe the `scanstatuschange` custom-event distribution pattern via `metaMapperApp`. |
+| 10 | Naming | `DependencyJobSelector` | Low | Selector for `Metadata_Scan_Job__c` named with inconsistent prefix. Renamed to `MetadataScanJobSelector`. Created new cls + cls-meta.xml; deleted old files; updated all 6 referencing classes (`DependencyQueueable`, `DependencyJobController`, `DependencyNotificationService`, `ScanResultFileQueueable`, `ScanSummaryQueueable`, `DependencyCleanupBatch`). |
+| 11 | Naming | `Admin_Settings_Configured__c` | Low | Ambiguous CMDT field name - "configured" not meaningful without context. Renamed to `Custom_Settings_Saved__c`. Created new field XML; deleted old field XML; updated CMDT record XML, `DependencyJobController.cls`, and CLAUDE.md (data model table + settings UI table + label). |
+| 12 | Arch | `metaMapperTree.js` `connectedCallback` | Low | `tabready` fired in `connectedCallback` before `nodes` prop arrived, conflating loading state with genuine zero-result state. Removed the `connectedCallback` dispatch; `renderedCallback` now fires `tabready` on the first render regardless of `_flatRows` length. |
+
+---
+
 ### Round 50 - sf-orchestrator Full Pass: 7 Findings Applied
 
 All 4 review lenses run in parallel (Architecture, UX, Naming, Full Design). 7 findings applied: 4 orphaned field XML deletions, 1 step-ordering fix in `DependencyQueueable`, 1 LWC tour checkbox, 1 label rename.

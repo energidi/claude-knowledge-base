@@ -26,7 +26,7 @@ export default class MetaMapperProgress extends LightningElement {
     @track showTimeoutBanner = false;
     @track longRunningBannerDismissed = false;
     @track resumeLoading = false;
-    @track resumeError = '';
+    @track resumeSlowerActive = false;
     @track showPollingNotice = false;
     @track pollingNoticeText = '';
 
@@ -68,13 +68,13 @@ export default class MetaMapperProgress extends LightningElement {
 
     get showStatusLabel() { return !this.isPaused && !this.showTimeoutBanner; }
     get showCancelButton() {
-        return !this.isTerminal && this._cancelPhase !== 'cancelled' && !this.showTimeoutBanner;
+        return !this.isTerminal && !this.isPaused && this._cancelPhase !== 'cancelled' && !this.showTimeoutBanner;
     }
 
     get showProgressBar() {
         if (!this.job) return false;
         const cap = this.maxComponentsCap || 0;
-        return cap > 0 && this.isProcessing;
+        return cap > 0 && (this.isProcessing || this.isPaused);
     }
 
     get showProgressSpinner() { return !this.showProgressBar && this.isProcessing; }
@@ -95,12 +95,16 @@ export default class MetaMapperProgress extends LightningElement {
     }
 
     get resumeCurrentLabel() {
-        // Prefer the server-computed batchSizeInUse (accounts for CMDT default vs override).
-        // Fall back to Batch_Size_Override__c on the raw record, then to 50.
-        const size = this.batchSizeInUse != null
-            ? this.batchSizeInUse
-            : ((this.job && this.job.Batch_Size_Override__c) || 50);
+        const size = this._effectiveBatchSize();
         return `Resume with current settings (batch size: ${size})`;
+    }
+
+    get resumeCurrentActive() { return this.resumeLoading && !this.resumeSlowerActive; }
+
+    _effectiveBatchSize() {
+        if (this.batchSizeInUse != null) return this.batchSizeInUse;
+        if (this.job && this.job.Batch_Size_Override__c) return this.job.Batch_Size_Override__c;
+        return 50;
     }
 
     get statusLabel() {
@@ -174,6 +178,27 @@ export default class MetaMapperProgress extends LightningElement {
                 this._cancelPhase = 'cancelled';
                 clearTimeout(this._cancelTimeoutTimer);
             }
+            // Clear resume loading state once status leaves Paused.
+            if (this.resumeLoading && status !== 'Paused') {
+                this.resumeLoading = false;
+                this.resumeSlowerActive = false;
+                clearTimeout(this._resumeTimeoutTimer);
+            }
+            // Reset resume timeout on each poll that confirms job is still Paused
+            // (resume in-flight but Queueable hasn't woken yet).
+            if (this.resumeLoading && status === 'Paused') {
+                clearTimeout(this._resumeTimeoutTimer);
+                // eslint-disable-next-line @lwc/lwc/no-async-operation
+                this._resumeTimeoutTimer = setTimeout(() => {
+                    if (!this._isMounted || this.status !== 'Paused') return;
+                    this.resumeLoading = false;
+                    this.resumeSlowerActive = false;
+                    this.dispatchEvent(new CustomEvent('showerror', {
+                        detail: { message: 'Resume is taking longer than expected. The scan will continue when the current step finishes. Try resuming again if this persists.' },
+                        bubbles: true, composed: true
+                    }));
+                }, RESUME_TIMEOUT);
+            }
             if (status && !['Completed', 'Failed', 'Cancelled'].includes(status)) {
                 this._startPolling();
             } else {
@@ -197,6 +222,12 @@ export default class MetaMapperProgress extends LightningElement {
 
     handleKeepRunning() {
         this.showCancelModal = false;
+        // eslint-disable-next-line @lwc/lwc/no-async-operation
+        setTimeout(() => {
+            const btn = this.template.querySelector('lightning-button[aria-label="Cancel"]') ||
+                        this.template.querySelector('.cancel-btn');
+            if (btn) btn.focus();
+        }, 0);
     }
 
     async handleConfirmCancel() {
@@ -239,23 +270,31 @@ export default class MetaMapperProgress extends LightningElement {
 
     async _resume(slower) {
         this.resumeLoading = true;
-        this.resumeError = '';
-        const currentBatchSize = (this.job && this.job.Batch_Size_Override__c) || 50;
+        this.resumeSlowerActive = slower;
+        const currentBatchSize = this._effectiveBatchSize();
         const overrideBatchSize = slower ? Math.max(1, Math.floor(currentBatchSize / 2)) : currentBatchSize;
         try {
             await resumeJob({ jobId: this.jobId, overrideBatchSize });
             this._startPolling();
+            // Initial timeout; _poll() resets this on each Paused-confirming poll.
             // eslint-disable-next-line @lwc/lwc/no-async-operation
             this._resumeTimeoutTimer = setTimeout(() => {
                 if (!this._isMounted || this.status !== 'Paused') return;
                 this.resumeLoading = false;
-                this.resumeError = 'Resume is taking longer than expected. The scan will continue when the current step finishes. Try resuming again if this persists.';
+                this.resumeSlowerActive = false;
+                this.dispatchEvent(new CustomEvent('showerror', {
+                    detail: { message: 'Resume is taking longer than expected. The scan will continue when the current step finishes. Try resuming again if this persists.' },
+                    bubbles: true, composed: true
+                }));
             }, RESUME_TIMEOUT);
         } catch (e) {
-            const msg = (e.body && e.body.message) ? e.body.message : 'Could not resume the scan.';
-            this.resumeError = `Could not resume the scan. ${msg}`;
-        } finally {
             this.resumeLoading = false;
+            this.resumeSlowerActive = false;
+            const msg = (e.body && e.body.message) ? e.body.message : 'Could not resume the scan.';
+            this.dispatchEvent(new CustomEvent('showerror', {
+                detail: { message: `Could not resume the scan. ${msg}` },
+                bubbles: true, composed: true
+            }));
         }
     }
 

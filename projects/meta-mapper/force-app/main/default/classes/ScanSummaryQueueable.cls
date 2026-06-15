@@ -23,7 +23,7 @@ public without sharing class ScanSummaryQueueable implements Queueable {
         // without a second SOQL query when the failure occurred after the SELECT.
         Metadata_Scan_Job__c job = null;
         try {
-            job = new DependencyJobSelector().getByIdForSummary(jobId);
+            job = new MetadataScanJobSelector().getByIdForSummary(jobId);
             if (job == null) { return; }
 
             // Required guard (per CLAUDE.md): if ScanResultFileQueueable rolled back
@@ -60,7 +60,7 @@ public without sharing class ScanSummaryQueueable implements Queueable {
                 } else {
                     // Initial SELECT failed; re-query is required to write the warning.
                     Metadata_Scan_Job__c errJob =
-                        new DependencyJobSelector().getByIdForLogAppend(jobId);
+                        new MetadataScanJobSelector().getByIdForLogAppend(jobId);
                     if (errJob != null) {
                         String existing = errJob.Scan_Diagnostic_Log__c;
                         errJob.Scan_Diagnostic_Log__c = String.isBlank(existing)

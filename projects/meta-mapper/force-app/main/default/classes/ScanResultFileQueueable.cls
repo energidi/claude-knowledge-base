@@ -14,7 +14,7 @@
  * 8. Updates job: Result_File_Id__c, Component_Type_Counts__c, Status=Completed, Status_Closed_At__c
  * [Savepoint released here - post-completion tasks below never roll back the Completed transition]
  * 9. Launches MetadataDependencyDeletionBatch(NODES_ONLY) to delete node records
- * 10. Enforces ring buffer via DependencyJobSelector.getCompletedJobsOldestFirst()
+ * 10. Enforces ring buffer via MetadataScanJobSelector.getCompletedJobsOldestFirst()
  * 11. Enqueues ScanSummaryQueueable
  *
  * Failure is terminal: on exception the job transitions to Failed.
@@ -93,7 +93,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
         // instances before any heap-intensive or DML work begins. The second instance that
         // receives the lock will see Status__c != 'Processing' (set by the first) and exit.
         Metadata_Scan_Job__c lockedJob =
-            new DependencyJobSelector().getByIdForLock(jobId);
+            new MetadataScanJobSelector().getByIdForLock(jobId);
         List<Metadata_Scan_Job__c> jobRows = lockedJob != null
             ? new List<Metadata_Scan_Job__c>{ lockedJob }
             : new List<Metadata_Scan_Job__c>();
@@ -335,7 +335,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
             // non-null Scan_Summary_Text__c that will never arrive.
             try {
                 Metadata_Scan_Job__c fallbackJob =
-                    new DependencyJobSelector().getByIdForSummary(jobId);
+                    new MetadataScanJobSelector().getByIdForSummary(jobId);
                 if (fallbackJob != null) {
                     Integer total = fallbackJob.Components_Analyzed__c != null
                         ? ((Decimal) fallbackJob.Components_Analyzed__c).intValue() : 0;
@@ -371,7 +371,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
         // Completed jobs have accumulated, COUNT() can throw QueryException at >50,000 rows
         // (same risk that was fixed in MetadataDependencyDeletionBatch.finish() in Round 20).
         // Fetch enough candidates to detect excess and identify which jobs to prune.
-        DependencyJobSelector jobSelector = new DependencyJobSelector();
+        MetadataScanJobSelector jobSelector = new MetadataScanJobSelector();
         List<Metadata_Scan_Job__c> candidates =
             jobSelector.getCompletedJobsOldestFirst(maxStored + 10);
         if (candidates.size() <= maxStored) {
@@ -544,7 +544,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
     private void appendWarningToJob(String warning) {
         try {
             Metadata_Scan_Job__c job =
-                new DependencyJobSelector().getByIdForLogAppend(jobId);
+                new MetadataScanJobSelector().getByIdForLogAppend(jobId);
             if (job != null) {
                 String existing = job.Scan_Diagnostic_Log__c;
                 job.Scan_Diagnostic_Log__c = String.isBlank(existing)
@@ -582,7 +582,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
             // instance could overwrite a 'Completed' status set by the first instance's
             // main path between the SELECT and the UPDATE.
             Metadata_Scan_Job__c lockedFailJob =
-                new DependencyJobSelector().getForFailedUpdateLocked(jobId);
+                new MetadataScanJobSelector().getForFailedUpdateLocked(jobId);
             List<Metadata_Scan_Job__c> jobs = lockedFailJob != null
                 ? new List<Metadata_Scan_Job__c>{ lockedFailJob }
                 : new List<Metadata_Scan_Job__c>();

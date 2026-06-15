@@ -42,7 +42,7 @@ public without sharing class DependencyCleanupBatch
         // immediately, preventing any post-failure diagnostics.
         retentionHours = Math.max(retentionHours, 1);
         DateTime threshold = DateTime.now().addHours(-retentionHours);
-        return new DependencyJobSelector().getClosedJobsBefore(threshold);
+        return new MetadataScanJobSelector().getClosedJobsBefore(threshold);
     }
 
     public void execute(Database.BatchableContext ctx, List<SObject> scope) {
@@ -108,7 +108,7 @@ public without sharing class DependencyCleanupBatch
     private void appendNoticeToJob(Id jobId, String notice) {
         try {
             Metadata_Scan_Job__c job =
-                new DependencyJobSelector().getByIdForLogAppend(jobId);
+                new MetadataScanJobSelector().getByIdForLogAppend(jobId);
             if (job != null) {
                 String existing = job.Scan_Diagnostic_Log__c;
                 job.Scan_Diagnostic_Log__c = String.isBlank(existing)

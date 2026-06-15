@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Custom_Settings_Saved__c</fullName>
+    <description>Set to true when an admin explicitly saves the MetaMapper Settings UI. When false (default, first-install state), createJob() applies conservative sandbox or production default profiles at runtime without mutating this record. Once true, the admin's explicit values take precedence over all runtime profile overrides. Do not edit manually.</description>
+    <defaultValue>false</defaultValue>
+    <label>Custom Settings Saved</label>
+    <type>Checkbox</type>
+</CustomField>

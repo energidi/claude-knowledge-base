@@ -214,7 +214,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
 
     private void appendNoticeToJob(String jobId, String notice) {
         try {
-            Metadata_Scan_Job__c job = new DependencyJobSelector().getByIdForLogAppend(jobId);
+            Metadata_Scan_Job__c job = new MetadataScanJobSelector().getByIdForLogAppend(jobId);
             if (job != null) {
                 String existing = job.Scan_Diagnostic_Log__c;
                 job.Scan_Diagnostic_Log__c = String.isBlank(existing)

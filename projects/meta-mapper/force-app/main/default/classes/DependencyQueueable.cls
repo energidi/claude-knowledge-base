@@ -137,7 +137,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
     }
 
     private void runEngine() {
-        DependencyJobSelector jobSelector  = new DependencyJobSelector();
+        MetadataScanJobSelector jobSelector  = new MetadataScanJobSelector();
         MetadataDependencySelector nodeSelector = new MetadataDependencySelector();
 
         // Step 1 - load job
@@ -950,7 +950,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         Boolean dmlSucceeded = false;
         Decimal analyzedCount = 0;
         try {
-            Metadata_Scan_Job__c fetched = new DependencyJobSelector().getForFailedUpdateLocked(jobId);
+            Metadata_Scan_Job__c fetched = new MetadataScanJobSelector().getForFailedUpdateLocked(jobId);
             List<Metadata_Scan_Job__c> jobs = fetched != null
                 ? new List<Metadata_Scan_Job__c>{ fetched }
                 : new List<Metadata_Scan_Job__c>();
