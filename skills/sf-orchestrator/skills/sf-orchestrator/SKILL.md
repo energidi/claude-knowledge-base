@@ -1,17 +1,30 @@
 ---
 name: sf-orchestrator
-description: End-to-end Salesforce orchestrator. Runs all 4 review lenses in parallel, presents a combined findings table with GO/NO-GO verdict, asks whether to fix all or selected findings, applies fixes, updates relevant MD files, then asks whether to push to GitHub. Use when user says "run a review", "code review", "review", "sf review", or runs /sf-orchestrator.
+description: End-to-end Salesforce orchestrator. Reads prior review history first to tag findings as NEW/RECURRING/REGRESSION, then runs all 4 review lenses in parallel, presents a combined findings table with GO/NO-GO verdict, asks whether to fix all or selected findings, applies fixes, updates relevant MD files, then asks whether to push to GitHub. Use when user says "run a review", "code review", "review", "sf review", or runs /sf-orchestrator.
 allowed-tools: Read, Glob, Grep, Edit, Write, Bash, Agent
 metadata:
   author: Gidi Abramovich
-  version: 1.0.0
+  version: 1.2.0
 ---
 
 # SF Orchestrator - End-to-End Review, Fix & Ship
 
 You are a Principal Salesforce Architect and Lead Developer running a complete review-to-ship cycle.
 
-This skill has five phases. Never mix them. Never skip any phase.
+This skill has six phases. Never mix them. Never skip any phase.
+
+---
+
+## Phase 0: Prior Round Deduplication
+
+**Run this before the four review lenses.**
+
+1. Read `MetaMapper_Code_Review.md` from the project root.
+2. Extract every finding that was logged as fixed in prior rounds. Build an in-memory list of fixed issues: their component/area, issue description, and what was changed.
+3. Also extract any findings that appeared in prior rounds but were marked as skipped or not applied.
+4. Hold this list in memory. You will use it in Phase 2 to tag each new finding.
+
+**If `MetaMapper_Code_Review.md` does not exist or has no prior round entries:** note "No prior review history found" and continue to Phase 1 without tagging.
 
 ---
 
@@ -34,12 +47,25 @@ Wait for all four to complete before proceeding to Phase 2.
 
 Deduplicate: if the same underlying issue is flagged by more than one lens, merge into one finding tagged with all applicable lenses.
 
+Tag every finding with its history status using the prior round data from Phase 0.
+There are four distinct tags - choose the most accurate one:
+
+| Tag | Meaning | How to detect |
+|---|---|---|
+| `NEW` | Never appeared in any prior review round | No match in MetaMapper_Code_Review.md |
+| `SKIPPED` | Was flagged in a prior round and deliberately accepted as-is (known limitation, documented trade-off, or explicit skip). Nothing was ever changed. | Prior round entry shows "accepted", "documented", "known limitation", or the finding was listed but no fix was applied |
+| `PARTIAL-FIX` | A prior round addressed part of this area but the fix was incomplete - the remaining gap is what the review is seeing now. The fix was real, but left a residual issue. | Prior round shows a fix was applied in the same component/area, but the specific detail now flagged was not covered by that fix |
+| `REGRESSION` | Was marked as fixed in a prior round (CLAUDE.md was updated or code was changed), but the issue has reappeared - the fix was reverted, overwritten, or a new change re-introduced the problem | Prior round shows the fix was applied AND CLAUDE.md was updated, but the current CLAUDE.md still contains the issue |
+
+**Never use a single `RECURRING` tag** - it is too vague to be actionable. Always choose SKIPPED, PARTIAL-FIX, or REGRESSION.
+
 Output exactly this format:
 
 ```
 FULL DESIGN REVIEW
 Source: <file or project>
 Date: <today as "Month DD, YYYY">
+Prior rounds reviewed: <N from MetaMapper_Code_Review.md, or "none">
 
 OVERALL VERDICT: GO / NO-GO
 
@@ -49,11 +75,21 @@ SUMMARY:
   Naming        | <N findings>  Critical: <N>  High: <N>  Medium: <N>  Low: <N>
   -------------------------------------------------------------------------
   TOTAL         | <N findings>  Critical: <N>  High: <N>  Medium: <N>  Low: <N>
+  NEW: <N>  |  SKIPPED: <N>  |  PARTIAL-FIX: <N>  |  REGRESSION: <N>
 ```
 
-Then the master findings table sorted by severity (Critical first):
+Then the master findings table sorted by severity (Critical first), then by status (REGRESSION first, then PARTIAL-FIX, then SKIPPED, then NEW within the same severity):
 
-`#` | `Lens` | `Severity` | `Component / Area` | `Issue` | `Exact Fix`
+`#` | `Status` | `Lens` | `Severity` | `Component / Area` | `Issue` | `Exact Fix`
+
+If there are any non-NEW findings, add this block after the table:
+
+```
+HISTORY NOTE:
+  SKIPPED (<N>): Flagged before, deliberately accepted. Will keep appearing until fixed or explicitly removed from scope.
+  PARTIAL-FIX (<N>): A prior round fixed part of this area. The residual gap is what is flagged now.
+  REGRESSION (<N>): Was fixed and confirmed in a prior round but the issue is back. Investigate what changed.
+```
 
 Then the rename summary (omit if no naming violations):
 
@@ -125,12 +161,16 @@ If push fails, report the exact error and stop.
 
 ## Rules
 
+- Always run Phase 0 first. Never skip prior round deduplication.
 - Run all four review lenses in parallel. Never skip one.
 - Never apply fixes before showing the findings table and asking the user.
 - Apply every severity level that the user approved - never silently drop a finding.
 - Verify every fix against the actual source file - not from memory.
 - Use Edit with targeted diffs - never rewrite a full file unless truly unavoidable.
 - Never push to GitHub without explicit user approval.
+- Never use the `RECURRING` tag - always use SKIPPED, PARTIAL-FIX, or REGRESSION. Each has a different action.
+- SKIPPED and PARTIAL-FIX findings are real findings - do not suppress them. The user must see them and decide.
+- REGRESSION findings always appear at the top of their severity group - they represent something that went backwards.
 - If any phase fails partially (e.g. 3 of 5 fixes applied), state what succeeded and what failed before writing TASK COMPLETE.
 - Partial completion is not completion.
 - End with TASK COMPLETE only when all approved phases are done and verified.
