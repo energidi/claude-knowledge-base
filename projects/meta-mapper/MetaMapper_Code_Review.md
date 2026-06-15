@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 14, 2026 (Round 49 - sf-review full pass: 11 findings applied, 4 renames)
+**Last Updated:** June 15, 2026 (Round 50 - sf-orchestrator full pass: 7 findings applied, 4 orphaned fields deleted)
 **Date:** May 23, 2026
 
 ---
@@ -698,6 +698,22 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 50 - sf-orchestrator Full Pass: 7 Findings Applied
+
+All 4 review lenses run in parallel (Architecture, UX, Naming, Full Design). 7 findings applied: 4 orphaned field XML deletions, 1 step-ordering fix in `DependencyQueueable`, 1 LWC tour checkbox, 1 label rename.
+
+| # | Lens | Component | Severity | Fix |
+|---|---|---|---|---|
+| 1 | Naming | `Metadata_Dependency__c.Ancestor_Bloom_Index__c` | Medium | Orphaned field XML - leaked internal "Bloom" jargon, zero references in all Apex and JS. Deleted `Ancestor_Bloom_Index__c.field-meta.xml`. |
+| 2 | Naming | `Metadata_Dependency__c.Ancestor_Id_Tail_Index__c` | Medium | Orphaned field XML - duplicate of `Ancestor_Tail_Index__c`, zero code references. Deleted `Ancestor_Id_Tail_Index__c.field-meta.xml`. |
+| 3 | Naming | `Metadata_Dependency__c.Traversal_Complete__c` | Medium | Orphaned field XML - code uses `Dependencies_Fetched__c`, zero references. Deleted `Traversal_Complete__c.field-meta.xml`. |
+| 4 | Naming | `Metadata_Scan_Job__c.Last_Progressive_Cycle__c` | Medium | Orphaned field XML - code uses `Last_Progress_Cycle__c`, zero references. Deleted `Last_Progressive_Cycle__c.field-meta.xml`. |
+| 5 | Architecture | `DependencyQueueable.runEngine()` | Medium | Stall detection (Step 5) ran before empty-batch check (Step 8). On the final execution when the last batch processed only leaf nodes (no `Components_Analyzed__c` increment), the stall counter fired first and emitted a spurious Paused transition instead of handing off to `ScanResultFileQueueable`. Fixed: batch fetch + empty-batch exit (new Steps 5-6) now run before stall detection (new Step 7) and node cap (new Step 8). Removed stale deferred-fix comment and dead `cycleUpdate` DML from the empty-batch exit path (cycles had not been incremented at that point, making the update a no-op). |
+| 6 | UX | `metaMapperApp.html` - tour modal | Medium | Tour modal footer was missing the "Don't show again" informational checkbox required by the UX spec. Added `<lightning-input type="checkbox" label="Don't show again. I understand MetaMapper basics.">` before the navigation buttons. No JS handler needed - `closeTour()` already sets the `localStorage` flag on any dismissal path. |
+| 7 | Naming | `Metadata_Scan_Job__c.PE_Suppressed_This_Execution__c` label | Low | Label "PE Suppressed This Execution" used unapproved abbreviation "PE". Changed to "Platform Events Suppressed This Execution". |
 
 ---
 

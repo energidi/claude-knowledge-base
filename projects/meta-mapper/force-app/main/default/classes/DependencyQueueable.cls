@@ -158,7 +158,50 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         // Step 4 - resolve batch size: override wins, else Flow-specific vs standard
         Integer batchSize = resolveBatchSize(settings, job);
 
-        // Step 5 - increment cycle counter + stall detection
+        // Step 5 - fetch unprocessed batch
+        // Runs before stall detection so that an empty batch on the final execution correctly
+        // hands off to the serializer. With the old ordering, when the last real batch processed
+        // only leaf nodes (producing no Components_Analyzed__c increment), the stall counter
+        // would fire before the empty-batch exit and emit a spurious Paused transition.
+        List<Metadata_Dependency__c> batch = nodeSelector.nextUnprocessed(jobId, batchSize);
+
+        // Step 5a - resolve root node Tooling API ID on first execution.
+        // The root node is inserted with Metadata_Id__c = '' at job creation. Without this
+        // step the Tooling API fetch silently skips it, leaving the scan target with no children.
+        for (Metadata_Dependency__c node : batch) {
+            if (String.isBlank(node.Metadata_Id__c)) {
+                String resolvedId = new MetadataDependencyService().resolveRootId(
+                    job.Target_Metadata_Type__c,
+                    job.Target_API_Name__c,
+                    job.Target_Parent_Object__c
+                );
+                if (String.isNotBlank(resolvedId)) {
+                    node.Metadata_Id__c = resolvedId;
+                    update node;
+                }
+                break; // at most one root node per job
+            }
+        }
+
+        // Step 6 - empty batch: hand off to serializer.
+        // Checked before stall detection: a completed scan with no remaining nodes must never
+        // be paused by the stall check, even when the last batch produced no new
+        // Components_Analyzed__c increment (e.g. leaf nodes only).
+        if (batch.isEmpty()) {
+            // Re-verify cancel status before enqueuing the serializer. A concurrent cancel
+            // that arrived between the step 2 check and here must not trigger serialization.
+            // ScanResultFileQueueable has its own FOR UPDATE guard, but this avoids
+            // enqueuing an unnecessary Queueable job for a job that is already Cancelled.
+            String cancelStatus = jobSelector.getStatusOnly(jobId);
+            if (cancelStatus != null && cancelStatus != 'Processing') {
+                return;
+            }
+            System.enqueueJob(new ScanResultFileQueueable(jobId));
+            return;
+        }
+
+        // Step 7 - increment cycle counter + stall detection.
+        // Runs only when there are unprocessed nodes (empty batch exits cleanly at Step 6).
         Decimal cycles = job.Processing_Cycle_Count__c != null
             ? job.Processing_Cycle_Count__c : 0;
         cycles += 1;
@@ -169,13 +212,6 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         Integer stallThreshold = settings.Stall_Pause_Threshold__c != null
             ? ((Decimal) settings.Stall_Pause_Threshold__c).intValue() : DEFAULT_STALL_THRESHOLD;
 
-        // Known edge case: this check runs before Step 8's empty-batch detection. On the final
-        // execution of a fully-traversed scan, if the last batch produced no new Components_Analyzed__c
-        // increment (e.g. only leaf nodes were processed), the stall counter may fire here and
-        // transition to Paused instead of handing off to ScanResultFileQueueable. The user sees a
-        // brief spurious Pause banner; resuming immediately completes the scan via Step 8. Fixing
-        // this requires reordering Steps 5 and 8, which would change the empty-batch short-circuit
-        // path - deferred to a future round.
         if ((cycles - lastSuccess) >= stallThreshold) {
             // Re-verify the job is still Processing before transitioning to Paused.
             // A concurrent cancel between the step 2 check and here must not be overwritten.
@@ -197,7 +233,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             return;
         }
 
-        // Step 6 - node cap check
+        // Step 8 - node cap check
         Decimal analyzed = job.Components_Analyzed__c != null ? job.Components_Analyzed__c : 0;
         Integer maxComponents = settings.Max_Components__c != null
             ? ((Decimal) settings.Max_Components__c).intValue() : 0;
@@ -218,47 +254,6 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             update job;
             publishSafe('Paused', intOf(job.Components_Analyzed__c),
                 'Analysis paused - node limit reached.');
-            return;
-        }
-
-        // Step 7 - fetch unprocessed batch
-        List<Metadata_Dependency__c> batch = nodeSelector.nextUnprocessed(jobId, batchSize);
-
-        // Step 7a - resolve root node Tooling API ID on first execution
-        // The root node is inserted with Metadata_Id__c = '' at job creation. Without this
-        // step the Step 10 isNotBlank filter silently skips it, leaving the scan target with
-        // no children ever fetched from the Tooling API.
-        for (Metadata_Dependency__c node : batch) {
-            if (String.isBlank(node.Metadata_Id__c)) {
-                String resolvedId = new MetadataDependencyService().resolveRootId(
-                    job.Target_Metadata_Type__c,
-                    job.Target_API_Name__c,
-                    job.Target_Parent_Object__c
-                );
-                if (String.isNotBlank(resolvedId)) {
-                    node.Metadata_Id__c = resolvedId;
-                    update node;
-                }
-                break; // at most one root node per job
-            }
-        }
-
-        // Step 8 - empty batch: hand off to serializer
-        if (batch.isEmpty()) {
-            // Re-verify cancel status before enqueuing the serializer. A concurrent cancel
-            // that arrived between the step 2 check and here must not trigger serialization.
-            // ScanResultFileQueueable has its own FOR UPDATE guard, but this avoids
-            // enqueuing an unnecessary Queueable job for a job that is already Cancelled.
-            String cancelStatus = jobSelector.getStatusOnly(jobId);
-            if (cancelStatus != null && cancelStatus != 'Processing') {
-                return;
-            }
-            // Targeted update (no Status__c): a concurrent cancel that arrived between the
-            // step 2 check and here must not be overwritten back to Processing.
-            Metadata_Scan_Job__c cycleUpdate = new Metadata_Scan_Job__c(Id = job.Id);
-            cycleUpdate.Processing_Cycle_Count__c = job.Processing_Cycle_Count__c;
-            update cycleUpdate;
-            System.enqueueJob(new ScanResultFileQueueable(jobId));
             return;
         }
 

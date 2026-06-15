@@ -91,6 +91,10 @@
                     </p>
                 </div>
                 <footer class="slds-modal__footer">
+                    <lightning-input type="checkbox"
+                        label="Don't show again. I understand MetaMapper basics."
+                        class="slds-var-m-bottom_small">
+                    </lightning-input>
                     <template lwc:if={showTourPrev}>
                         <lightning-button label={tourPrevLabel} variant="neutral"
                             onclick={handleTourPrev}></lightning-button>
