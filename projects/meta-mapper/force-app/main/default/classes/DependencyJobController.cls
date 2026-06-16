@@ -506,4 +506,14 @@ public with sharing class DependencyJobController {
             overrideBatchSize
         ));
     }
+
+    /**
+     * Returns the 18-character org ID for the current org. Used by metaMapperApp to
+     * construct "Open in Setup" deep-link URLs in metaMapperComponentDetailsPanel.
+     * Cacheable because the org ID is immutable for the lifetime of the org.
+     */
+    @AuraEnabled(cacheable=true)
+    public static String getOrgId() {
+        return UserInfo.getOrganizationId();
+    }
 }

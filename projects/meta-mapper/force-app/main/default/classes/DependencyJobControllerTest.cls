@@ -272,4 +272,11 @@ private class DependencyJobControllerTest {
         Boolean result = DependencyJobController.isCopilotEnabled();
         Assert.isNotNull(result, 'isCopilotEnabled should return a Boolean, not null');
     }
+
+    @isTest
+    static void getOrgId_returnsNonBlankString() {
+        String orgId = DependencyJobController.getOrgId();
+        Assert.isNotNull(orgId, 'getOrgId should return a non-null String');
+        Assert.isFalse(String.isBlank(orgId), 'getOrgId should return a non-blank org ID');
+    }
 }

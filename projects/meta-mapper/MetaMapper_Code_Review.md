@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 16, 2026 (Round 53 - sf-orchestrator full pass: 5 findings applied, PE suppression propagation fix, subscribe failure recovery, tab reconciliation)
+**Last Updated:** June 16, 2026 (Round 54 - sf-orchestrator full pass: 3 findings applied, orgId propagation fix, PE terminal routing fix, deprecated class removed)
 **Date:** May 23, 2026
 
 ---
@@ -698,6 +698,18 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 54 - sf-orchestrator Full Pass: 3 Findings Applied (June 16, 2026)
+
+All 4 review lenses run in parallel via sf-orchestrator with Phase 0 prior-round deduplication (53 prior rounds reviewed). 3 findings applied: 3 NEW. No Critical findings. OVERALL VERDICT: NO-GO (resolved by fixes below). Root cause of prior GO verdicts confirmed via git history: all 3 issues were pre-existing since Round 48; prior review agents did not trace the full cross-component prop chain.
+
+| # | Status | Lens | Severity | Component / Area | Fix Applied |
+|---|---|---|---|---|---|
+| 1 | NEW | UX | High | `metaMapperApp` → `metaMapperResults` → `metaMapperComponentDetailsPanel` | `orgId` was never sourced or propagated. `metaMapperApp.js` had no org ID import; `metaMapperApp.html` did not pass `org-id` to `c-meta-mapper-results`; `metaMapperResults.js` `@api orgId = ''` was permanently empty; `resolveSetupUrl()` short-circuits on falsy `orgId`; "Open in Setup" button was permanently disabled for all node types in every scan. Fix: added `@AuraEnabled(cacheable=true) public static String getOrgId()` to `DependencyJobController` (returns `UserInfo.getOrganizationId()`); imported in `metaMapperApp.js`, fetched in `connectedCallback`, stored as `_orgId`, exposed as `get orgId()`; bound as `org-id={orgId}` on `c-meta-mapper-results` in `metaMapperApp.html`. Test added: `getOrgId_returnsNonBlankString` in `DependencyJobControllerTest`. |
+| 2 | NEW | UX | Medium | `metaMapperApp.js` `_handlePEEvent()` | When a PE arrived with `Status__c = 'Cancelled'` or `'Failed'`, the handler called `_refreshJob().then(() => { this.view = 'results'; })`, immediately navigating away from the progress view. The defined terminal states in `metaMapperProgress` (Cancelled: "Analysis cancelled. Partial results are available." + "View partial results" link; Failed: diagnostic log display) were never shown. Fix: `_handlePEEvent` now auto-navigates to `results` for `Completed` only. For `Failed` and `Cancelled`, it calls `_refreshJob()` without changing `this.view`, so the progress component renders the correct terminal state and the user controls navigation. |
+| 3 | NEW | Naming | Low | `CustomMetadataDescribeCache.cls` | Deprecated wrapper class retained since Round 42 rename. V-02 violation (`Cache` implementation detail in name). No external references confirmed via grep. Deleted `CustomMetadataDescribeCache.cls` and `CustomMetadataDescribeCache.cls-meta.xml`. |
 
 ---
 

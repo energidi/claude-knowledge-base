@@ -3,6 +3,7 @@ import { CurrentPageReference } from 'lightning/navigation';
 import { subscribe, unsubscribe, onError } from 'lightning/empApi';
 import verifyHealthCheck from '@salesforce/apex/ToolingApiHealthCheck.verify';
 import getJobStatus from '@salesforce/apex/DependencyJobController.getJobStatus';
+import getOrgId from '@salesforce/apex/DependencyJobController.getOrgId';
 
 const TOUR_KEY = 'metaMapper_tourSeen_v1';
 const PE_CHANNEL = '/event/Dependency_Scan_Status__e';
@@ -71,11 +72,15 @@ export default class MetaMapperApp extends LightningElement {
     _peSubscription = null;
     _toastTimer = null;
     _tourTriggerElement = null;
+    _orgId = '';
 
     connectedCallback() {
         this.runHealthCheck();
         onError(err => console.error('PE error:', err));
+        getOrgId().then(id => { this._orgId = id || ''; }).catch(() => {});
     }
+
+    get orgId() { return this._orgId; }
 
     disconnectedCallback() {
         if (this._peSubscription) {
@@ -164,9 +169,13 @@ export default class MetaMapperApp extends LightningElement {
 
     _handlePEEvent(payload) {
         const newStatus = payload.Status__c;
-        if (['Completed', 'Failed', 'Cancelled'].includes(newStatus)) {
-            // C3: transition to results view once the refreshed job record is available
+        if (newStatus === 'Completed') {
             this._refreshJob().then(() => { this.view = 'results'; });
+        } else if (['Failed', 'Cancelled'].includes(newStatus)) {
+            // Refresh job so the progress view renders the correct terminal state
+            // (Failed diagnostic log, Cancelled "View partial results" link).
+            // The user navigates to results themselves via the link in the progress view.
+            this._refreshJob();
         }
         if (['Initializing', 'Processing'].includes(newStatus) && this.view !== 'progress') {
             this.view = 'progress';
