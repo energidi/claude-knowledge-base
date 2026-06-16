@@ -133,7 +133,7 @@ public with sharing class DependencyJobController {
         MetadataScanJobSelector jobSelector = new MetadataScanJobSelector();
         // Sandbox: limit to 1 concurrent job to bound peak Data Storage.
         Integer maxConcurrent = sandboxOverrideActive ? 1
-            : (settings.Max_Concurrent_Jobs__c != null ? (Integer) settings.Max_Concurrent_Jobs__c : 2);
+            : (settings.Max_Concurrent_Jobs__c != null ? ((Decimal) settings.Max_Concurrent_Jobs__c).intValue() : 2);
         // Primary: count active Queueable jobs in AsyncApexJob (indexed by ApexClassId).
         Integer activeCount = jobSelector.countActiveQueueables(maxConcurrent);
         if (activeCount >= maxConcurrent) {
@@ -159,7 +159,7 @@ public with sharing class DependencyJobController {
             // Sandbox: 50MB reserve (matches the scan peak for Max_Components__c = 5000).
             // Production: 200MB reserve to protect production data from scan peaks.
             Integer reserveMB = sandboxOverrideActive ? 50
-                : (settings.Min_Free_Storage_MB__c != null ? (Integer) settings.Min_Free_Storage_MB__c : 200);
+                : (settings.Min_Free_Storage_MB__c != null ? ((Decimal) settings.Min_Free_Storage_MB__c).intValue() : 200);
             if (freeStorageMB < reserveMB) {
                 throw new DependencyJobException(
                     'Not enough data storage to start a scan. '
@@ -295,9 +295,9 @@ public with sharing class DependencyJobController {
         Boolean platformEventsDisabled = settings.Disable_Platform_Events__c == true
             || statusJob.PE_Suppressed_This_Execution__c == true;
         Integer batchSizeInUse = statusJob.Batch_Size_Override__c != null
-            ? (Integer) statusJob.Batch_Size_Override__c
-            : (settings.Scan_Batch_Size__c != null ? (Integer) settings.Scan_Batch_Size__c : 50);
-        Integer maxComponentsCap = settings.Max_Components__c != null ? (Integer) settings.Max_Components__c : 0;
+            ? ((Decimal) statusJob.Batch_Size_Override__c).intValue()
+            : (settings.Scan_Batch_Size__c != null ? ((Decimal) settings.Scan_Batch_Size__c).intValue() : 50);
+        Integer maxComponentsCap = settings.Max_Components__c != null ? ((Decimal) settings.Max_Components__c).intValue() : 0;
         return new JobStatusResult(statusJob, platformEventsDisabled, batchSizeInUse, maxComponentsCap);
     }
 

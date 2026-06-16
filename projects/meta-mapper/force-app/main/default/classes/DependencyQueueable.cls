@@ -419,13 +419,13 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                 }
 
                 String parentPath  = parent.Ancestor_Path__c;
-                String parentIndex = parent.Ancestor_Tail_Index__c;
+                String parentIndex = parent.Ancestor_Id_Shortkeys__c;
 
                 // Ancestor path depth guard - capacity protection before building the path.
                 Integer parentPathLen = parentPath != null ? parentPath.length() : 0;
                 if ((parentPathLen + ANCESTOR_PATH_MARGIN) > ANCESTOR_PATH_MAX) {
                     child.Ancestor_Path__c              = parentPath;
-                    child.Ancestor_Tail_Index__c  = parentIndex;
+                    child.Ancestor_Id_Shortkeys__c  = parentIndex;
                     // Is_Circular__c is intentionally NOT set: depth overflow is a traversal
                     // ceiling, not an ancestry cycle. Setting it would cause the UI to render
                     // these nodes with dashed "circular dependency" styling, which is incorrect.
@@ -453,20 +453,20 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     (String.isBlank(parentPath) ? '' : parentPath + '|')
                     + parent.Metadata_Id__c;
 
-                // Build child's Ancestor_Tail_Index__c (append parent's 6-char suffix).
+                // Build child's Ancestor_Id_Shortkeys__c (append parent's 6-char suffix).
                 // right(6) uses the auto-number portion of the 18-char ID, which is unique
                 // per component - unlike left(6) which is the entity key prefix (identical for
                 // all same-type components in an org, making it useless as a bloom-filter key).
                 String parentPrefix = parent.Metadata_Id__c != null
                     ? parent.Metadata_Id__c.right(6) : '';
-                child.Ancestor_Tail_Index__c =
+                child.Ancestor_Id_Shortkeys__c =
                     (String.isBlank(parentIndex) ? '' : parentIndex + '|')
                     + parentPrefix;
 
                 // Tier 2 - bloom-filter pre-screen then authoritative confirmation.
                 String childPrefix = childId.right(6);
-                Boolean possibleCycle = String.isNotBlank(child.Ancestor_Tail_Index__c)
-                    && ('|' + child.Ancestor_Tail_Index__c + '|')
+                Boolean possibleCycle = String.isNotBlank(child.Ancestor_Id_Shortkeys__c)
+                    && ('|' + child.Ancestor_Id_Shortkeys__c + '|')
                         .contains('|' + childPrefix + '|');
 
                 if (possibleCycle) {

@@ -50,6 +50,13 @@
             </div>
         </template>
 
+        <!-- View partial results link (Cancelled state) -->
+        <template lwc:if={isCancelled}>
+            <div class="slds-var-m-top_x-small">
+                <a onclick={handleViewPartialResults}>View partial results</a>
+            </div>
+        </template>
+
         <!-- Progress bar or spinner -->
         <template lwc:if={showProgressBar}>
             <div class="slds-var-m-vertical_small">
@@ -72,6 +79,22 @@
         <!-- PE suppression notice -->
         <template lwc:if={showPollingNotice}>
             <p class="slds-text-body_small slds-text-color_weak" aria-live="polite">{pollingNoticeText}</p>
+        </template>
+
+        <!-- Poll failure warning banner (3-4 consecutive failures) -->
+        <template lwc:if={showPollWarningBanner}>
+            <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-top_small" role="alert">
+                <p>Progress updates are having trouble reaching the server. The scan is still running - retrying...</p>
+            </div>
+        </template>
+
+        <!-- Poll failure error banner (5+ consecutive failures) -->
+        <template lwc:if={showPollErrorBanner}>
+            <div class="slds-notify slds-notify_alert slds-theme_error slds-var-m-top_small" role="alert">
+                <p>Progress updates have stopped. Check your network connection.
+                    <a onclick={handleRetryPolling}> Retry polling</a>
+                </p>
+            </div>
         </template>
 
         <!-- Cancel button -->
@@ -118,7 +141,7 @@
 
         <!-- Cancel timeout banner -->
         <template lwc:if={showCancelTimeoutBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_info" role="status">
+            <div class="slds-notify slds-notify_alert slds-theme_info" role="alert" aria-live="assertive">
                 <p>Cancellation is taking longer than expected. The scan will stop when the current step finishes. You can try cancelling again if this persists.</p>
             </div>
         </template>

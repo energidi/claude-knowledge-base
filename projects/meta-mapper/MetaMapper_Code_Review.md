@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 15, 2026 (Round 50 - sf-orchestrator full pass: 7 findings applied, 4 orphaned fields deleted)
+**Last Updated:** June 15, 2026 (Round 52 - sf-orchestrator full pass: 6 findings applied, Ancestor_Id_Shortkeys__c rename completed)
 **Date:** May 23, 2026
 
 ---
@@ -698,6 +698,21 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 52 - sf-orchestrator Full Pass: 6 Findings Applied (June 15, 2026)
+
+All 4 review lenses run in parallel via sf-orchestrator with Phase 0 prior-round deduplication (51 prior rounds reviewed). 6 findings applied: 3 NEW, 3 PARTIAL-FIX. No Critical findings. OVERALL VERDICT: GO.
+
+| # | Status | Lens | Severity | Component / Area | Fix Applied |
+|---|---|---|---|---|---|
+| 1 | PARTIAL-FIX | UX | High | `metaMapperProgress.js:123` / `.html` | Cancelled status label changed from "Partial results are available below." to "Partial results are available." Added `get isCancelled()` getter. Added `lwc:if={isCancelled}` block in HTML rendering `<a onclick={handleViewPartialResults}>View partial results</a>` adjacent to the status label. Round 50 fixed the spec copy; this round applies the matching LWC code change. |
+| 2 | NEW | UX | High | `metaMapperProgress.js` `_poll()` catch / HTML | Implemented `_pollFailCount` counter (Round 50 spec, never applied to code). Class-level `_pollFailCount = 0`. Successful poll resets counter and clears banners. 3+ failures: show `showPollWarningBanner` ("Progress updates are having trouble reaching the server. Still retrying..."). 5+ failures: stop polling, show `showPollErrorBanner` ("Progress updates have stopped. [Retry polling]"). Added `handleRetryPolling()` method. Added `@track showPollWarningBanner` and `@track showPollErrorBanner`. Added both HTML banner blocks. |
+| 3 | NEW | UX | Medium | `metaMapperProgress.html` line 121 | Cancel timeout banner changed from `role="status"` to `role="alert" aria-live="assertive"`. `role="status"` implies `aria-live="polite"` which does not interrupt; a persistent problem-signaling banner requires assertive announcement. |
+| 4 | NEW | Architecture | Medium | `DependencyJobController.cls` lines 136, 162, 298-300 | 5 direct `(Integer)` casts on CMDT Decimal and SObject Number fields replaced with `((Decimal) x).intValue()` pattern. Affected fields: `Max_Concurrent_Jobs__c`, `Min_Free_Storage_MB__c`, `Batch_Size_Override__c`, `Scan_Batch_Size__c`, `Max_Components__c`. Consistent with the pattern applied in Round 29 to `DependencyQueueable`, `DependencyCleanupBatch`, and `ScanResultFileQueueable`. |
+| 5 | NEW | UX | Low | `metaMapperProgress.js` `handleKeepRunning()` line 227 | Removed dead primary selector `'lightning-button[aria-label="Cancel"]'` (no `aria-label` on the cancel button; this branch never matched). Simplified to `this.template.querySelector('.cancel-btn')` which correctly finds the `<lightning-button>` element and calls `.focus()`. |
+| 6 | PARTIAL-FIX | Naming | Low | `Ancestor_Tail_Index__c` → `Ancestor_Id_Shortkeys__c` | Completed the rename deferred in Round 50 (spec-only). Renamed field XML (`Ancestor_Tail_Index__c.field-meta.xml` deleted, `Ancestor_Id_Shortkeys__c.field-meta.xml` created). Updated all Apex references: `DependencyQueueable.cls` (6 occurrences), `MetadataDependencySelector.cls` (3 occurrences), `CustomFieldDependencyHandler.cls` (2 occurrences). Updated comment in `MetaMapper_Admin.permissionset-meta.xml`. |
 
 ---
 

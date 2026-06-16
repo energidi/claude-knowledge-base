@@ -166,7 +166,7 @@ When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFile
 | `Ancestor_Path__c` | Long Text 32768 | Pipe-delimited ancestor `Metadata_Id__c` chain. Excludes self. Used for true cycle detection. |
 | `Supplemental_Confidence__c` | Number (3,0) | 0-100 confidence score. Null for ToolingAPI nodes. Nodes < 70 show warning badge. |
 | `Unique_Component_Key__c` | Text 80 (External ID, Unique) | Composite key: `JobId + ':' + Metadata_Id__c`. Used for upsert dedup. |
-| `Ancestor_Tail_Index__c` | Long Text 32768 | Internal engine field. Pipe-delimited 6-char tails (`.right(6)`, auto-number suffix) of ancestor `Metadata_Id__c` values. Used as a fast bloom-filter pre-screen before the expensive full `Ancestor_Path__c` string search. A match triggers the conclusive `Ancestor_Path__c` confirmation; no match skips it. Do not edit manually. |
+| `Ancestor_Id_Shortkeys__c` | Long Text 32768 | Internal engine field. Pipe-delimited 6-char tails (`.right(6)`, auto-number suffix) of ancestor `Metadata_Id__c` values. Used as a fast bloom-filter pre-screen before the expensive full `Ancestor_Path__c` string search. A match triggers the conclusive `Ancestor_Path__c` confirmation; no match skips it. Do not edit manually. |
 
 ### Dependency_Context__c Payloads by Type
 
@@ -549,7 +549,7 @@ Every Apex class must carry a file-level header comment answering: purpose, what
 - **Serializer ceiling:** `ScanResultFileQueueable` serializes all nodes in one heap-bound JSON operation. Safe ceiling ~2,000-3,000 nodes for deep trees. Default `Max_Components__c = 5,000` works for most dev sandbox metadata. Raising above 5,000 without a chunked serializer will hit the heap failure path.
 - `Scan_Summary_Text__c` populated only on Completed. Agentforce Actions should check `Status__c = 'Completed'` before reading.
 - **Storage model during active scans:** nodes temporarily occupy Data Storage (~5KB/node). A 5,000-node scan peaks at ~25MB. `Min_Free_Storage_MB__c = 50` ensures headroom.
-- `Ancestor_Tail_Index__c` 6-char tail has negligible false-positive probability. `Ancestor_Path__c` always used to confirm before setting `Is_Circular__c = true`.
+- `Ancestor_Id_Shortkeys__c` 6-char tail has negligible false-positive probability. `Ancestor_Path__c` always used to confirm before setting `Is_Circular__c = true`.
 - **`getNodeHierarchy()` pagination:** results are returned in pages (default 500 nodes per call). The LWC accumulates pages client-side before rendering. For completed jobs, the design prefers returning the `ContentDocumentId` for direct file fetch over server-side slicing to avoid repeated heap cost across pagination calls.
 
 ---

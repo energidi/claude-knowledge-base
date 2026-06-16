@@ -746,7 +746,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             ? parent.Metadata_Id__c
             : parent.Ancestor_Path__c + '|' + parent.Metadata_Id__c;
 
-        // H2: Ancestor_Tail_Index__c - pipe-delimited 6-char tails (.right(6)) of each ancestor ID.
+        // H2: Ancestor_Id_Shortkeys__c - pipe-delimited 6-char tails (.right(6)) of each ancestor ID.
         // Uses the auto-number suffix (last 6 chars), which is unique per component, matching
         // DependencyQueueable's construction so the bloom-filter pre-screen works on supplemental nodes.
         String cycleIndex = '';
@@ -786,7 +786,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             Discovery_Source__c         = 'Supplemental',
             Supplemental_Confidence__c  = confidence,
             Ancestor_Path__c            = ancestorPath,
-            Ancestor_Tail_Index__c      = cycleIndex,
+            Ancestor_Id_Shortkeys__c      = cycleIndex,
             Unique_Component_Key__c = uniquenessKey
         );
     }

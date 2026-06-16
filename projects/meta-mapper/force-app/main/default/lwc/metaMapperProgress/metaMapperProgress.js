@@ -29,6 +29,8 @@ export default class MetaMapperProgress extends LightningElement {
     @track resumeSlowerActive = false;
     @track showPollingNotice = false;
     @track pollingNoticeText = '';
+    @track showPollWarningBanner = false;
+    @track showPollErrorBanner = false;
 
     _isMounted = false;
     _pollTimer = null;
@@ -37,6 +39,7 @@ export default class MetaMapperProgress extends LightningElement {
     _cancelPhase = 'idle';
     _elapsedTick = 0;
     _resumeTimeoutTimer = null;
+    _pollFailCount = 0;
 
     connectedCallback() {
         this._isMounted = true;
@@ -65,6 +68,7 @@ export default class MetaMapperProgress extends LightningElement {
     get isPaused() { return this.status === 'Paused'; }
     get isProcessing() { return this.status === 'Processing' || this.status === 'Initializing'; }
     get isTerminal() { return ['Completed', 'Failed', 'Cancelled'].includes(this.status); }
+    get isCancelled() { return this.status === 'Cancelled'; }
 
     get showStatusLabel() { return !this.isPaused && !this.showTimeoutBanner; }
     get showCancelButton() {
@@ -120,7 +124,7 @@ export default class MetaMapperProgress extends LightningElement {
                 const msg = log ? log.substring(0, 200) : 'An unexpected error stopped the analysis.';
                 return `Analysis of ${name} failed. ${msg} See details for diagnostics.`;
             }
-            case 'Cancelled':    return `Analysis of ${name} cancelled. Partial results are available below.`;
+            case 'Cancelled':    return `Analysis of ${name} cancelled. Partial results are available.`;
             default: return '';
         }
     }
@@ -167,6 +171,9 @@ export default class MetaMapperProgress extends LightningElement {
         if (!this._isMounted || this.isTerminal) return;
         try {
             const result = await getJobStatus({ jobId: this.jobId });
+            this._pollFailCount = 0;
+            this.showPollWarningBanner = false;
+            this.showPollErrorBanner = false;
             if (!this._isMounted) return;
             // Dispatch the full wrapper so metaMapperApp._storeJobResult() can extract
             // the raw job record, peSuppressionActive, batchSizeInUse, and maxComponentsCap.
@@ -205,7 +212,17 @@ export default class MetaMapperProgress extends LightningElement {
                 this.showPollingNotice = false;
             }
         } catch {
-            if (this._isMounted) this._startPolling();
+            if (!this._isMounted) return;
+            this._pollFailCount++;
+            if (this._pollFailCount >= 5) {
+                this._stopPolling();
+                this.showPollErrorBanner = true;
+            } else if (this._pollFailCount >= 3) {
+                this.showPollWarningBanner = true;
+                this._startPolling();
+            } else {
+                this._startPolling();
+            }
         }
     }
 
@@ -224,8 +241,7 @@ export default class MetaMapperProgress extends LightningElement {
         this.showCancelModal = false;
         // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
-            const btn = this.template.querySelector('lightning-button[aria-label="Cancel"]') ||
-                        this.template.querySelector('.cancel-btn');
+            const btn = this.template.querySelector('.cancel-btn');
             if (btn) btn.focus();
         }, 0);
     }
@@ -311,5 +327,11 @@ export default class MetaMapperProgress extends LightningElement {
     dismissLongRunningBanner() {
         this.showLongRunningBanner = false;
         this.longRunningBannerDismissed = true;
+    }
+
+    handleRetryPolling() {
+        this._pollFailCount = 0;
+        this.showPollErrorBanner = false;
+        this._startPolling();
     }
 }
