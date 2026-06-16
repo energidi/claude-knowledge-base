@@ -31,8 +31,22 @@ export default class MetaMapperProgress extends LightningElement {
     @track pollingNoticeText = '';
     @track showPollWarningBanner = false;
     @track showPollErrorBanner = false;
+    @track showStreamingQuotaBanner = false;
 
     _isMounted = false;
+    _peSuppressionActiveProp = false;
+    _streamingQuotaBannerDismissed = false;
+
+    @api
+    get peSuppressionActive() {
+        return this._peSuppressionActiveProp;
+    }
+    set peSuppressionActive(val) {
+        this._peSuppressionActiveProp = val === true;
+        if (this._peSuppressionActiveProp && this._isMounted) {
+            this._startPolling();
+        }
+    }
     _pollTimer = null;
     _elapsedTimer = null;
     _cancelTimeoutTimer = null;
@@ -44,6 +58,11 @@ export default class MetaMapperProgress extends LightningElement {
     connectedCallback() {
         this._isMounted = true;
         this._startElapsedTimer();
+        // Props are set before connectedCallback fires; if peSuppressionActive arrived
+        // before mount the setter could not start polling — check here.
+        if (this._peSuppressionActiveProp) {
+            this._startPolling();
+        }
     }
 
     disconnectedCallback() {
@@ -60,6 +79,14 @@ export default class MetaMapperProgress extends LightningElement {
         if (eventData && eventData.peSuppressionActive) {
             this._startPolling();
         }
+        if (eventData && eventData.streamingQuotaLimitExceeded && !this._streamingQuotaBannerDismissed) {
+            this.showStreamingQuotaBanner = true;
+        }
+    }
+
+    dismissStreamingQuotaBanner() {
+        this.showStreamingQuotaBanner = false;
+        this._streamingQuotaBannerDismissed = true;
     }
 
     // --- Computed getters ---

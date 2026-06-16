@@ -73,9 +73,10 @@ public without sharing class DependencyQueueable implements Queueable, Database.
     private final Integer overrideBatchSize;
 
     // Database.rollback() throws CalloutException if called after a callout in the same
-    // transaction. execute()'s catch block uses Limits.getCallouts() == 0 as the guard:
-    // the platform increments this counter at the moment Http().send() fires, so there is
-    // no timing window where a mid-service exception could leave the flag stale.
+    // transaction. execute()'s catch block uses a delta check: Limits.getCallouts() ==
+    // calloutsAtSavepoint. This correctly handles pre-savepoint callouts from
+    // checkAndSuppressIfNeeded() which would leave the counter non-zero even when no
+    // engine callout fired. The delta is the authoritative guard.
     // Set to true by mergeCycleAttribute() when any node's Dependency_Context__c JSON is
     // malformed. runEngine() appends a single admin-visible notice per execution rather than
     // one per node, keeping Scan_Diagnostic_Log__c readable on high-volume scans.
@@ -101,7 +102,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
      * so a SOQL exception in the PE-limit check (or a savepoint failure) is caught and
      * routed to updateJobFailed() rather than leaving the job permanently in Processing.
      * sp is declared outside so the catch block can conditionally roll it back only when
-     * it was actually set (Limits.getCallouts() == 0 at that point, meaning no callout fired).
+     * it was actually set and no callout fired after the savepoint (delta check is authoritative).
      */
     public void execute(QueueableContext ctx) {
         Savepoint sp = null;

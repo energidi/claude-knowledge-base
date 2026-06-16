@@ -931,13 +931,26 @@ An uncaught exception in `execute()` rolls back the entire Queueable transaction
 
 ```
 public void execute(QueueableContext ctx) {
-    Savepoint sp = Database.setSavepoint();
+    Savepoint sp = null;
+    // Capture callout count BEFORE the savepoint. checkAndSuppressIfNeeded() and the
+    // Initializing→Processing DML run before the savepoint so they are never rolled back.
+    // The delta check (Limits.getCallouts() == calloutsAtSavepoint) is the authoritative
+    // rollback guard: Limits.getCallouts() == 0 is incorrect because pre-savepoint
+    // callouts from checkAndSuppressIfNeeded() leave the counter non-zero even when no
+    // engine callout has fired.
+    Integer calloutsAtSavepoint = 0;
     try {
+        // Pre-savepoint work: PE limit check + Initializing→Processing transition
+        calloutsAtSavepoint = Limits.getCallouts();
+        sp = Database.setSavepoint();
         // ... all engine work ...
     } catch (Exception e) {
-        Database.rollback(sp);   // Roll back partial engine work
+        // Only roll back if no callout fired after the savepoint.
+        if (sp != null && Limits.getCallouts() == calloutsAtSavepoint) {
+            Database.rollback(sp);
+        }
         // Status update is now a fresh DML outside the failed transaction scope
-        updateJobFailed(jobId, e.getMessage());      // update + Platform Event publish
+        updateJobFailed(jobId, e.getMessage() + '\n' + e.getStackTraceString());
     }
 }
 ```

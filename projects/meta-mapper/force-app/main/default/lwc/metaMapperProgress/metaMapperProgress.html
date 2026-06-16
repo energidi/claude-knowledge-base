@@ -1,6 +1,17 @@
 <template>
     <div class="progress-container">
 
+        <!-- Streaming API quota admin banner (empApi subscribe failure due to client limit) -->
+        <template lwc:if={showStreamingQuotaBanner}>
+            <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="alert">
+                <p>Live updates unavailable - your org has reached the Streaming API client limit. Progress will refresh every 5 seconds.</p>
+                <button class="slds-button slds-button_icon slds-notify__close" onclick={dismissStreamingQuotaBanner}
+                    aria-label="Dismiss streaming quota notice" title="Dismiss">
+                    <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
+                </button>
+            </div>
+        </template>
+
         <!-- Long-running scan banner (> 15 min) -->
         <template lwc:if={showLongRunningBanner}>
             <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="alert">

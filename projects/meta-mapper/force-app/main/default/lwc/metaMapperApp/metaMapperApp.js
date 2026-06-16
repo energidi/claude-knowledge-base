@@ -137,11 +137,29 @@ export default class MetaMapperApp extends LightningElement {
     }
 
     _subscribePE() {
-        subscribe(PE_CHANNEL, -1, event => {
-            const payload = event.data.payload;
-            if (payload.Scan_Job_Id__c !== this.jobId) return;
-            this._handlePEEvent(payload);
-        }).then(sub => { this._peSubscription = sub; });
+        try {
+            subscribe(PE_CHANNEL, -1, event => {
+                const payload = event.data.payload;
+                if (payload.Scan_Job_Id__c !== this.jobId) return;
+                this._handlePEEvent(payload);
+            }).then(sub => {
+                this._peSubscription = sub;
+            }).catch(err => {
+                this._handleSubscribeFailure(err);
+            });
+        } catch (err) {
+            this._handleSubscribeFailure(err);
+        }
+    }
+
+    _handleSubscribeFailure(err) {
+        const msg = err && (err.message || (err.body && err.body.message) || String(err));
+        console.error('MetaMapper: empApi subscribe failed -', msg);
+        const isQuotaLimit = msg && /concurrent clients limit exceeded|streaming api.*limit/i.test(msg);
+        const prog = this.template.querySelector('c-meta-mapper-progress');
+        if (prog) {
+            prog.handleStatusEvent({ peSuppressionActive: true, streamingQuotaLimitExceeded: isQuotaLimit });
+        }
     }
 
     _handlePEEvent(payload) {

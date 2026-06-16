@@ -222,6 +222,7 @@ export default class MetaMapperResults extends LightningElement {
         this._tabReadyTimer = setTimeout(() => {
             if (!this._isMounted) return;
             this.isTransitioning = false;
+            this._reconcileJobStatus();
         }, TAB_TRANSITION_TIMEOUT);
     }
 
@@ -231,7 +232,21 @@ export default class MetaMapperResults extends LightningElement {
             if (!this._isMounted) return;
             this.isTransitioning = false;
             clearTimeout(this._tabReadyTimer);
+            this._reconcileJobStatus();
         }, TAB_TRANSITION_MIN_MS);
+    }
+
+    _reconcileJobStatus() {
+        if (this.isCompleted) return;
+        getJobStatus({ jobId: this.jobId })
+            .then(w => {
+                if (this._isMounted && w) {
+                    this.dispatchEvent(new CustomEvent('jobstatuspolled', {
+                        detail: w, bubbles: true, composed: true
+                    }));
+                }
+            })
+            .catch(() => { /* reconciliation is best-effort */ });
     }
 
     handleNodeSelected(event) {

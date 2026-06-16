@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 15, 2026 (Round 52 - sf-orchestrator full pass: 6 findings applied, Ancestor_Id_Shortkeys__c rename completed)
+**Last Updated:** June 16, 2026 (Round 53 - sf-orchestrator full pass: 5 findings applied, PE suppression propagation fix, subscribe failure recovery, tab reconciliation)
 **Date:** May 23, 2026
 
 ---
@@ -698,6 +698,20 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 53 - sf-orchestrator Full Pass: 5 Findings Applied (June 16, 2026)
+
+All 4 review lenses run in parallel via sf-orchestrator with Phase 0 prior-round deduplication (52 prior rounds reviewed). 5 findings applied: 1 NEW, 4 PARTIAL-FIX. No Critical findings. OVERALL VERDICT: GO.
+
+| # | Status | Lens | Severity | Component / Area | Fix Applied |
+|---|---|---|---|---|---|
+| 1 | PARTIAL-FIX | UX | High | `metaMapperApp.js` `_subscribePE()` | Added try/catch + `.catch()` around `subscribe()` Promise. New `_handleSubscribeFailure(err)` method: logs to console, calls `prog.handleStatusEvent({ peSuppressionActive: true, streamingQuotaLimitExceeded: ... })` so the progress component immediately starts polling. Quota-limit detection via regex on the error message triggers the dismissible Streaming API admin banner. Round 50 added the spec; this round applies the code change. |
+| 2 | NEW | UX | High | `metaMapperApp.html` / `metaMapperProgress.js` | `peSuppressionActive` was stored in `metaMapperApp._peSuppressionActive` but never propagated to `metaMapperProgress` when PE is disabled from the start. Progress screen was permanently frozen with no polling. Fix: added `@api peSuppressionActive` prop with reactive setter in `metaMapperProgress.js` (calls `_startPolling()` if `true` and mounted; `connectedCallback` also checks for pre-mount delivery). Bound `pe-suppression-active={_peSuppressionActive}` in `metaMapperApp.html`. Also added `showStreamingQuotaBanner` tracking and `dismissStreamingQuotaBanner()` handler in `metaMapperProgress.js`; added Streaming API quota banner block to `metaMapperProgress.html`. |
+| 3 | PARTIAL-FIX | Architecture | Medium | `metaMapperResults.js` `handleTabReady()` / hard timeout | Tab transition reconciliation `getJobStatus()` call was specified (Round 50/51) but not implemented. Added `_reconcileJobStatus()` private method (calls `getJobStatus()`, dispatches `jobstatuspolled` event to `metaMapperApp`). Called in both `handleTabReady()` and the 3-second hard-timeout callback after `isTransitioning = false`. Skipped when `isCompleted` (no PE events for completed jobs). |
+| 4 | PARTIAL-FIX | Architecture | Low | `DependencyQueueable.cls` lines 77-78, 105 | Two stale comments said "execute()'s catch block uses `Limits.getCallouts() == 0` as the guard" — incorrect since Round 47 when the `calloutsAtSavepoint` delta pattern was introduced. Comments updated to describe the delta check accurately. |
+| 5 | PARTIAL-FIX | Docs | Low | `CLAUDE.md` Failure Handling Pattern | Code skeleton showed unconditional `Database.rollback(sp)` and `Savepoint sp = Database.setSavepoint()` at the top of `execute()`. Updated to show the correct pattern: `sp = null`, `calloutsAtSavepoint` capture before savepoint, pre-savepoint work comment, and `if (sp != null && Limits.getCallouts() == calloutsAtSavepoint)` guard on rollback. |
 
 ---
 
