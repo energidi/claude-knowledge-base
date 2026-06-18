@@ -121,19 +121,16 @@ private class DependencyJobControllerTest {
     @IsTest
     static void getJobStatus_returnsRecord() {
         Metadata_Scan_Job__c job = buildJob('Processing');
-        Metadata_Scan_Job__c result = DependencyJobController.getJobStatus(job.Id);
-        Assert.areEqual('Processing', result.Status__c);
+        DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(job.Id);
+        Assert.isNotNull(result);
+        Assert.areEqual('Processing', result.job.Status__c);
     }
 
     @IsTest
-    static void getJobStatus_notFound_throws() {
+    static void getJobStatus_notFound_returnsNull() {
         Id fakeId = '001000000000001AAA';
-        try {
-            DependencyJobController.getJobStatus(fakeId);
-            Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobController.DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('not found'));
-        }
+        DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(fakeId);
+        Assert.isNull(result);
     }
 
     // -----------------------------------------------------------------------

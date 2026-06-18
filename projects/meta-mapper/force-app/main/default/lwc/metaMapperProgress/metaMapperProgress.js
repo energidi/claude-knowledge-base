@@ -54,6 +54,7 @@ export default class MetaMapperProgress extends LightningElement {
     _elapsedTick = 0;
     _resumeTimeoutTimer = null;
     _pollFailCount = 0;
+    _isResuming = false;
 
     connectedCallback() {
         this._isMounted = true;
@@ -185,7 +186,9 @@ export default class MetaMapperProgress extends LightningElement {
 
     _startPolling() {
         this._stopPolling();
-        const interval = this.isPaused ? POLL_INTERVAL_PAUSED : POLL_INTERVAL_PROCESSING;
+        // Use 5s after a successful resumeJob() call regardless of current Paused status,
+        // so the Processing transition is caught quickly before the Queueable runs.
+        const interval = (this.isPaused && !this._isResuming) ? POLL_INTERVAL_PAUSED : POLL_INTERVAL_PROCESSING;
         // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._pollTimer = setTimeout(() => this._poll(), interval);
         this.showPollingNotice = true;
@@ -222,6 +225,7 @@ export default class MetaMapperProgress extends LightningElement {
             if (this.resumeLoading && status !== 'Paused') {
                 this.resumeLoading = false;
                 this.resumeSlowerActive = false;
+                this._isResuming = false;
                 clearTimeout(this._resumeTimeoutTimer);
             }
             // Reset resume timeout on each poll that confirms job is still Paused
@@ -318,6 +322,7 @@ export default class MetaMapperProgress extends LightningElement {
     }
 
     async _resume(slower) {
+        this._isResuming = true;
         this.resumeLoading = true;
         this.resumeSlowerActive = slower;
         const currentBatchSize = this._effectiveBatchSize();
@@ -337,6 +342,7 @@ export default class MetaMapperProgress extends LightningElement {
                 }));
             }, RESUME_TIMEOUT);
         } catch (e) {
+            this._isResuming = false;
             this.resumeLoading = false;
             this.resumeSlowerActive = false;
             const msg = (e.body && e.body.message) ? e.body.message : 'Could not resume the scan.';

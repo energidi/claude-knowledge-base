@@ -291,7 +291,7 @@ public with sharing class DependencyJobController {
     public static JobStatusResult getJobStatus(Id jobId) {
         Metadata_Scan_Job__c statusJob = new MetadataScanJobSelector().getByIdForStatusView(jobId);
         if (statusJob == null) {
-            throw new DependencyJobException('Scan job not found: ' + jobId);
+            return null;
         }
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
         Boolean platformEventsDisabled = settings.Disable_Platform_Events__c == true

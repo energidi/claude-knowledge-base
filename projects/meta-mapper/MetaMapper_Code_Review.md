@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 18, 2026 (Round 55 - sf-orchestrator full pass: 9 findings applied, appendNoticeSafe mandate, cancel state machine fixes, retentionHours propagation, field rename Platform_Events_Auto_Suppressed__c)
+**Last Updated:** June 18, 2026 (Round 56 - sf-orchestrator full pass: 4 findings applied, getJobStatus null-return fix, resume poll interval fix, Platform_Events_Auto_Suppressed__c data model doc, MetadataTypeDescribeService class doc)
 **Date:** May 23, 2026
 
 ---
@@ -713,6 +713,19 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 56 - sf-orchestrator Full Pass: 4 Findings Applied (June 18, 2026)
+
+All 4 review lenses run in parallel via sf-orchestrator with Phase 0 prior-round deduplication (55 prior rounds reviewed). 4 findings reviewed; 4 applied: 2 NEW, 2 PARTIAL-FIX. No Critical or High findings. OVERALL VERDICT: GO.
+
+| # | Status | Lens | Severity | Component / Area | Fix Applied |
+|---|---|---|---|---|---|
+| 1 | PARTIAL-FIX | UX | Medium | `metaMapperApp.js` deep-link loading / `DependencyJobController.getJobStatus()` | The "no longer available" toast was dead code: `getJobStatus()` threw `DependencyJobException` when the job was not found, so the `if (wrapper) { ... } else { show toast }` else-branch never executed. The catch block showed a generic connection-error message instead. Fix: `getJobStatus()` now returns `null` when `statusJob == null`. The existing else-branch in the LWC now activates correctly. Test updated: `getJobStatus_notFound_throws` renamed to `getJobStatus_notFound_returnsNull`; assertion changed to `Assert.isNull(result)`; return-type access in `getJobStatus_returnsRecord` corrected from `Metadata_Scan_Job__c` to `DependencyJobController.JobStatusResult`. |
+| 2 | NEW | UX | Medium | `metaMapperProgress.js` `_startPolling()` / `_resume()` | After `resumeJob()` succeeded, `_startPolling()` ran with `this.isPaused === true` (status not yet changed), selecting `POLL_INTERVAL_PAUSED` (10 s). Spec requires 5 s after a resume to catch the Processing transition quickly. Fix: added `_isResuming = false` class field; set `true` at start of `_resume()`, cleared in `_poll()` when status leaves Paused and in the `_resume()` error path. `_startPolling()` now uses `(this.isPaused && !this._isResuming) ? POLL_INTERVAL_PAUSED : POLL_INTERVAL_PROCESSING`. |
+| 3 | PARTIAL-FIX | Arch + Naming | Low | `CLAUDE.md` - `Metadata_Scan_Job__c` data model table | `Platform_Events_Auto_Suppressed__c` field (added and renamed in Round 55) was missing from the data model table. Field XML exists and is used in `DependencyNotificationService`, `DependencyJobController`, and `MetadataScanJobSelector`. Row added to the table with full description. |
+| 4 | NEW | Naming | Low | `CLAUDE.md` - Key Apex Classes table | `MetadataTypeDescribeService` was absent from the Key Apex Classes documentation table. Class exists with full code documentation and is used by `CustomFieldDependencyHandler` and `ApexClassDependencyHandler` as a shared CMT describe-data cache. Row added. |
 
 ---
 
