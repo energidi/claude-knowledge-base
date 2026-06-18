@@ -60,7 +60,9 @@ export default class MetaMapperApp extends LightningElement {
     @track _peSuppressionActive = false;
     @track _batchSizeInUse = null;
     @track _maxComponentsCap = 0;
+    @track _retentionHours = 72;
     @track isCheckingHealth = true;
+    _isMounted = false;
     @track isDeepLinkLoading = false;
     @track preflightErrorCode = null;
     @track showLearnMoreModal = false;
@@ -75,6 +77,7 @@ export default class MetaMapperApp extends LightningElement {
     _orgId = '';
 
     connectedCallback() {
+        this._isMounted = true;
         this.runHealthCheck();
         onError(err => console.error('PE error:', err));
         getOrgId().then(id => { this._orgId = id || ''; }).catch(() => {});
@@ -83,6 +86,7 @@ export default class MetaMapperApp extends LightningElement {
     get orgId() { return this._orgId; }
 
     disconnectedCallback() {
+        this._isMounted = false;
         if (this._peSubscription) {
             unsubscribe(this._peSubscription, () => {});
         }
@@ -109,6 +113,7 @@ export default class MetaMapperApp extends LightningElement {
     }
 
     async _handleHealthCheckPassed() {
+        if (!this._isMounted) return;
         const params = this.pageRef && this.pageRef.state;
         const deepJobId = params && params.jobId;
         if (deepJobId) {
@@ -126,6 +131,7 @@ export default class MetaMapperApp extends LightningElement {
                 }
             } catch {
                 this.view = 'search';
+                this._showToast('Could not load this scan result. Check your connection and try again.', 'error');
             } finally {
                 this.isDeepLinkLoading = false;
             }
@@ -144,6 +150,7 @@ export default class MetaMapperApp extends LightningElement {
     _subscribePE() {
         try {
             subscribe(PE_CHANNEL, -1, event => {
+                if (!this._isMounted) return;
                 const payload = event.data.payload;
                 if (payload.Scan_Job_Id__c !== this.jobId) return;
                 this._handlePEEvent(payload);
@@ -168,6 +175,7 @@ export default class MetaMapperApp extends LightningElement {
     }
 
     _handlePEEvent(payload) {
+        if (!this._isMounted) return;
         const newStatus = payload.Status__c;
         if (newStatus === 'Completed') {
             this._refreshJob().then(() => { this.view = 'results'; });
@@ -203,6 +211,7 @@ export default class MetaMapperApp extends LightningElement {
         this._peSuppressionActive = wrapper.peSuppressionActive === true;
         this._batchSizeInUse = wrapper.batchSizeInUse != null ? wrapper.batchSizeInUse : null;
         this._maxComponentsCap = wrapper.maxComponentsCap != null ? wrapper.maxComponentsCap : 0;
+        this._retentionHours = wrapper.retentionHours != null ? wrapper.retentionHours : 72;
     }
 
     // --- Computed getters ---
@@ -211,6 +220,7 @@ export default class MetaMapperApp extends LightningElement {
     get isProgressView()    { return this.view === 'progress'; }
     get isResultsView()     { return this.view === 'results'; }
     get maxComponentsCap()  { return this._maxComponentsCap || 0; }
+    get retentionHours()    { return this._retentionHours || 72; }
     get showApp() {
         return !this.isCheckingHealth && !this.isDeepLinkLoading && !this.showPreflightError;
     }
@@ -257,7 +267,7 @@ export default class MetaMapperApp extends LightningElement {
     handleJobStatusPolled(event) {
         this._storeJobResult(event.detail);
         const s = this.job && this.job.Status__c;
-        if (s === 'Completed' || s === 'Failed' || s === 'Cancelled') {
+        if (s === 'Completed' || s === 'Failed') {
             this.view = 'results';
         }
     }
@@ -304,7 +314,19 @@ export default class MetaMapperApp extends LightningElement {
     closeTour() {
         localStorage.setItem(TOUR_KEY, 'true');
         this.showTour = false;
-        if (this._tourTriggerElement) {
+        if (window.innerWidth < 1024) {
+            // On mobile there is no reliable keyboard focus to restore. Move focus to the
+            // first focusable element in metaMapperSearch so screen readers have a landing
+            // point without triggering a scroll jump to document.body.
+            // eslint-disable-next-line @lwc/lwc/no-async-operation
+            setTimeout(() => {
+                const search = this.template.querySelector('c-meta-mapper-search');
+                if (search) {
+                    const firstFocusable = search.querySelector('input, select, button, [tabindex="0"]');
+                    if (firstFocusable) firstFocusable.focus();
+                }
+            }, 0);
+        } else if (this._tourTriggerElement) {
             this._tourTriggerElement.focus();
         }
     }

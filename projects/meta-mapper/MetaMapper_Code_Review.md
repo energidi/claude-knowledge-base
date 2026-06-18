@@ -2,8 +2,23 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 16, 2026 (Round 54 - sf-orchestrator full pass: 3 findings applied, orgId propagation fix, PE terminal routing fix, deprecated class removed)
+**Last Updated:** June 18, 2026 (Round 55 - sf-orchestrator full pass: 9 findings applied, appendNoticeSafe mandate, cancel state machine fixes, retentionHours propagation, field rename Platform_Events_Auto_Suppressed__c)
 **Date:** May 23, 2026
+
+---
+
+## Known Skipped Findings
+
+Findings listed here appeared in one or more prior review rounds and were **deliberately accepted as-is** - known limitations, documented design trade-offs, or work explicitly deferred to a future phase. The sf-orchestrator Phase 0 deduplication step reads this section and tags matching findings as `SKIPPED` rather than `NEW`, preventing them from generating redundant action items in future rounds.
+
+**Format rule:** when a finding is permanently accepted (not just deferred), add a row here. When it is eventually fixed, move it to the relevant round entry and remove it from this table.
+
+| Area | Issue | Round First Seen | Reason Accepted |
+|---|---|---|---|
+| `setup/CONTRAST_MATRIX.md` | File not yet created - required WCAG contrast gate before LWC implementation | Round 18 | Pre-implementation gate document; required only when LWC node coloring work begins |
+| ECharts canvas - keyboard nav | `<canvas>` has no per-node DOM targets; virtual focus index not yet implemented | Round 41 | Deferred until LWC graph component is built; off-screen ARIA summary table is the interim accessibility mechanism per spec |
+| LWC components (all 8) | No LWC source files present in `force-app/` | Round 18 | Full LWC sprint is a separate phase; engine Apex is the current scope |
+| `MetadataDependencyDeletionBatch` - `Database.emptyRecycleBin` | Deleted records occupy Recycle Bin storage until nightly auto-purge | Round 17 | `emptyRecycleBin` was added in Round 17 (fix #18). **Resolved - remove from table if still appearing.** |
 
 ---
 
@@ -698,6 +713,25 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 55 - sf-orchestrator Full Pass: 9 Findings Applied (June 18, 2026)
+
+All 4 review lenses run in parallel via sf-orchestrator with Phase 0 prior-round deduplication (54 prior rounds reviewed). 10 findings reviewed; 9 applied: 7 NEW, 1 SKIPPED. No Critical findings. OVERALL VERDICT: GO.
+
+| # | Status | Lens | Severity | Component / Area | Fix Applied |
+|---|---|---|---|---|---|
+| 1 | NEW | Architecture | High | `SupplementalScanResult` + `DependencyNotificationService` + `DependencyJobController` | `appendErrorsSafe` mandate violations: two engine classes used `.right(32768)` for log truncation (preserving newest, discarding oldest entries - wrong direction). Added static `appendNoticeSafe(String existing, String notice)` to `SupplementalScanResult`; updated `DependencyNotificationService.appendNoticeToJob()` and `DependencyJobController.getNodeHierarchy()` truncation notice to call `appendNoticeSafe`. Created `SupplementalScanResultTest.cls` with 5 test methods covering boundary cases. |
+| 2 | NEW | UX | Medium | `metaMapperProgress.js` `handleStatusEvent()` | PE-delivered `Status__c = 'Cancelled'` events were not advancing the cancel state machine. When `_cancelPhase === 'cancelling'` and a `Status__c = 'Cancelled'` PE arrived, `_cancelPhase` was never set to `'cancelled'`. Added handling in `handleStatusEvent()` to set `_cancelPhase = 'cancelled'`, `showCancellingSubtext = false`, and clear `_cancelTimeoutTimer`. |
+| 3 | NEW | UX | Medium | `metaMapperProgress.js` `_poll()` | When polling detected `Status__c = 'Cancelled'` while `_cancelPhase === 'cancelling'`, `_cancelPhase` was set to `'cancelled'` but `showCancellingSubtext` was never cleared. Added `this.showCancellingSubtext = false` alongside the existing state transition. |
+| 4 | NEW | Architecture | Medium | `DependencyJobController.JobStatusResult` + `metaMapperResults.js` | `retentionHours` was derived from `job.Retention_Hours__c` (a field that does not exist on `Metadata_Scan_Job__c` - it is a CMDT field). Added `@AuraEnabled public Integer retentionHours` to `JobStatusResult` wrapper, populated from `settings.Retention_Hours__c` in `getJobStatus()`. Propagated via `metaMapperApp` `_storeJobResult()`, `@track _retentionHours`, HTML `retention-hours` prop. Replaced invalid getter in `metaMapperResults.js` with `@api retentionHours = 72`. |
+| 5 | NEW | UX | Medium | `metaMapperApp.js` `handleJobStatusPolled()` | `Cancelled` was incorrectly included in the auto-navigate-to-results condition alongside `Completed` and `Failed`. The spec requires the user to navigate via the "View partial results" link in the progress view, not auto-redirect. Removed `Cancelled` from the condition. |
+| 6 | NEW | UX | Medium | `metaMapperApp.js` | `_isMounted` guard missing. PE callbacks, `_handlePEEvent()`, `_handleHealthCheckPassed()`, and the `empApi` subscribe callback could update state on an unmounted component. Added `_isMounted = false` property; set `true` in `connectedCallback`, `false` in `disconnectedCallback`; added `if (!this._isMounted) return` guards to all four locations. |
+| 7 | NEW | UX | Low | `metaMapperApp.js` `closeTour()` | On mobile (`< 1024px`), `document.activeElement` is typically `document.body` - restoring focus to it causes scroll jumps with no accessibility value. Added mobile detection via `window.innerWidth < 1024`; on mobile, focus moves to the first focusable element in `metaMapperSearch` instead. |
+| 8 | NEW | UX | Low | `metaMapperApp.js` `_handleHealthCheckPassed()` | Deep-link catch block was silent (`this.view = 'search'` only). Network errors were indistinguishable from successful not-found responses. Added toast: "Could not load this scan result. Check your connection and try again." |
+| 9 | NEW | Naming | Medium | `PE_Suppressed_This_Execution__c` field | V-02 (`This_Execution` implementation detail) + V-05 (`PE` unapproved abbreviation). Renamed to `Platform_Events_Auto_Suppressed__c`. Created new field XML; deleted old XML. Updated all references: `DependencyNotificationService.cls`, `DependencyJobController.cls`, `MetadataScanJobSelector.cls`. |
+| 10 | SKIPPED | Naming | Low | `PE_Suppressed_This_Execution__c` field label | Prior rounds accepted this as engine-internal. Now resolved as part of finding #9 field rename. |
 
 ---
 

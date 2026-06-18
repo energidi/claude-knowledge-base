@@ -53,6 +53,33 @@ public class SupplementalScanResult {
     }
 
     /**
+     * Static 2-argument variant of the log-safe append. Appends a single notice string
+     * to an existing Scan_Diagnostic_Log__c value, truncating the NOTICE (not the existing
+     * log) so that the combined length never exceeds 32,768 characters.
+     *
+     * This is the ONLY permitted write path for engine-level log entries that are NOT
+     * produced by supplemental handlers (e.g. PE suppression notices, truncation warnings,
+     * system diagnostics). All direct string operations on Scan_Diagnostic_Log__c are
+     * forbidden - call this method instead.
+     *
+     * Behavior: if the existing log leaves no budget for the notice, the existing log is
+     * returned unchanged (unlike .right() which would discard the oldest entries).
+     *
+     * @param existing  Current value of Scan_Diagnostic_Log__c (may be null/blank)
+     * @param notice    The notice string to append
+     * @return          Updated log string, safe to assign to Scan_Diagnostic_Log__c
+     */
+    public static String appendNoticeSafe(String existing, String notice) {
+        if (String.isBlank(notice)) { return existing; }
+        Integer existingLen = String.isBlank(existing) ? 0 : existing.length();
+        Integer separator   = String.isBlank(existing) ? 0 : 1;  // '\n'
+        Integer budget      = 32768 - existingLen - separator;
+        if (budget <= 0) { return existing; }
+        String safeNotice   = notice.length() <= budget ? notice : notice.left(budget);
+        return String.isBlank(existing) ? safeNotice : (existing + '\n' + safeNotice);
+    }
+
+    /**
      * Appends all accumulated error strings to an existing log string, guarding against
      * Metadata_Scan_Job__c.Scan_Diagnostic_Log__c overflow (Long Text 32,768 char limit).
      *

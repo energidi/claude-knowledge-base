@@ -216,11 +216,9 @@ public without sharing class DependencyNotificationService implements IScanNotif
         try {
             Metadata_Scan_Job__c job = new MetadataScanJobSelector().getByIdForLogAppend(jobId);
             if (job != null) {
-                String existing = job.Scan_Diagnostic_Log__c;
-                job.Scan_Diagnostic_Log__c = String.isBlank(existing)
-                    ? notice
-                    : (existing + '\n' + notice).right(32768);
-                job.PE_Suppressed_This_Execution__c = true;
+                job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                        job.Scan_Diagnostic_Log__c, notice);
+                job.Platform_Events_Auto_Suppressed__c = true;
                 update job;
             }
         } catch (Exception e) {

@@ -319,7 +319,7 @@ public without sharing class MetadataScanJobSelector {
                    Batch_Size_Override__c,
                    Pause_Reason__c,
                    Result_Save_Attempted__c,
-                   PE_Suppressed_This_Execution__c,
+                   Platform_Events_Auto_Suppressed__c,
                    CreatedDate
             FROM Metadata_Scan_Job__c
             WHERE Id = :jobId

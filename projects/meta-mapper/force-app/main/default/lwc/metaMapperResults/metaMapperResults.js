@@ -25,6 +25,7 @@ export default class MetaMapperResults extends LightningElement {
     @api jobId;
     @api job;
     @api orgId = '';
+    @api retentionHours = 72;
 
     @track allNodes = [];
     @track filters = { ...DEFAULT_FILTERS };
@@ -151,7 +152,6 @@ export default class MetaMapperResults extends LightningElement {
     get isZeroResults() { return this.hasResults && this.allNodes.length === 0; }
     get showTabs() { return this.hasResults && this.allNodes.length > 0; }
     get targetApiName() { return (this.job && this.job.Target_API_Name__c) || ''; }
-    get retentionHours() { return (this.job && this.job.Retention_Hours__c) || 72; }
 
     get isSerializerFailure() {
         return this.job

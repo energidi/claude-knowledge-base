@@ -35,12 +35,14 @@ public with sharing class DependencyJobController {
         @AuraEnabled public Boolean peSuppressionActive;
         @AuraEnabled public Integer batchSizeInUse;
         @AuraEnabled public Integer maxComponentsCap;
+        @AuraEnabled public Integer retentionHours;
 
-        public JobStatusResult(Metadata_Scan_Job__c job, Boolean platformEventsDisabled, Integer batchSize, Integer maxCap) {
+        public JobStatusResult(Metadata_Scan_Job__c job, Boolean platformEventsDisabled, Integer batchSize, Integer maxCap, Integer retentionHrs) {
             this.job                = job;
             this.peSuppressionActive = platformEventsDisabled;
             this.batchSizeInUse     = batchSize;
             this.maxComponentsCap   = maxCap;
+            this.retentionHours     = retentionHrs;
         }
     }
 
@@ -293,12 +295,13 @@ public with sharing class DependencyJobController {
         }
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
         Boolean platformEventsDisabled = settings.Disable_Platform_Events__c == true
-            || statusJob.PE_Suppressed_This_Execution__c == true;
+            || statusJob.Platform_Events_Auto_Suppressed__c == true;
         Integer batchSizeInUse = statusJob.Batch_Size_Override__c != null
             ? ((Decimal) statusJob.Batch_Size_Override__c).intValue()
             : (settings.Scan_Batch_Size__c != null ? ((Decimal) settings.Scan_Batch_Size__c).intValue() : 50);
         Integer maxComponentsCap = settings.Max_Components__c != null ? ((Decimal) settings.Max_Components__c).intValue() : 0;
-        return new JobStatusResult(statusJob, platformEventsDisabled, batchSizeInUse, maxComponentsCap);
+        Integer retentionHrs = settings.Retention_Hours__c != null ? ((Decimal) settings.Retention_Hours__c).intValue() : 72;
+        return new JobStatusResult(statusJob, platformEventsDisabled, batchSizeInUse, maxComponentsCap, retentionHrs);
     }
 
     // -----------------------------------------------------------------------
@@ -369,9 +372,8 @@ public with sharing class DependencyJobController {
                         + MetadataDependencySelector.MAX_NODE_QUERY_LIMIT
                         + ' nodes. Some nodes may be missing from the live view. '
                         + 'Download the result file for the complete dataset.';
-                    String existing = logTruncJob.Scan_Diagnostic_Log__c;
-                    logTruncJob.Scan_Diagnostic_Log__c = String.isBlank(existing)
-                        ? notice : (existing + '\n' + notice).right(32768);
+                    logTruncJob.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                        logTruncJob.Scan_Diagnostic_Log__c, notice);
                     update as user logTruncJob;
                 }
             } catch (Exception e) {

@@ -82,6 +82,11 @@ export default class MetaMapperProgress extends LightningElement {
         if (eventData && eventData.streamingQuotaLimitExceeded && !this._streamingQuotaBannerDismissed) {
             this.showStreamingQuotaBanner = true;
         }
+        if (eventData && eventData.Status__c === 'Cancelled' && this._cancelPhase === 'cancelling') {
+            this._cancelPhase = 'cancelled';
+            this.showCancellingSubtext = false;
+            clearTimeout(this._cancelTimeoutTimer);
+        }
     }
 
     dismissStreamingQuotaBanner() {
@@ -210,6 +215,7 @@ export default class MetaMapperProgress extends LightningElement {
             const status = result && result.job && result.job.Status__c;
             if (status === 'Cancelled' && this._cancelPhase === 'cancelling') {
                 this._cancelPhase = 'cancelled';
+                this.showCancellingSubtext = false;
                 clearTimeout(this._cancelTimeoutTimer);
             }
             // Clear resume loading state once status leaves Paused.

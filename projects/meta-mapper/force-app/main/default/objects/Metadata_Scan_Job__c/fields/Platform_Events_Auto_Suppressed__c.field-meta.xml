@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>PE_Suppressed_This_Execution__c</fullName>
+    <fullName>Platform_Events_Auto_Suppressed__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Set to true synchronously by the engine when Platform Event auto-suppression fires during an execution (org daily PE delivery >80% consumed). Allows getJobStatus() to return peSuppressionActive: true immediately, without waiting for the async CMDT Disable_Platform_Events__c write to commit. Cleared on subsequent job starts. Do not edit manually.</description>
-    <label>Platform Events Suppressed This Execution</label>
+    <label>Platform Events Auto-Suppressed</label>
     <type>Checkbox</type>
 </CustomField>
