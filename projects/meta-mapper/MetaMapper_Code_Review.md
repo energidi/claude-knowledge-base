@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 18, 2026 (Round 56 - sf-orchestrator full pass: 4 findings applied, getJobStatus null-return fix, resume poll interval fix, Platform_Events_Auto_Suppressed__c data model doc, MetadataTypeDescribeService class doc)
+**Last Updated:** June 18, 2026 (Round 57 - sf-orchestrator full pass: 5 findings applied, DependencyCleanupBatch log concat fix, polling notice text resume fix, DependencyJobSelector rename in CLAUDE.md, appendNoticeSafe two-path doc, root ID resolution Step 5a doc)
 **Date:** May 23, 2026
 
 ---
@@ -713,6 +713,20 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 57 - sf-orchestrator Full Pass: 5 Findings Applied (June 18, 2026)
+
+All 4 review lenses run in parallel via sf-orchestrator with Phase 0 prior-round deduplication (56 prior rounds reviewed). 5 NEW findings applied, 2 SKIPPED shown for transparency. No Critical or High findings. OVERALL VERDICT: GO.
+
+| # | Status | Lens | Severity | Component / Area | Fix Applied |
+|---|---|---|---|---|---|
+| 1 | NEW | Architecture + Naming | Medium | `CLAUDE.md` - Selectors table + Key Apex Classes + updateJobFailed() | CLAUDE.md consistently referenced `DependencyJobSelector` but the actual class is `MetadataScanJobSelector.cls`. Three occurrences updated: Selectors table row, concurrency guard advisory note (`countActiveQueueables`), and `updateJobFailed()` description (`getForFailedUpdateLocked`). |
+| 2 | NEW | Architecture | Medium | `DependencyCleanupBatch.cls:113-116` | `appendNoticeToJob()` used direct string concatenation with `.right(32768)`, which truncates from the beginning of the combined string (discards oldest log entries). CLAUDE.md forbids direct concatenation. Replaced with `SupplementalScanResult.appendNoticeSafe(job.Scan_Diagnostic_Log__c, notice)`. |
+| 3 | NEW | UX | Medium | `metaMapperProgress.js:195` | Polling notice text showed "refreshing every 10 seconds" during resume-in-progress (`_isResuming=true`, `isPaused=true`) when actual interval was 5 s. Fixed: notice text now also checks `!this._isResuming` to match the interval logic already used by `_startPolling()`. |
+| 4 | NEW | Architecture | Low | `CLAUDE.md` - `SupplementalScanResult` class description | The "ONLY permitted write path" claim was incorrect - `appendNoticeSafe` (static, single-notice) and `appendErrorsSafe` (instance, batch-handler) are two distinct methods both serving as valid write paths. Updated description documents both methods, their signatures, and their distinct use cases. |
+| 5 | NEW | Architecture | Low | `CLAUDE.md` - `DependencyQueueable` + `DependencyJobController.createJob()` descriptions | Step 5a (root node `Metadata_Id__c` blank-on-insert pattern + `resolveRootId()` resolution on first execution) was undocumented. Added Step 5a details to `DependencyQueueable` Key Apex Classes entry and a parenthetical note to the `createJob()` description. |
 
 ---
 

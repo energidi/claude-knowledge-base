@@ -192,7 +192,7 @@ export default class MetaMapperProgress extends LightningElement {
         // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._pollTimer = setTimeout(() => this._poll(), interval);
         this.showPollingNotice = true;
-        this.pollingNoticeText = this.isPaused
+        this.pollingNoticeText = (this.isPaused && !this._isResuming)
             ? 'Live updates paused - refreshing every 10 seconds.'
             : 'Live updates paused - refreshing every 5 seconds.';
     }

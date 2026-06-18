@@ -110,10 +110,8 @@ public without sharing class DependencyCleanupBatch
             Metadata_Scan_Job__c job =
                 new MetadataScanJobSelector().getByIdForLogAppend(jobId);
             if (job != null) {
-                String existing = job.Scan_Diagnostic_Log__c;
-                job.Scan_Diagnostic_Log__c = String.isBlank(existing)
-                    ? notice
-                    : (existing + '\n' + notice).right(32768);
+                job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                    job.Scan_Diagnostic_Log__c, notice);
                 update job;
             }
         } catch (Exception e) {
