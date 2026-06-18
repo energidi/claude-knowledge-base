@@ -121,9 +121,8 @@ public without sharing class ScanResultFileQueueable implements Queueable {
             String truncMsg = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] Node list may be truncated; '
                 + 'result size hit the query cap of ' + nodes.size()
                 + '. Some nodes may be missing from the exported file.';
-            job.Scan_Diagnostic_Log__c = String.isBlank(job.Scan_Diagnostic_Log__c)
-                ? truncMsg
-                : (job.Scan_Diagnostic_Log__c + '\n' + truncMsg).right(32768);
+            job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                job.Scan_Diagnostic_Log__c, truncMsg);
         }
 
         // --- 2. Sample-based heap check ---
@@ -181,14 +180,14 @@ public without sharing class ScanResultFileQueueable implements Queueable {
                 String warn = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] ContentDocumentLink visibility update failed: '
                     + linkResults[0].getErrors()[0].getMessage()
                     + '. File may be visible to unintended users.';
-                job.Scan_Diagnostic_Log__c = (String.isBlank(job.Scan_Diagnostic_Log__c)
-                    ? warn : (job.Scan_Diagnostic_Log__c + '\n' + warn)).right(32768);
+                job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                    job.Scan_Diagnostic_Log__c, warn);
             }
         } else {
             String warn = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] ContentDocumentLink not found for '
                 + cv.ContentDocumentId + '; file visibility may not be restricted to InternalUsers.';
-            job.Scan_Diagnostic_Log__c = (String.isBlank(job.Scan_Diagnostic_Log__c)
-                ? warn : (job.Scan_Diagnostic_Log__c + '\n' + warn)).right(32768);
+            job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                job.Scan_Diagnostic_Log__c, warn);
         }
 
         // --- 6. Compute Component_Type_Counts__c ---
@@ -232,8 +231,8 @@ public without sharing class ScanResultFileQueueable implements Queueable {
             // This should never occur ({"v":1} is 7 chars) but is guarded to avoid a field truncation.
             String warn = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] WARNING: Component_Type_Counts__c '
                 + 'fell back to minimum envelope {"v":1} after all type keys were trimmed.';
-            job.Scan_Diagnostic_Log__c = (String.isBlank(job.Scan_Diagnostic_Log__c)
-                ? warn : (job.Scan_Diagnostic_Log__c + '\n' + warn)).right(32768);
+            job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                job.Scan_Diagnostic_Log__c, warn);
             typeCountsJson = '{"v":1}';
         }
 
@@ -342,8 +341,8 @@ public without sharing class ScanResultFileQueueable implements Queueable {
                     fallbackJob.Scan_Summary_Text__c = 'This scan found ' + total
                         + ' dependenc' + (total == 1 ? 'y' : 'ies') + '.';
                     String existing = fallbackJob.Scan_Diagnostic_Log__c;
-                    fallbackJob.Scan_Diagnostic_Log__c = String.isBlank(existing)
-                        ? warn : (existing + '\n' + warn).right(32768);
+                    fallbackJob.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                        existing, warn);
                     update fallbackJob;
                 }
             } catch (Exception fallbackEx) {
@@ -522,9 +521,8 @@ public without sharing class ScanResultFileQueueable implements Queueable {
      */
     private void appendWarningToJob(Metadata_Scan_Job__c job, String warning) {
         if (job == null) { return; }
-        job.Scan_Diagnostic_Log__c = String.isBlank(job.Scan_Diagnostic_Log__c)
-            ? warning
-            : (job.Scan_Diagnostic_Log__c + '\n' + warning).right(32768);
+        job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+            job.Scan_Diagnostic_Log__c, warning);
         try {
             update new Metadata_Scan_Job__c(
                 Id = job.Id,
@@ -547,9 +545,8 @@ public without sharing class ScanResultFileQueueable implements Queueable {
                 new MetadataScanJobSelector().getByIdForLogAppend(jobId);
             if (job != null) {
                 String existing = job.Scan_Diagnostic_Log__c;
-                job.Scan_Diagnostic_Log__c = String.isBlank(existing)
-                    ? warning
-                    : (existing + '\n' + warning).right(32768);
+                job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                    existing, warning);
                 update job;
             }
         } catch (Exception e) {
@@ -599,9 +596,8 @@ public without sharing class ScanResultFileQueueable implements Queueable {
                 ? jobs[0].Components_Analyzed__c : 0;
             String prior = jobs[0].Scan_Diagnostic_Log__c;
             jobs[0].Status__c = 'Failed';
-            jobs[0].Scan_Diagnostic_Log__c = String.isBlank(prior)
-                ? errorMsg.left(32768)
-                : (prior + '\n' + errorMsg).right(32768);
+            jobs[0].Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                prior, errorMsg);
             jobs[0].Status_Closed_At__c = System.now();
             update jobs;
             dmlSucceeded = true;

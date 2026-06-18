@@ -643,12 +643,11 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         job.Last_Query_Row_Count__c = fetchContext.lastResultCount != null ? fetchContext.lastResultCount : 0;
 
         // Errors from fetchContext.errors already carry individual timestamps from addError().
-        // Append them directly without using appendToLog() to avoid double-timestamping.
+        // Use appendNoticeSafe (no extra timestamp added) to stay on the two-path mandate.
         if (fetchContext.errors != null && !fetchContext.errors.isEmpty()) {
             String joined = String.join(fetchContext.errors, '\n');
-            job.Scan_Diagnostic_Log__c = String.isBlank(job.Scan_Diagnostic_Log__c)
-                ? joined.right(LOG_FIELD_MAX)
-                : (job.Scan_Diagnostic_Log__c + '\n' + joined).right(LOG_FIELD_MAX);
+            job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                job.Scan_Diagnostic_Log__c, joined);
         }
 
         // Surface a warning when some parents could not be fetched.
@@ -847,9 +846,8 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         List<String> peNotices = DependencyNotificationService.getAndClearPendingNotices();
         if (!peNotices.isEmpty()) {
             String combined = String.join(peNotices, '\n');
-            job.Scan_Diagnostic_Log__c = String.isBlank(job.Scan_Diagnostic_Log__c)
-                ? combined
-                : (job.Scan_Diagnostic_Log__c + '\n' + combined).right(LOG_FIELD_MAX);
+            job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                job.Scan_Diagnostic_Log__c, combined);
         }
 
         // Step 20 - self-chain to process the next batch
@@ -906,20 +904,13 @@ public without sharing class DependencyQueueable implements Queueable, Database.
     }
 
     /**
-     * Appends a single timestamped diagnostic line to a log field value,
-     * capped at the Long Text field maximum.
+     * Appends a single timestamped diagnostic line to a log field value via the
+     * two-path mandate (appendNoticeSafe). Preserves existing log content when full
+     * by truncating the new message rather than discarding the oldest entries.
      */
     private String appendToLog(String existing, String msg) {
         String timestamped = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] ' + msg;
-        if (String.isBlank(existing)) {
-            return timestamped.left(LOG_FIELD_MAX);
-        }
-        String combined = existing + '\n' + timestamped;
-        // Keep the NEWEST diagnostics when the field is full: right() discards the oldest
-        // entries instead of left() which would discard the most recent ones.
-        return combined.length() > LOG_FIELD_MAX
-            ? combined.right(LOG_FIELD_MAX)
-            : combined;
+        return SupplementalScanResult.appendNoticeSafe(existing, timestamped);
     }
 
     private Integer intOf(Decimal d) {
@@ -976,9 +967,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             // Append to preserve any prior diagnostics accumulated during the execution.
             String prior = job.Scan_Diagnostic_Log__c;
             String newMsg = errorMsg != null ? errorMsg : 'An unexpected error stopped the analysis.';
-            job.Scan_Diagnostic_Log__c = String.isBlank(prior)
-                ? newMsg.left(LOG_FIELD_MAX)
-                : (prior + '\n' + newMsg).right(LOG_FIELD_MAX);
+            job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(prior, newMsg);
             update job;
             dmlSucceeded = true;
         } catch (Exception e) {

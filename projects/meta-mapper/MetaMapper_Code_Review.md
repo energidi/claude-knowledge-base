@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 18, 2026 (Round 57 - sf-orchestrator full pass: 5 findings applied, DependencyCleanupBatch log concat fix, polling notice text resume fix, DependencyJobSelector rename in CLAUDE.md, appendNoticeSafe two-path doc, root ID resolution Step 5a doc)
+**Last Updated:** June 18, 2026 (Round 58 - sf-orchestrator full pass: 4 findings applied, appendNoticeSafe mandate enforced across ScanResultFileQueueable, DependencyQueueable, MetadataDependencyDeletionBatch, ScanSummaryQueueable)
 **Date:** May 23, 2026
 
 ---
@@ -713,6 +713,19 @@ sf-review-design run. Architecture: NO-GO (3 missing classes). UX: NO-GO (4 spec
 | 29 | Collapse All button defined: toolbar button, no size guard, symmetric with Expand All | Graph View interactions |
 | 30 | Package.xml namespace detection: 5 test cases added for unit test coverage | Export Formats |
 | 31 | Resume error recovery state machine: steps (1-4) explicit in the Paused state row | Empty & Error States |
+
+---
+
+### Round 58 - sf-orchestrator Full Pass: 4 Findings Applied (June 18, 2026)
+
+All 4 review lenses run in parallel via sf-orchestrator with Phase 0 prior-round deduplication (57 prior rounds reviewed). 4 PARTIAL-FIX findings applied. No Critical or High findings. OVERALL VERDICT: GO.
+
+| # | Status | Lens | Severity | Component / Area | Fix Applied |
+|---|---|---|---|---|---|
+| 1 | PARTIAL-FIX | Architecture | High | `ScanResultFileQueueable.cls` (8 sites) | 8 direct `.right(32768)` concatenations in log-write paths violated the two-path mandate. Replaced all 8 with `SupplementalScanResult.appendNoticeSafe()` calls: truncation notice (line ~126), CDL visibility update failed (~185), CDL not found (~191), Component_Type_Counts__c emergency fallback (~236), `ScanSummaryQueueable` fallback (~346), `appendWarningToJob(Metadata_Scan_Job__c, String)` (~527), `appendWarningToJob(String)` overload (~552), `updateJobFailed()` (~604). |
+| 2 | PARTIAL-FIX | Architecture | Medium | `DependencyQueueable.cls` (3 sites) | 3 direct `.right(LOG_FIELD_MAX)` concatenations replaced with `SupplementalScanResult.appendNoticeSafe()`: `fetchContext.errors` join (~651), PE failure notices from `DependencyNotificationService` (~852), `updateJobFailed()` error message (~981). Comment on `fetchContext.errors` site updated to reflect mandate compliance. |
+| 3 | PARTIAL-FIX | Architecture | Medium | `MetadataDependencyDeletionBatch.cls` (2 sites) + `ScanSummaryQueueable.cls` (2 sites) | `MetadataDependencyDeletionBatch`: 2 ContentDocument delete failure log writes replaced (~137-138, ~167-168). `ScanSummaryQueueable`: 2 catch-block log writes replaced (~57-58, ~65-66). Both files now use `SupplementalScanResult.appendNoticeSafe()` exclusively for log writes. |
+| 4 | PARTIAL-FIX | Architecture | Low | `DependencyQueueable.appendToLog()` private method | `appendToLog()` was an unapproved third log-write path using `.right()` (keeps newest, discards oldest). Refactored to delegate to `SupplementalScanResult.appendNoticeSafe()` - consistent with the two-path mandate. Overflow behavior changed from "keep newest" to "keep oldest" (acceptable per user approval). Comment updated. |
 
 ---
 

@@ -132,10 +132,8 @@ public without sharing class MetadataDependencyDeletionBatch
                                             FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1
                                         ];
                                         if (!toUpdate.isEmpty()) {
-                                            String existing = toUpdate[0].Scan_Diagnostic_Log__c;
-                                            toUpdate[0].Scan_Diagnostic_Log__c = String.isBlank(existing)
-                                                ? fileErrMsg.right(32768)
-                                                : (existing + '\n' + fileErrMsg).right(32768);
+                                            toUpdate[0].Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                                                toUpdate[0].Scan_Diagnostic_Log__c, fileErrMsg);
                                             update toUpdate;
                                         }
                                     } catch (Exception updateEx) {
@@ -162,10 +160,8 @@ public without sharing class MetadataDependencyDeletionBatch
                                     FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1
                                 ];
                                 if (!toUpdate.isEmpty()) {
-                                    String existing = toUpdate[0].Scan_Diagnostic_Log__c;
-                                    toUpdate[0].Scan_Diagnostic_Log__c = String.isBlank(existing)
-                                        ? fileErrMsg.right(32768)
-                                        : (existing + '\n' + fileErrMsg).right(32768);
+                                    toUpdate[0].Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                                        toUpdate[0].Scan_Diagnostic_Log__c, fileErrMsg);
                                     update toUpdate;
                                 }
                             } catch (Exception updateEx) {

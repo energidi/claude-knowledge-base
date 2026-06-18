@@ -53,18 +53,16 @@ public without sharing class ScanSummaryQueueable implements Queueable {
                     // Reuse the in-memory record; avoids a second SOQL query.
                     // Clear any partial summary value that may have been set before the throw.
                     job.Scan_Summary_Text__c = null;
-                    String existing = job.Scan_Diagnostic_Log__c;
-                    job.Scan_Diagnostic_Log__c = String.isBlank(existing)
-                        ? warn : (existing + '\n' + warn).right(32768);
+                    job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                        job.Scan_Diagnostic_Log__c, warn);
                     update job;
                 } else {
                     // Initial SELECT failed; re-query is required to write the warning.
                     Metadata_Scan_Job__c errJob =
                         new MetadataScanJobSelector().getByIdForLogAppend(jobId);
                     if (errJob != null) {
-                        String existing = errJob.Scan_Diagnostic_Log__c;
-                        errJob.Scan_Diagnostic_Log__c = String.isBlank(existing)
-                            ? warn : (existing + '\n' + warn).right(32768);
+                        errJob.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                            errJob.Scan_Diagnostic_Log__c, warn);
                         update errJob;
                     }
                 }
