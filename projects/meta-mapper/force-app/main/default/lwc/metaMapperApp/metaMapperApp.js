@@ -116,6 +116,7 @@ export default class MetaMapperApp extends LightningElement {
         if (!this._isMounted) return;
         const params = this.pageRef && this.pageRef.state;
         const deepJobId = params && params.jobId;
+        const deepNodeId = params && params.nodeId;
         if (deepJobId) {
             this.isDeepLinkLoading = true;
             try {
@@ -125,6 +126,13 @@ export default class MetaMapperApp extends LightningElement {
                     this._storeJobResult(wrapper);
                     const s = this.job && this.job.Status__c;
                     this.view = ['Initializing', 'Processing', 'Paused'].includes(s) ? 'progress' : 'results';
+                    if (deepNodeId && this.view === 'results') {
+                        // eslint-disable-next-line @lwc/lwc/no-async-operation
+                        setTimeout(() => {
+                            const res = this.template.querySelector('c-meta-mapper-results');
+                            if (res) res.setPendingNodeId(deepNodeId);
+                        }, 0);
+                    }
                 } else {
                     this.view = 'search';
                     this._showToast('This scan result is no longer available. It may have been automatically deleted.', 'error');
@@ -333,6 +341,10 @@ export default class MetaMapperApp extends LightningElement {
 
     handleShowError(event) {
         this._showToast(event.detail.message, 'error');
+    }
+
+    handleShowToast(event) {
+        this._showToast(event.detail.message, event.detail.variant || 'info');
     }
 
     handleFiltersReset() {

@@ -848,6 +848,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             String combined = String.join(peNotices, '\n');
             job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
                 job.Scan_Diagnostic_Log__c, combined);
+            update job;
         }
 
         // Step 20 - self-chain to process the next batch

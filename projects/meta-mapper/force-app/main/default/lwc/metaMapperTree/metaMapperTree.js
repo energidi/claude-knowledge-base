@@ -1,5 +1,5 @@
 import { LightningElement, api, track } from 'lwc';
-import { applyFilters, buildNodeMap } from 'c/metaMapperNodeFilters';
+import { applyFilters, buildNodeMap } from 'c/metaMapperNodeServices';
 
 const ROW_HEIGHT = 40;
 const BUFFER = 15;
@@ -430,7 +430,9 @@ export default class MetaMapperTree extends LightningElement {
         this._closeContextMenu();
         if (!node) return;
         this.dispatchEvent(new CustomEvent('graphpathrequest', {
-            detail: { nodeId: node.Metadata_Id__c }
+            detail: { nodeId: node.Metadata_Id__c },
+            bubbles: true,
+            composed: true
         }));
     }
 

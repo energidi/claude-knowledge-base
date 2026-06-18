@@ -1,5 +1,5 @@
 import { LightningElement, api, track } from 'lwc';
-import { resolveSetupUrl } from 'c/metaMapperNodeFilters';
+import { resolveSetupUrl } from 'c/metaMapperNodeServices';
 import { renderPills } from 'c/metaMapperFormatters';
 
 export default class MetaMapperComponentDetailsPanel extends LightningElement {

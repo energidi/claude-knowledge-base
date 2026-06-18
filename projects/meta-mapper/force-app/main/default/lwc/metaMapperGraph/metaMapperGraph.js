@@ -1,7 +1,7 @@
 import { LightningElement, api } from 'lwc';
 import { loadScript } from 'lightning/platformResourceLoader';
 import ECHARTS from '@salesforce/resourceUrl/ECharts';
-import { applyFilters } from 'c/metaMapperNodeFilters';
+import { applyFilters } from 'c/metaMapperNodeServices';
 import { renderPills } from 'c/metaMapperFormatters';
 
 const TYPE_COLORS = {
@@ -56,6 +56,18 @@ export default class MetaMapperGraph extends LightningElement {
 
     @api targetApiName = '';
 
+    @api
+    set selectedNodeId(val) {
+        const prev = this._selectedNodeId;
+        this._selectedNodeId = val || null;
+        if (this._chartReady && prev !== this._selectedNodeId) {
+            this._renderGraph();
+        }
+    }
+    get selectedNodeId() {
+        return this._selectedNodeId;
+    }
+
     // ---- internal state ----
     _chart = null;
     _chartReady = false;
@@ -84,6 +96,9 @@ export default class MetaMapperGraph extends LightningElement {
     _handleCtrlK = null;
     _handleResize = null;
     _ctrlKAttached = false;
+    _ariaRebuildTimer = null;
+    _ariaTableBusy = false;
+    _graphAriaLiveText = '';
 
     // ---- lifecycle ----
 
@@ -130,6 +145,7 @@ export default class MetaMapperGraph extends LightningElement {
     disconnectedCallback() {
         this._isMounted = false;
         clearTimeout(this._tabReadyTimeout);
+        clearTimeout(this._ariaRebuildTimer);
         window.removeEventListener('resize', this._handleResize);
         if (this._handleCtrlK) {
             const wrapper = this.template.querySelector('.graph-canvas-wrapper');
@@ -278,16 +294,27 @@ export default class MetaMapperGraph extends LightningElement {
         if (!this._chart) return;
         const visible = this._getVisibleNodes();
         this._nodeMap = new Map(visible.map((n) => [n.Metadata_Id__c, n]));
-        this._ariaTableRows = visible.map((n) => ({
-            id: n.Metadata_Id__c,
-            name: n.Metadata_Name__c || '',
-            type: n.Metadata_Type__c || '',
-            flags: [n.Is_Circular__c && 'Circular', n.Is_Dynamic_Reference__c && 'Dynamic']
-                .filter(Boolean)
-                .join(', '),
-        }));
         const option = this._buildOption(visible);
         this._chart.setOption(option, true);
+        this._scheduleAriaTableRebuild(visible);
+    }
+
+    _scheduleAriaTableRebuild(visible) {
+        clearTimeout(this._ariaRebuildTimer);
+        this._ariaTableBusy = true;
+        // eslint-disable-next-line @lwc/lwc/no-async-operation
+        this._ariaRebuildTimer = setTimeout(() => {
+            if (!this._isMounted) return;
+            this._ariaTableRows = visible.map((n) => ({
+                id: n.Metadata_Id__c,
+                name: n.Metadata_Name__c || '',
+                type: n.Metadata_Type__c || '',
+                flags: [n.Is_Circular__c && 'Circular', n.Is_Dynamic_Reference__c && 'Dynamic']
+                    .filter(Boolean)
+                    .join(', '),
+            }));
+            this._ariaTableBusy = false;
+        }, 400);
     }
 
     _buildOption(visibleNodes) {
@@ -397,6 +424,7 @@ export default class MetaMapperGraph extends LightningElement {
         this._focusPath = pathSet;
         this._showClearFocus = true;
         this._renderGraph();
+        this._announceAriaLive(`Focus path activated: ${pathSet.size} nodes highlighted`);
         // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             if (!this._isMounted) return;
@@ -432,6 +460,7 @@ export default class MetaMapperGraph extends LightningElement {
                     .filter((n) => (n.Metadata_Name__c || '').toLowerCase().includes(lower))
                     .map((n) => n.Metadata_Id__c)
             );
+            this._announceAriaLive(`${this._searchHighlights.size} nodes match your search`);
         }
         this._renderGraph();
     }
@@ -472,6 +501,20 @@ export default class MetaMapperGraph extends LightningElement {
 
     get ariaTableRows() {
         return this._ariaTableRows || [];
+    }
+
+    get ariaTableBusy() {
+        return this._ariaTableBusy ? 'true' : 'false';
+    }
+
+    get graphAriaLiveText() {
+        return this._graphAriaLiveText || '';
+    }
+
+    _announceAriaLive(text) {
+        this._graphAriaLiveText = text;
+        // eslint-disable-next-line @lwc/lwc/no-async-operation
+        setTimeout(() => { this._graphAriaLiveText = ''; }, 3000);
     }
 
     get contextMenuStyle() {
@@ -539,6 +582,12 @@ export default class MetaMapperGraph extends LightningElement {
 
     handleShowShortcuts() {
         this._showShortcutLegend = true;
+        // eslint-disable-next-line @lwc/lwc/no-async-operation
+        Promise.resolve().then(() => {
+            if (!this._isMounted) return;
+            const modal = this.template.querySelector('[aria-label="Keyboard shortcuts"]');
+            if (modal) modal.focus();
+        });
     }
 
     handleCloseShortcuts() {

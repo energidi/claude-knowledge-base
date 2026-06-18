@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
+    <description>Root shell component. Owns jobId state and switches between input, progress, and results views. Runs pre-flight Named Credential health check on mount. Owns the empApi subscription for Dependency_Scan_Status__e and distributes events to children via scanstatuschange custom events. Handles deep-link routing via @wire(CurrentPageReference).</description>
     <isExposed>true</isExposed>
     <targets>
         <target>lightning__AppPage</target>

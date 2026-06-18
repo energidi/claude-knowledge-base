@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
+    <description>Shared filter state service module. Provides loadFilters (reads from sessionStorage key metaMapper_filters_v1), saveFilters (persists to sessionStorage), validateFilters (drops stale type values against available metadata types), and DEFAULT_FILTERS constant. Used by metaMapperResults to persist filter state across tab switches and page navigation within the browser session.</description>
     <isExposed>false</isExposed>
 </LightningComponentBundle>

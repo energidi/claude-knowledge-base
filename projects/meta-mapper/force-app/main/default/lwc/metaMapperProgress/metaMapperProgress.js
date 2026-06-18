@@ -138,6 +138,14 @@ export default class MetaMapperProgress extends LightningElement {
 
     get resumeCurrentActive() { return this.resumeLoading && !this.resumeSlowerActive; }
 
+    get pauseBannerText() {
+        const reason = this.job && this.job.Pause_Reason__c;
+        if (reason === 'NodeCapReached') {
+            return 'Analysis paused - the component limit was reached. Raise Max_Components__c in MetaMapper Settings to continue.';
+        }
+        return 'Analysis paused - encountered a complex component. You can resume at a slower speed or with current settings.';
+    }
+
     _effectiveBatchSize() {
         if (this.batchSizeInUse != null) return this.batchSizeInUse;
         if (this.job && this.job.Batch_Size_Override__c) return this.job.Batch_Size_Override__c;
@@ -269,7 +277,7 @@ export default class MetaMapperProgress extends LightningElement {
         this.showCancelModal = true;
         // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
-            const btn = this.template.querySelector('[aria-label="Keep the scan running - do not cancel"]');
+            const btn = this.template.querySelector('[data-id="keepRunningBtn"]');
             if (btn) btn.focus();
         }, 0);
     }

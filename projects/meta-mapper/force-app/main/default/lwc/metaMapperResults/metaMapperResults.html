@@ -94,6 +94,16 @@
             </lightning-card>
         </template>
 
+        <!-- Stats tile shimmer (completed but counts not yet populated) -->
+        <template lwc:if={showStatsTileShimmer}>
+            <lightning-card class="slds-var-m-bottom_small">
+                <div class="slds-var-p-around_medium stats-grid">
+                    <div class="slds-skeleton slds-skeleton__text" style="height:20px;width:60%;margin-bottom:8px;"></div>
+                    <div class="slds-skeleton slds-skeleton__text" style="height:20px;width:40%;"></div>
+                </div>
+            </lightning-card>
+        </template>
+
         <!-- Stats tile -->
         <template lwc:if={showStatsTile}>
             <lightning-card class="slds-var-m-bottom_small">
@@ -123,9 +133,9 @@
 
         <!-- Tab container -->
         <template lwc:if={showTabs}>
-            <lightning-tabset onactive={handleTabActivate}>
+            <lightning-tabset active-tab-value={activeTab} onactive={handleTabActivate}>
                 <lightning-tab label="Tree View" value="tree">
-                    <div class={tabContentClass}>
+                    <div class={tabContentClass} aria-disabled={isTransitioningStr} data-tab-content="tree">
                         <c-meta-mapper-tree
                             nodes={filteredNodes}
                             filters={filters}
@@ -136,13 +146,15 @@
                     </div>
                 </lightning-tab>
                 <lightning-tab label="Graph View" value="graph">
-                    <div class={tabContentClass}>
+                    <div class={tabContentClass} aria-disabled={isTransitioningStr} data-tab-content="graph">
                         <c-meta-mapper-graph
                             nodes={filteredNodes}
                             filters={filters}
                             selected-node-id={selectedNodeId}
                             ontabready={handleTabReady}
-                            onnodeselected={handleNodeSelected}>
+                            onnodeselected={handleNodeSelected}
+                            onswitchtotree={handleSwitchToTree}
+                            ongraphpathrequest={handleGraphPathRequest}>
                         </c-meta-mapper-graph>
                     </div>
                 </lightning-tab>

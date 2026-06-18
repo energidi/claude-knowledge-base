@@ -2,7 +2,6 @@ import { LightningElement, track } from 'lwc';
 import createJob from '@salesforce/apex/DependencyJobController.createJob';
 import getObjectList from '@salesforce/apex/DependencyJobController.getObjectList';
 import getComponentCount from '@salesforce/apex/DependencyJobController.getComponentCount';
-import { countToBucket } from 'c/metaMapperFormatters';
 
 const TYPE_OPTIONS = [
     { label: 'Apex Class',       value: 'ApexClass' },
@@ -40,6 +39,7 @@ export default class MetaMapperSearch extends LightningElement {
     @track typeaheadCalloutError = false;
     @track targetObjectError = '';
     @track complexityBucket = null;
+    @track _complexityLoading = false;
 
     _typeaheadTimer = null;
     _complexityTimer = null;
@@ -103,7 +103,7 @@ export default class MetaMapperSearch extends LightningElement {
         this.typeaheadCalloutError = false;
         try {
             const results = await getObjectList({ searchTerm: this.targetObject });
-            this.typeaheadResults = (results || []).map(r => ({ label: r, value: r }));
+            this.typeaheadResults = (results || []).map(r => ({ label: r.QualifiedApiName, value: r.QualifiedApiName }));
             this.typeaheadOpen = true;
         } catch {
             this.typeaheadCalloutError = true;
@@ -121,11 +121,14 @@ export default class MetaMapperSearch extends LightningElement {
     }
 
     async _fetchComplexity() {
+        this._complexityLoading = true;
         try {
-            const count = await getComponentCount({ apiName: this.apiName.trim() });
-            this.complexityBucket = count != null ? countToBucket(count) : null;
+            const bucket = await getComponentCount({ apiName: this.apiName.trim() });
+            this.complexityBucket = bucket != null ? bucket : null;
         } catch {
             this.complexityBucket = null;
+        } finally {
+            this._complexityLoading = false;
         }
     }
 
@@ -136,9 +139,9 @@ export default class MetaMapperSearch extends LightningElement {
         this.isRunningScanError = false;
         try {
             const jobId = await createJob({
-                targetType: this.selectedType,
-                targetApiName: this.apiName.trim(),
-                targetParentObject: this.targetObject.trim() || null,
+                metadataType: this.selectedType,
+                apiName: this.apiName.trim(),
+                targetObject: this.targetObject.trim() || null,
                 activeFlowsOnly: this.activeFlowsOnly
             });
             this.dispatchEvent(new CustomEvent('jobcreated', { detail: { jobId }, bubbles: true, composed: true }));

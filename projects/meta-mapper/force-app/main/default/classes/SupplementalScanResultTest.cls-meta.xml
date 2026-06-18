@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
+    <description>Unit test class for SupplementalScanResult. Covers appendNoticeSafe (static single-notice path), appendErrorsSafe (instance bulk-append path), and the 32768-char ceiling enforcement for both methods. No DML, no callouts, no SeeAllData.</description>
     <status>Active</status>
 </ApexClass>

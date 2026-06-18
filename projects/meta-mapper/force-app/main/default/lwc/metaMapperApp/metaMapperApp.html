@@ -86,7 +86,7 @@
                     <div tabindex="-1" lwc:ref="tourSlideBody">
                         <p>{tourSlideBody}</p>
                     </div>
-                    <p class="slds-text-body_small slds-var-m-top_medium slds-text-color_weak" aria-live="polite">
+                    <p class="slds-text-body_small slds-var-m-top_medium slds-text-color_weak">
                         Slide {tourSlide} of 3
                     </p>
                 </div>
@@ -148,6 +148,7 @@
                 retention-hours={retentionHours}
                 onstartnew={handleStartNew}
                 onshowerror={handleShowError}
+                onshowtoast={handleShowToast}
                 onfiltersreset={handleFiltersReset}
                 onaskcopilot={handleAskCopilot}>
             </c-meta-mapper-results>

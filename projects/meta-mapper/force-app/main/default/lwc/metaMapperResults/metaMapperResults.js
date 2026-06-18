@@ -3,7 +3,7 @@ import getNodeHierarchy from '@salesforce/apex/DependencyJobController.getNodeHi
 import getJobStatus from '@salesforce/apex/DependencyJobController.getJobStatus';
 import isCopilotEnabled from '@salesforce/apex/DependencyJobController.isCopilotEnabled';
 import { loadFilters, saveFilters, validateFilters, DEFAULT_FILTERS } from 'c/metaMapperFilters';
-import { buildTypeCounts, applyFilters, buildNodeMap, extractTypes } from 'c/metaMapperNodeFilters';
+import { buildTypeCounts, applyFilters, buildNodeMap, extractTypes } from 'c/metaMapperNodeServices';
 import { truncateAt } from 'c/metaMapperFormatters';
 
 const SUMMARY_POLL_INTERVAL = 5000;
@@ -43,6 +43,7 @@ export default class MetaMapperResults extends LightningElement {
     @track showReloadBanner = false;
     @track showPartialBanner = false;
     @track isTransitioning = false;
+    @track activeTab = 'tree';
 
     _summaryPollTimer = null;
     _summaryPollCount = 0;
@@ -50,6 +51,8 @@ export default class MetaMapperResults extends LightningElement {
     _isMounted = false;
     _filteredNodesCache = null;
     _nodeMapCache = null;
+    _pendingNodeId = null;
+    _pendingFocusNodeId = null;
 
     connectedCallback() {
         this._isMounted = true;
@@ -72,6 +75,11 @@ export default class MetaMapperResults extends LightningElement {
         }
     }
 
+    @api
+    setPendingNodeId(nodeId) {
+        this._pendingNodeId = nodeId || null;
+    }
+
     async loadResults() {
         this.isLoading = true;
         this.loadError = '';
@@ -82,6 +90,10 @@ export default class MetaMapperResults extends LightningElement {
             this._invalidateCaches();
             this._syncFiltersToNodes();
             this._startSummaryPollIfNeeded();
+            if (this._pendingNodeId) {
+                this.selectedNodeId = this._pendingNodeId;
+                this._pendingNodeId = null;
+            }
         } catch (e) {
             if (!this._isMounted) return;
             const msg = (e.body && e.body.message) ? e.body.message : 'The dependency data could not be loaded.';
@@ -212,16 +224,24 @@ export default class MetaMapperResults extends LightningElement {
     get summaryTruncated() { return this.summaryText && this.summaryText.length > 300; }
     get summaryToggleLabel() { return this.summaryExpanded ? 'Show less' : 'Show more'; }
     get tabContentClass() { return this.isTransitioning ? 'tab-content is-transitioning' : 'tab-content'; }
+    get isTransitioningStr() { return this.isTransitioning ? 'true' : null; }
+    get showStatsTileShimmer() {
+        return this.isCompleted && this.job && !this.job.Component_Type_Counts__c && this.typeCounts.length === 0;
+    }
 
     // --- Event handlers ---
 
-    handleTabActivate() {
+    handleTabActivate(event) {
+        const tabValue = event.target && event.target.value;
+        if (tabValue) this.activeTab = tabValue;
         this.isTransitioning = true;
+        this._updateTabInert(true);
         clearTimeout(this._tabReadyTimer);
         // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._tabReadyTimer = setTimeout(() => {
             if (!this._isMounted) return;
             this.isTransitioning = false;
+            this._updateTabInert(false);
             this._reconcileJobStatus();
         }, TAB_TRANSITION_TIMEOUT);
     }
@@ -231,9 +251,26 @@ export default class MetaMapperResults extends LightningElement {
         setTimeout(() => {
             if (!this._isMounted) return;
             this.isTransitioning = false;
+            this._updateTabInert(false);
             clearTimeout(this._tabReadyTimer);
             this._reconcileJobStatus();
+            if (this._pendingFocusNodeId) {
+                const nodeId = this._pendingFocusNodeId;
+                this._pendingFocusNodeId = null;
+                this.selectedNodeId = nodeId;
+            }
         }, TAB_TRANSITION_MIN_MS);
+    }
+
+    _updateTabInert(inert) {
+        const containers = this.template.querySelectorAll('[data-tab-content]');
+        containers.forEach(el => {
+            if (inert) {
+                el.setAttribute('inert', '');
+            } else {
+                el.removeAttribute('inert');
+            }
+        });
     }
 
     _reconcileJobStatus() {
@@ -285,7 +322,17 @@ export default class MetaMapperResults extends LightningElement {
 
     reloadResults() { this.loadResults(); }
     handleStartNew() { this.dispatchEvent(new CustomEvent('startnew', { bubbles: true, composed: true })); }
-    handleExportPartial() { /* handled by metaMapperExport */ }
+    handleExportPartial() {
+        const exportEl = this.template.querySelector('c-meta-mapper-export');
+        if (exportEl) exportEl.exportCsv();
+    }
+
+    handleSwitchToTree() { this.activeTab = 'tree'; }
+
+    handleGraphPathRequest(event) {
+        this._pendingFocusNodeId = event.detail && event.detail.nodeId;
+        this.activeTab = 'graph';
+    }
     handleDownloadPartialCsv() {
         const exportEl = this.template.querySelector('c-meta-mapper-export');
         if (exportEl) exportEl.exportCsv();

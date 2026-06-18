@@ -48,10 +48,11 @@
                         <input id="targetObject" type="text" class="slds-input"
                             placeholder="e.g. Account" value={targetObject}
                             oninput={handleTargetObjectInput} onblur={handleTargetObjectBlur}
-                            autocomplete="off" aria-autocomplete="list" aria-expanded={typeaheadOpen} />
+                            autocomplete="off" aria-autocomplete="list" aria-expanded={typeaheadOpen}
+                            aria-controls="typeahead-listbox" />
                     </div>
                     <template lwc:if={typeaheadOpen}>
-                        <div class="slds-dropdown slds-dropdown_length-5 slds-dropdown_fluid" role="listbox">
+                        <div id="typeahead-listbox" class="slds-dropdown slds-dropdown_length-5 slds-dropdown_fluid" role="listbox">
                             <ul class="slds-listbox slds-listbox_vertical" role="presentation">
                                 <template lwc:if={typeaheadResults.length}>
                                     <template for:each={typeaheadResults} for:item="result">
@@ -83,12 +84,18 @@
                 <lightning-input type="checkbox" name="activeFlows"
                     label="Only analyze active Flow versions"
                     checked={activeFlowsOnly}
-                    title="When checked, inactive and deprecated Flow versions are excluded. Uncheck to include all Flow versions, including inactive ones."
+                    field-level-help="When checked, inactive and deprecated Flow versions are excluded. Uncheck to include all Flow versions, including inactive ones."
                     onchange={handleActiveFlowsChange}>
                 </lightning-input>
             </div>
 
             <!-- Complexity preview (non-blocking) -->
+            <template lwc:if={_complexityLoading}>
+                <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small">
+                    <lightning-spinner size="x-small" alternative-text="Estimating scope..." style="display:inline-block;vertical-align:middle;margin-right:4px;"></lightning-spinner>
+                    Estimating scope...
+                </p>
+            </template>
             <template lwc:if={complexityBucket}>
                 <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small">
                     Estimated scan scope: <strong>{complexityBucket}</strong> based on historical averages for this metadata type.

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
+    <description>Progress screen for an active scan. Shows progress bar or spinner, elapsed time, and status labels. Calls cancelJob() and resumeJob(). Receives Dependency_Scan_Status__e payloads via scanstatuschange custom events from metaMapperApp (does not subscribe to empApi directly). Handles polling fallback when Platform Events are suppressed. Fires jobstatuspolled, viewpartialresults, and startnew events.</description>
     <isExposed>false</isExposed>
 </LightningComponentBundle>

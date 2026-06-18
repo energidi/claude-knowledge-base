@@ -1,6 +1,6 @@
 import { LightningElement, api } from 'lwc';
 import { buildDefaultFilename } from 'c/metaMapperFormatters';
-import { isNamespacePrefixed } from 'c/metaMapperNodeFilters';
+import { isNamespacePrefixed } from 'c/metaMapperNodeServices';
 
 export default class MetaMapperExport extends LightningElement {
     @api nodes = [];

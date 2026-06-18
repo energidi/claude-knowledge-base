@@ -14,7 +14,7 @@
 
         <!-- Long-running scan banner (> 15 min) -->
         <template lwc:if={showLongRunningBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="alert">
+            <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="status">
                 <p>This scan is taking longer than usual.
                     <a onclick={handleViewPartialResults}> View partial results so far</a> — this will not cancel the scan.
                 </p>
@@ -38,7 +38,7 @@
         <!-- Paused warning banner -->
         <template lwc:if={isPaused}>
             <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-bottom_small" role="alert">
-                <p>Analysis paused — encountered a complex component. You can resume at a slower speed or with current settings.</p>
+                <p>{pauseBannerText}</p>
                 <div class="slds-var-m-top_x-small slds-grid slds-grid_vertical-align-center">
                     <lightning-button label="Resume at slower speed" variant="neutral"
                         disabled={resumeLoading} onclick={handleResumeSlower}></lightning-button>
@@ -61,10 +61,14 @@
             </div>
         </template>
 
-        <!-- View partial results link (Cancelled state) -->
+        <!-- View partial results link + Start new scan (Cancelled state) -->
         <template lwc:if={isCancelled}>
             <div class="slds-var-m-top_x-small">
                 <a onclick={handleViewPartialResults}>View partial results</a>
+            </div>
+            <div class="slds-var-m-top_medium">
+                <lightning-button variant="brand" label="Start new scan"
+                    onclick={handleStartNew}></lightning-button>
             </div>
         </template>
 
@@ -138,9 +142,9 @@
                         <p>The job will stop at the next checkpoint. Partial results already found will remain available.</p>
                     </div>
                     <footer class="slds-modal__footer">
-                        <lightning-button label="Keep Running" variant="neutral"
+                        <button class="slds-button slds-button_neutral" data-id="keepRunningBtn"
                             aria-label="Keep the scan running - do not cancel"
-                            onclick={handleKeepRunning}></lightning-button>
+                            onclick={handleKeepRunning}>Keep Running</button>
                         <lightning-button label="Stop Analysis" variant="destructive" class="slds-var-m-left_x-small"
                             aria-label="Confirm. Stop the analysis now."
                             onclick={handleConfirmCancel}></lightning-button>

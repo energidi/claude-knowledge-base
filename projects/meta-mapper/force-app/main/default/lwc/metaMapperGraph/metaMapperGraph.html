@@ -115,9 +115,8 @@
                 <!-- Graph live region for announcements -->
                 <span
                     class="slds-assistive-text"
-                    aria-live="polite"
                     role="status"
-                ></span>
+                >{graphAriaLiveText}</span>
             </div>
 
             <!-- Canvas wrapper -->
@@ -156,7 +155,7 @@
             </div>
 
             <!-- Off-screen ARIA table for screen readers -->
-            <table class="slds-assistive-text" aria-hidden="false" aria-label="Dependency graph nodes">
+            <table class="slds-assistive-text" aria-hidden="false" aria-label="Dependency graph nodes" aria-busy={ariaTableBusy}>
                 <caption>Dependency graph nodes</caption>
                 <thead>
                     <tr>
@@ -228,6 +227,7 @@
             role="dialog"
             aria-label="Keyboard shortcuts"
             aria-modal="true"
+            tabindex="-1"
             onkeydown={handleShortcutModalKeyDown}
         >
             <div class="modal-panel">

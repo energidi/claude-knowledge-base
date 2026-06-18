@@ -603,12 +603,12 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         if (res.getStatusCode() != 200) {
             return null;
         }
-        Blob bodyBlob = res.getBodyAsBlob();
-        if (bodyBlob == null || bodyBlob.size() > MAX_RESPONSE_BODY_SIZE) {
+        String body = res.getBody();
+        if (String.isBlank(body) || body.length() > 500000) {
             return null;
         }
         try {
-            Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+            Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(body);
             List<Object> records = (List<Object>) result.get('records');
             if (records == null || records.isEmpty()) {
                 return null;

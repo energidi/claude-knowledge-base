@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 18, 2026 (Round 58 - sf-orchestrator full pass: 4 findings applied, appendNoticeSafe mandate enforced across ScanResultFileQueueable, DependencyQueueable, MetadataDependencyDeletionBatch, ScanSummaryQueueable)
+**Last Updated:** June 18, 2026 (Round 59 - sf-orchestrator full pass: 36 findings applied across Architecture, UX, and Naming lenses; LWC service module renamed metaMapperNodeFilters → metaMapperNodeServices)
 **Date:** May 23, 2026
 
 ---
@@ -3630,6 +3630,50 @@ The following findings from the Round 15 external review were assessed and rejec
 | Gemini | CRLF bug in `appendErrorsSafe` dedup: `safeExisting.split('\n')` leaves trailing `\r` on extracted strings, defeating dedup | False positive. The code uses `safeExisting.contains(baseMsg)` and `existingBaseMsgs.contains(baseMsg)` - not split/set operations. Gemini described code that does not exist. Additionally, `Error_Progress_Label__c` is only written by Apex code in MetaMapper (always using `\n`), so CRLF is not possible in this field under normal operation. |
 | Gemini | `appendErrorsSafe` produces double-truncation notice when existing log is at capacity | Fixed in Round 15. Pre-truncation path returns immediately. |
 | Grok | `IsCustomizable = true` filter in `getCmtEntities()` is wrong for `__mdt` types - returns zero rows | Disputed and likely false positive. Custom Metadata Types (`__mdt`) are designed specifically for customization (adding custom fields is their primary purpose), so `IsCustomizable = true` should be correct for user-defined CMT types. The filter has been in place through 14 prior review rounds without evidence of failure. The filter correctly excludes managed-package CMT types that have `IsCustomizable = false` - which is intentional, since those types typically restrict field access and cannot be queried for record values anyway. |
+
+---
+
+## Round 59 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming lenses). 36 findings applied across all severities (Critical through Low).
+
+**Critical / High - LWC correctness:**
+- C1, C2 (`metaMapperSearch.js`): Fixed `createJob()` param names (`targetType`/`targetApiName`/`targetParentObject` → `metadataType`/`apiName`/`targetObject`); fixed `getObjectList` mapping from raw string to `r.QualifiedApiName`.
+- H3 (`metaMapperTree.js`): `graphpathrequest` event missing `bubbles: true, composed: true` - fixed.
+- H4 (`metaMapperGraph.js`): `selectedNodeId` not exposed as `@api` - getter/setter added.
+- H5 (`metaMapperResults.html`/`.js`): `inert` as HTML attribute rejected by LWC1057 - removed from template; applied programmatically via `_updateTabInert()` on `[data-tab-content]` elements. Added `active-tab-value={activeTab}` to `lightning-tabset`.
+
+**High - UX state machine:**
+- H6 (`metaMapperProgress.html`): Long-running banner `role="alert"` → `role="status"`.
+- H7 (`metaMapperProgress.html`/`.js`): Paused banner text hardcoded - replaced with `{pauseBannerText}` getter (NodeCapReached vs. StallDetected branch). `data-id="keepRunningBtn"` on native `<button>` replacing `lightning-button` for reliable `querySelector` focus.
+- H8, H9 (`metaMapperProgress.html`): Added "Stop at next checkpoint" subtext + "Start new scan" button in cancelled state.
+
+**Medium - logic and accessibility:**
+- M10 (`metaMapperProgress.js`): `pauseBannerText` getter added.
+- M11 (`metaMapperResults.js`): `filteredNodes` and `nodeMap` caching via `_filteredNodesCache`/`_nodeMapCache`.
+- M12 (`metaMapperApp.js`/`.html`): Deep-link `nodeId` param read; `setPendingNodeId()` called on results component after load. `onshowtoast` wired.
+- M13 (`metaMapperSearch.html`/`.js`): Complexity preview loading state (`_complexityLoading` + spinner template); removed spurious `countToBucket` wrapper.
+- M14 (`MetadataDependencyService.cls`): `resolveRootId()` double heap allocation fixed - replaced `getBodyAsBlob()` + `getBody()` with single `getBody()` + char length guard.
+- M15 (`DependencyQueueable.cls`): PE notices now persisted with `update job` before self-chain.
+- M16 (`metaMapperSearch.html`): Active Flows checkbox `title` → `field-level-help`.
+- M17 (`metaMapperResults.html`/`.js`): Stats tile shimmer added for completed-but-counts-not-yet-populated state.
+- M18, M19 (`metaMapperGraph.html`/`.js`): ARIA table `aria-busy={ariaTableBusy}` added; rebuild extracted to debounced `_scheduleAriaTableRebuild()` with 400ms timeout.
+- M20 (`metaMapperApp.html`/`.js`): `onshowtoast={handleShowToast}` + `handleShowToast()` added.
+- M21 (`metaMapperResults.js`): `handleExportPartial()` stub fixed to use `querySelector`.
+
+**Low - UX polish and ARIA:**
+- L24 (`metaMapperGraph.html`): Shortcuts modal `tabindex="-1"` added.
+- L25 (`metaMapperApp.html`): Tour slide counter `aria-live="polite"` removed (redundant with `role="status"` on parent).
+- L26 (`metaMapperSearch.html`): Active Flows `title` → `field-level-help` (same as M16).
+- L27 (`metaMapperGraph.html`): Graph live region `aria-live="polite"` removed (implied by `role="status"`).
+
+**Naming / metadata:**
+- N28: `Ancestor_Id_Shortkeys__c` label "Ancestor Id Shortkeys" → "Ancestor ID Shortkeys".
+- N29: `Last_Progress_Cycle__c` label "Last Successful Cycle" → "Last Progress Cycle".
+- N30: `Stall_Pause_Threshold__c` label "Stall Detection Threshold" → "Stall Pause Threshold".
+- N31-N37: `<description>` tags added to all 7 LWC `js-meta.xml` files that were missing them (metaMapperApp, metaMapperSearch, metaMapperProgress, metaMapperResults, metaMapperFormatters, metaMapperFilters, metaMapperNodeFilters → now metaMapperNodeServices).
+- N38: `SupplementalScanResultTest.cls-meta.xml` description added.
+- N22: `metaMapperNodeFilters` renamed to `metaMapperNodeServices` (folder + both files); all 5 consumer imports updated (metaMapperResults, metaMapperGraph, metaMapperTree, metaMapperComponentDetailsPanel, metaMapperExport); old folder deleted.
 
 ---
 
