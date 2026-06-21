@@ -275,7 +275,7 @@ export default class MetaMapperApp extends LightningElement {
     handleJobStatusPolled(event) {
         this._storeJobResult(event.detail);
         const s = this.job && this.job.Status__c;
-        if (s === 'Completed' || s === 'Failed') {
+        if (s === 'Completed') {
             this.view = 'results';
         }
     }

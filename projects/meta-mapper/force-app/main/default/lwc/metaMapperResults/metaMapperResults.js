@@ -232,7 +232,7 @@ export default class MetaMapperResults extends LightningElement {
     // --- Event handlers ---
 
     handleTabActivate(event) {
-        const tabValue = event.target && event.target.value;
+        const tabValue = event.detail && event.detail.value;
         if (tabValue) this.activeTab = tabValue;
         this.isTransitioning = true;
         this._updateTabInert(true);

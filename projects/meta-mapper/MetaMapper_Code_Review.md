@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 21, 2026 (Round 60 - sf-orchestrator full pass: 7 findings applied - permissionset FLS gap, elapsed timer freeze, typeahead keyboard nav, wfu/vr/cmt naming renames, Tech Design field name fix)
+**Last Updated:** June 21, 2026 (Round 61 - sf-orchestrator full pass: 3 findings applied - Failed status navigation inconsistency, undocumented utility LWC modules, tab event API)
 **Date:** May 23, 2026
 
 ---
@@ -3630,6 +3630,21 @@ The following findings from the Round 15 external review were assessed and rejec
 | Gemini | CRLF bug in `appendErrorsSafe` dedup: `safeExisting.split('\n')` leaves trailing `\r` on extracted strings, defeating dedup | False positive. The code uses `safeExisting.contains(baseMsg)` and `existingBaseMsgs.contains(baseMsg)` - not split/set operations. Gemini described code that does not exist. Additionally, `Error_Progress_Label__c` is only written by Apex code in MetaMapper (always using `\n`), so CRLF is not possible in this field under normal operation. |
 | Gemini | `appendErrorsSafe` produces double-truncation notice when existing log is at capacity | Fixed in Round 15. Pre-truncation path returns immediately. |
 | Grok | `IsCustomizable = true` filter in `getCmtEntities()` is wrong for `__mdt` types - returns zero rows | Disputed and likely false positive. Custom Metadata Types (`__mdt`) are designed specifically for customization (adding custom fields is their primary purpose), so `IsCustomizable = true` should be correct for user-defined CMT types. The filter has been in place through 14 prior review rounds without evidence of failure. The filter correctly excludes managed-package CMT types that have `IsCustomizable = false` - which is intentional, since those types typically restrict field access and cannot be queried for record values anyway. |
+
+---
+
+## Round 61 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 3 findings applied (0 Critical, 1 High, 1 Medium, 1 Low). Overall verdict: GO.
+
+**High - UX/Architecture consistency:**
+- Finding 1 (`metaMapperApp.js:278`): `handleJobStatusPolled` navigated to the `results` view for both `Completed` and `Failed` statuses. The PE handler `_handlePEEvent` does not navigate on `Failed` (it calls `_refreshJob()` and stays on the progress screen). CLAUDE.md defines `Failed` as a labeled status state in the progress view. Removed `|| s === 'Failed'` from the condition so polling path matches PE path behavior - both stay on progress for Failed, both navigate to results for Completed only.
+
+**Medium - Naming/Documentation (V-08):**
+- Finding 2 (`CLAUDE.md`): Three utility LWC modules (`metaMapperFilters`, `metaMapperNodeServices`, `metaMapperFormatters`) were absent from the Key LWC Components table in both the spec section and the Metadata Component Descriptions section. Added description rows for all three to both tables.
+
+**Low - UX event API:**
+- Finding 3 (`metaMapperResults.js:235`): `handleTabActivate` read the active tab value via `event.target.value` instead of the documented `lightning-tabset` event API `event.detail.value`. Changed to `event.detail && event.detail.value`.
 
 ---
 
