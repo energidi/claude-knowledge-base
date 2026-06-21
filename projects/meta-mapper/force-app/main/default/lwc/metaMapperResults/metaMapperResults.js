@@ -53,6 +53,8 @@ export default class MetaMapperResults extends LightningElement {
     _nodeMapCache = null;
     _pendingNodeId = null;
     _pendingFocusNodeId = null;
+    _copilotChecked = false;
+    _copilotException = false;
 
     connectedCallback() {
         this._isMounted = true;
@@ -71,8 +73,16 @@ export default class MetaMapperResults extends LightningElement {
         try {
             this.copilotEnabled = await isCopilotEnabled();
         } catch {
-            // suppress — button is hidden on exception
+            this._copilotException = true;
+        } finally {
+            this._copilotChecked = true;
         }
+    }
+
+    get isMobile() { return window.innerWidth < 1024; }
+    get showCopilotButton() { return this.copilotEnabled && !this.isMobile; }
+    get showCopilotNotAvailable() {
+        return this._copilotChecked && !this.copilotEnabled && !this._copilotException && !this.isMobile;
     }
 
     @api
@@ -84,6 +94,7 @@ export default class MetaMapperResults extends LightningElement {
         this.isLoading = true;
         this.loadError = '';
         try {
+            this.showReloadBanner = false;
             const nodes = await getNodeHierarchy({ jobId: this.jobId });
             if (!this._isMounted) return;
             this.allNodes = nodes || [];

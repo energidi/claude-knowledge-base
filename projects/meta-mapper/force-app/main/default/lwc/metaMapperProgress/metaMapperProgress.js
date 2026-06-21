@@ -85,6 +85,7 @@ export default class MetaMapperProgress extends LightningElement {
 
     disconnectedCallback() {
         this._isMounted = false;
+        this._isResuming = false;
         clearTimeout(this._pollTimer);
         clearInterval(this._elapsedTimer);
         clearTimeout(this._cancelTimeoutTimer);

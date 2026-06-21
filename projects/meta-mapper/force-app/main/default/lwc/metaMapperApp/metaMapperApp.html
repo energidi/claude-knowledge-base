@@ -97,7 +97,7 @@
                         class="slds-var-m-bottom_small">
                     </lightning-input>
                     <template lwc:if={showTourPrev}>
-                        <lightning-button label={tourPrevLabel} variant="neutral"
+                        <lightning-button label={tourPrevLabel} aria-label={tourPrevAriaLabel} variant="neutral"
                             onclick={handleTourPrev}></lightning-button>
                     </template>
                     <lightning-button label={tourNextLabel} aria-label={tourNextAriaLabel} variant="brand"

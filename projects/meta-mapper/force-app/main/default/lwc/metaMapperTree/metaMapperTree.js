@@ -303,6 +303,13 @@ export default class MetaMapperTree extends LightningElement {
         }
     }
 
+    handleTreeMenuItemKeyDown(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.target.click();
+        }
+    }
+
     handleKeyDown(event) {
         if (event.key === 'Escape' && this._contextMenu) {
             this._closeContextMenu();

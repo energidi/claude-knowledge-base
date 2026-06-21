@@ -97,11 +97,12 @@ export default class MetaMapperApp extends LightningElement {
         this.isCheckingHealth = true;
         this.preflightErrorCode = null;
         try {
-            const code = await verifyHealthCheck();
+            const result = await verifyHealthCheck();
+            const code = (result && result.status) ? result.status : 'UNREACHABLE';
             if (code === 'AUTHORIZED') {
                 await this._handleHealthCheckPassed();
             } else {
-                this.preflightErrorCode = code || 'UNREACHABLE';
+                this.preflightErrorCode = code;
                 this.view = 'preflight-error';
             }
         } catch {
@@ -264,7 +265,8 @@ export default class MetaMapperApp extends LightningElement {
             ? 'Got it - close tour'
             : `Next (slide ${this.tourSlide + 1} of 3)`;
     }
-    get tourPrevLabel()  { return `Previous (slide ${this.tourSlide - 1} of 3)`; }
+    get tourPrevLabel()      { return 'Previous'; }
+    get tourPrevAriaLabel()  { return `Previous (slide ${this.tourSlide - 1} of 3)`; }
 
     get toastClass() {
         return `slds-notify slds-notify_toast slds-theme_${this.toastVariant} toast-overlay`;

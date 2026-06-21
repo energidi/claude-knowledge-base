@@ -144,9 +144,9 @@
                 role="menu"
                 onkeydown={handleMenuKeyDown}
             >
-                <div role="menuitem" tabindex="0" class="menu-item" onclick={handleCopyApiName}>Copy API Name</div>
-                <div role="menuitem" tabindex="-1" class="menu-item" onclick={handleCollapseSubtree}>{collapseSubtreeLabel}</div>
-                <div role="menuitem" tabindex="-1" class="menu-item" onclick={handleViewInGraph}>View path in Graph</div>
+                <div role="menuitem" tabindex="0" class="menu-item" onclick={handleCopyApiName} onkeydown={handleTreeMenuItemKeyDown}>Copy API Name</div>
+                <div role="menuitem" tabindex="-1" class="menu-item" onclick={handleCollapseSubtree} onkeydown={handleTreeMenuItemKeyDown}>{collapseSubtreeLabel}</div>
+                <div role="menuitem" tabindex="-1" class="menu-item" onclick={handleViewInGraph} onkeydown={handleTreeMenuItemKeyDown}>View path in Graph</div>
             </div>
         </template>
     </div>

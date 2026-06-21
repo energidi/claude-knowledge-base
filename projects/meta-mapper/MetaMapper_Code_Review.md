@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 21, 2026 (Round 64 - sf-orchestrator full pass: 5 findings applied - 2 spec text fixes, 2 constant renames, field rename Ancestor_Id_Shortkeys__c → Ancestor_Id_Index__c)
+**Last Updated:** June 21, 2026 (Round 65 - sf-orchestrator full pass: 10 findings applied - 1 Critical fix, 2 High fixes, 4 Medium fixes, 3 Low fixes)
 **Date:** May 23, 2026
 
 ---
@@ -3627,6 +3627,42 @@ The following findings from the Round 15 external review were assessed and rejec
 | Gemini | CRLF bug in `appendErrorsSafe` dedup: `safeExisting.split('\n')` leaves trailing `\r` on extracted strings, defeating dedup | False positive. The code uses `safeExisting.contains(baseMsg)` and `existingBaseMsgs.contains(baseMsg)` - not split/set operations. Gemini described code that does not exist. Additionally, `Error_Progress_Label__c` is only written by Apex code in MetaMapper (always using `\n`), so CRLF is not possible in this field under normal operation. |
 | Gemini | `appendErrorsSafe` produces double-truncation notice when existing log is at capacity | Fixed in Round 15. Pre-truncation path returns immediately. |
 | Grok | `IsCustomizable = true` filter in `getCmtEntities()` is wrong for `__mdt` types - returns zero rows | Disputed and likely false positive. Custom Metadata Types (`__mdt`) are designed specifically for customization (adding custom fields is their primary purpose), so `IsCustomizable = true` should be correct for user-defined CMT types. The filter has been in place through 14 prior review rounds without evidence of failure. The filter correctly excludes managed-package CMT types that have `IsCustomizable = false` - which is intentional, since those types typically restrict field access and cannot be queried for record values anyway. |
+
+---
+
+## Round 65 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 10 findings applied (1 Critical, 2 High, 4 Medium, 3 Low; all NEW). Overall verdict: NO-GO → fixed to GO.
+
+**Critical - Design (health check always returns preflight error):**
+- Finding 1 (`metaMapperApp.js:100-104`): `ToolingApiHealthCheck.verify()` returns a `HealthResult` wrapper `{status, message}` but the LWC compared `code === 'AUTHORIZED'` where `code` was the full object - always `false`. App permanently showed a preflight error for every user. Fixed by extracting `code = (result && result.status) ? result.status : 'UNREACHABLE'` from the returned object before comparison. `preflightErrorCode` now stores the string code instead of the object.
+
+**High - Architecture (PE-drain update overwrites concurrent cancel):**
+- Finding 2 (`DependencyQueueable.runEngine():851`): The PE-notice drain block called `update job` on the full in-memory sObject (which holds `Status__c = 'Processing'` from the initial fetch). A concurrent `cancelJob()` setting `Status__c = 'Cancelled'` between Step 18 and this drain was silently overwritten, causing the engine to self-chain indefinitely. Fixed by replacing `update job` with `update new Metadata_Scan_Job__c(Id = job.Id, Scan_Diagnostic_Log__c = job.Scan_Diagnostic_Log__c)` - a targeted update that cannot overwrite Status__c.
+
+**High - UX (Copilot exception shows "not available"; no mobile guard):**
+- Finding 3 (`metaMapperResults.js` + `.html`): Two issues: (a) `_checkCopilot()` catch block left `copilotEnabled = false`, causing the `lwc:else` "Einstein Copilot not available" text to render even when Copilot is enabled but the RPC threw. Spec: suppress silently on exception. Added `_copilotChecked` and `_copilotException` fields; catch now sets `_copilotException = true`; finally sets `_copilotChecked = true`. (b) Copilot button and helper text had no mobile breakpoint guard. Spec: hide on viewports < 1024px. Added `isMobile` getter, `showCopilotButton` getter (copilotEnabled AND NOT isMobile), and `showCopilotNotAvailable` getter (_copilotChecked AND NOT copilotEnabled AND NOT _copilotException AND NOT isMobile). Replaced the `lwc:else` in HTML with `lwc:if={showCopilotNotAvailable}`.
+
+**Medium - UX (reload banner persists / stacks with error state):**
+- Finding 4 (`metaMapperResults.js:loadResults()`): `reloadResults()` calls `loadResults()` which never cleared `showReloadBanner`. On success the banner persisted after results loaded; on failure both the banner and the error state rendered simultaneously. Fixed by adding `this.showReloadBanner = false` as the first line of the try block in `loadResults()`.
+
+**Medium - UX (tour Previous button missing aria-label):**
+- Finding 5 (`metaMapperApp.html:100`, `metaMapperApp.js`): "Next" button had `aria-label={tourNextAriaLabel}` with a descriptive target-slide string. "Previous" button had only `label={tourPrevLabel}` with no `aria-label`. Inconsistent with spec ("aria-label='Previous (slide [N-1] of 3)'"). Added `tourPrevAriaLabel` getter returning the spec-required string. Updated `tourPrevLabel` to the short label "Previous" (matching the Next button's pattern of short label + descriptive aria-label). Bound `aria-label={tourPrevAriaLabel}` on the Previous button in HTML.
+
+**Medium - Design + Naming (getActiveJobId and getOrgId absent from CLAUDE.md):**
+- Finding 6 (CLAUDE.md Key Apex Classes + Metadata Descriptions): `getActiveJobId()` (used by `metaMapperSearch.handleViewRunningScan()` for concurrency rejection navigation) and `getOrgId()` (used by `metaMapperApp` for "Open in Setup" deep-link URL construction) were implemented and in production use but absent from CLAUDE.md. Added both methods with descriptions to both the Key Apex Classes DependencyJobController narrative (line ~417) and the Metadata Component Descriptions Exposes list (line ~1032).
+
+**Medium - Design (MetadataScanJobSelector missing 6 methods from spec):**
+- Finding 7 (CLAUDE.md Selectors table): Six active methods were present in code but absent from the MetadataScanJobSelector spec row: `getStatusOnly()`, `getForFailedUpdate()`, `getForFailedUpdateLocked()`, `getByIdForLock()`, `getByIdForLogAppend()`, `getCompletedJobsOldestFirst()`. All are called by engine failure paths, the ring buffer, and cleanup diagnostics. Added all six with brief descriptions to the selector row.
+
+**Low - UX (tree context menu keyboard inaccessible for items 2 and 3):**
+- Finding 8 (`metaMapperTree.html`, `metaMapperTree.js`): The context menu container had `onkeydown={handleMenuKeyDown}` which only handled Escape. Items 2 ("Collapse subtree") and 3 ("View path in Graph") could not be activated with Enter/Space by keyboard users because `div[role="menuitem"]` does not fire `onclick` on keyboard by default. Added `onkeydown={handleTreeMenuItemKeyDown}` to all three menu items in HTML. Added `handleTreeMenuItemKeyDown(event)` method to JS that calls `event.target.click()` on Enter or Space.
+
+**Low - Design (breadcrumb truncation direction unspecified in CLAUDE.md):**
+- Finding 9 (CLAUDE.md Responsive Behavior `< 1024px`): The spec said "levels beyond 10 are collapsed" but did not specify which 10 to show. Implementation uses `breadcrumbs.slice(length - 10)` (nearest 10). Added explicit clarification: "Show the 10 nearest ancestors (closest to the selected node, i.e. `breadcrumbs.slice(length - 10)`); ancestors closer to the root are the ones collapsed."
+
+**Low - Design (_isResuming not reset in disconnectedCallback):**
+- Finding 10 (`metaMapperProgress.js:disconnectedCallback`): `_isResuming = true` is set when a resume RPC fires and is reset on success or timeout but not in `disconnectedCallback()`. A recycled component instance starting with stale `_isResuming = true` would poll at 5s instead of 10s for a Paused job. Added `this._isResuming = false` to `disconnectedCallback()`.
 
 ---
 

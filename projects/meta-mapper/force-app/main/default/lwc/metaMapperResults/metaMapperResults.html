@@ -90,11 +90,11 @@
                         <div class="slds-var-m-top_small">
                             <lightning-button label={copyLabel} variant="neutral" onclick={handleCopySummary}></lightning-button>
                             <span class="slds-assistive-text" aria-live="polite" lwc:ref="copyLiveRegion"></span>
-                            <template lwc:if={copilotEnabled}>
+                            <template lwc:if={showCopilotButton}>
                                 <lightning-button label="Ask Copilot" variant="neutral"
                                     class="slds-var-m-left_x-small" onclick={handleAskCopilot}></lightning-button>
                             </template>
-                            <template lwc:else>
+                            <template lwc:if={showCopilotNotAvailable}>
                                 <span class="slds-text-body_small slds-text-color_weak slds-var-m-left_small">
                                     Einstein Copilot not available in this org.
                                 </span>
