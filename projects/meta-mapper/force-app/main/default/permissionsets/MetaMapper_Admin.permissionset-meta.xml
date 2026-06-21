@@ -176,7 +176,7 @@
 
     <!-- Metadata_Dependency__c field permissions -->
     <!-- Required for getNodeHierarchyForJob() WITH USER_MODE and insert as user rootNode in createJob(). -->
-    <!-- Ancestor_Id_Shortkeys__c and Unique_Component_Key__c are engine-internal and excluded from -->
+    <!-- Ancestor_Id_Index__c and Unique_Component_Key__c are engine-internal and excluded from -->
     <!-- the USER_MODE SELECT projection. Unique_Component_Key__c needs editable=true for the   -->
     <!-- root node insert in createJob(); readable is intentionally false (not projected to the LWC).   -->
     <fieldPermissions>

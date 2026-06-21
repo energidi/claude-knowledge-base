@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 21, 2026 (Round 63 - sf-orchestrator full pass: 3 findings applied - cross-user "View running scan" toast copy, stale heap comment, ECharts virtual focus index)
+**Last Updated:** June 21, 2026 (Round 64 - sf-orchestrator full pass: 5 findings applied - 2 spec text fixes, 2 constant renames, field rename Ancestor_Id_Shortkeys__c → Ancestor_Id_Index__c)
 **Date:** May 23, 2026
 
 ---
@@ -3627,6 +3627,27 @@ The following findings from the Round 15 external review were assessed and rejec
 | Gemini | CRLF bug in `appendErrorsSafe` dedup: `safeExisting.split('\n')` leaves trailing `\r` on extracted strings, defeating dedup | False positive. The code uses `safeExisting.contains(baseMsg)` and `existingBaseMsgs.contains(baseMsg)` - not split/set operations. Gemini described code that does not exist. Additionally, `Error_Progress_Label__c` is only written by Apex code in MetaMapper (always using `\n`), so CRLF is not possible in this field under normal operation. |
 | Gemini | `appendErrorsSafe` produces double-truncation notice when existing log is at capacity | Fixed in Round 15. Pre-truncation path returns immediately. |
 | Grok | `IsCustomizable = true` filter in `getCmtEntities()` is wrong for `__mdt` types - returns zero rows | Disputed and likely false positive. Custom Metadata Types (`__mdt`) are designed specifically for customization (adding custom fields is their primary purpose), so `IsCustomizable = true` should be correct for user-defined CMT types. The filter has been in place through 14 prior review rounds without evidence of failure. The filter correctly excludes managed-package CMT types that have `IsCustomizable = false` - which is intentional, since those types typically restrict field access and cannot be queried for record values anyway. |
+
+---
+
+## Round 64 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 5 findings applied (0 Critical, 0 High, 1 Medium PARTIAL-FIX, 4 Low NEW). Overall verdict: GO.
+
+**Medium PARTIAL-FIX - UX copy (concurrency rejection null-result toast):**
+- Finding 1 (CLAUDE.md spec + `metaMapperSearch.js`): Round 63 updated the code toast copy for the cross-user null-result case but the CLAUDE.md spec text was left with the old copy "The scan finished while this message was showing. You can start a new scan now." Updated CLAUDE.md Empty/Error States table (Concurrency rejection row) to match the implemented copy: "The running scan isn't visible to your account. It may belong to another user or have just completed. Try starting a new scan - if one is still running you will see this message again." Spec and code are now in sync.
+
+**Low NEW - UX spec alignment (deep-link expired job):**
+- Finding 2 (CLAUDE.md spec): `metaMapperApp` deep-link routing on expired jobId was implemented as `view='search' + toast` but the CLAUDE.md spec said "renders a dedicated error state" with a button. Updated CLAUDE.md `metaMapperApp` Key LWC Components entry to: "routes to the search view and shows an error toast: 'This scan result is no longer available. It may have been automatically deleted.'" Spec now matches the implemented behavior.
+
+**Low NEW - Naming V-05 (unapproved abbreviation in constant):**
+- Finding 3 (`DependencyQueueable.cls`): `SUPP_LOG_THRESHOLD` used unapproved abbreviation "SUPP" (not in the approved list: API, DML, LWC, SOQL, CMDT, OWD, FLS, CRUD, LDV, URL, UI, UX, ID, JSON). Renamed to `SUPPLEMENTAL_LOG_THRESHOLD`. Two occurrences updated (declaration line 27, usage in `appendErrorsSafe` call).
+
+**Low NEW - Naming V-05 (unapproved abbreviation in constant):**
+- Finding 4 (`DependencyQueueable.cls`): `DML_STMTS_CHAIN_RESERVE` used unapproved abbreviation "STMTS". Renamed to `DML_STATEMENTS_CHAIN_RESERVE`. Two occurrences updated (declaration line 48, guardrail check line 291).
+
+**Low NEW - Naming V-02/V-03 (field name leaks implementation jargon):**
+- Finding 5 (`Ancestor_Id_Shortkeys__c` field): "Shortkeys" is internal implementation jargon for the bloom-filter prescreen index (6-char ID tail values). Sounds like keyboard shortcuts to admins. Renamed to `Ancestor_Id_Index__c` across all files: field XML (old file deleted, new file created), DependencyQueueable.cls, MetadataDependencySelector.cls, CustomFieldDependencyHandler.cls, MetaMapper_Admin.permissionset-meta.xml, CLAUDE.md (4 occurrences replaced), MetaMapper_Technical_Design.md (2 occurrences replaced). Field label updated from "Ancestor ID Shortkeys" to "Ancestor ID Index". Zero stale references remain in any cls/xml/js/md live file.
 
 ---
 

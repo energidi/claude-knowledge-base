@@ -24,7 +24,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
 
     // ---- Field size limits ----
     private static final Integer LOG_FIELD_MAX        = 32768;
-    private static final Integer SUPP_LOG_THRESHOLD   = 200;
+    private static final Integer SUPPLEMENTAL_LOG_THRESHOLD   = 200;
     private static final Integer ANCESTOR_PATH_MAX    = 32000;
     private static final Integer ANCESTOR_PATH_MARGIN = 20;
 
@@ -45,7 +45,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
     // 10 SOQL query reserve: minimum budget before entering the handler loop.
     private static final Integer QUERIES_CHAIN_RESERVE     = 10;
     // 40 DML statement reserve: worst-case 5 supplemental handlers x ~8 statements each.
-    private static final Integer DML_STMTS_CHAIN_RESERVE   = 40;
+    private static final Integer DML_STATEMENTS_CHAIN_RESERVE   = 40;
 
     // ---- Mid-loop limit thresholds ----
     // 0.75 for both CPU and heap: slightly higher than pre-batch to absorb in-flight work.
@@ -288,7 +288,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             || cpuPct >= CPU_CHAIN_THRESHOLD
             || queryRowsRemaining < QUERY_ROWS_CHAIN_RESERVE
             || queriesRemaining < QUERIES_CHAIN_RESERVE
-            || dmlStmtsRemaining < DML_STMTS_CHAIN_RESERVE) {
+            || dmlStmtsRemaining < DML_STATEMENTS_CHAIN_RESERVE) {
             // Targeted update (no Status__c): same cancel-overwrite protection as step 18.
             Metadata_Scan_Job__c cycleUpdate = new Metadata_Scan_Job__c(Id = job.Id);
             cycleUpdate.Processing_Cycle_Count__c = job.Processing_Cycle_Count__c;
@@ -420,13 +420,13 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                 }
 
                 String parentPath  = parent.Ancestor_Path__c;
-                String parentIndex = parent.Ancestor_Id_Shortkeys__c;
+                String parentIndex = parent.Ancestor_Id_Index__c;
 
                 // Ancestor path depth guard - capacity protection before building the path.
                 Integer parentPathLen = parentPath != null ? parentPath.length() : 0;
                 if ((parentPathLen + ANCESTOR_PATH_MARGIN) > ANCESTOR_PATH_MAX) {
                     child.Ancestor_Path__c              = parentPath;
-                    child.Ancestor_Id_Shortkeys__c  = parentIndex;
+                    child.Ancestor_Id_Index__c  = parentIndex;
                     // Is_Circular__c is intentionally NOT set: depth overflow is a traversal
                     // ceiling, not an ancestry cycle. Setting it would cause the UI to render
                     // these nodes with dashed "circular dependency" styling, which is incorrect.
@@ -454,20 +454,20 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     (String.isBlank(parentPath) ? '' : parentPath + '|')
                     + parent.Metadata_Id__c;
 
-                // Build child's Ancestor_Id_Shortkeys__c (append parent's 6-char suffix).
+                // Build child's Ancestor_Id_Index__c (append parent's 6-char suffix).
                 // right(6) uses the auto-number portion of the 18-char ID, which is unique
                 // per component - unlike left(6) which is the entity key prefix (identical for
                 // all same-type components in an org, making it useless as a bloom-filter key).
                 String parentPrefix = parent.Metadata_Id__c != null
                     ? parent.Metadata_Id__c.right(6) : '';
-                child.Ancestor_Id_Shortkeys__c =
+                child.Ancestor_Id_Index__c =
                     (String.isBlank(parentIndex) ? '' : parentIndex + '|')
                     + parentPrefix;
 
                 // Tier 2 - bloom-filter pre-screen then authoritative confirmation.
                 String childPrefix = childId.right(6);
-                Boolean possibleCycle = String.isNotBlank(child.Ancestor_Id_Shortkeys__c)
-                    && ('|' + child.Ancestor_Id_Shortkeys__c + '|')
+                Boolean possibleCycle = String.isNotBlank(child.Ancestor_Id_Index__c)
+                    && ('|' + child.Ancestor_Id_Index__c + '|')
                         .contains('|' + childPrefix + '|');
 
                 if (possibleCycle) {
@@ -728,7 +728,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     }
                 }
                 job.Scan_Diagnostic_Log__c = sr.appendErrorsSafe(
-                    job.Scan_Diagnostic_Log__c, LOG_FIELD_MAX, SUPP_LOG_THRESHOLD);
+                    job.Scan_Diagnostic_Log__c, LOG_FIELD_MAX, SUPPLEMENTAL_LOG_THRESHOLD);
             }
         }
         List<Metadata_Dependency__c> allSupplementalNodes = suppByKey.values();
