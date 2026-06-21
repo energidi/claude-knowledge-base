@@ -121,19 +121,19 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             + 'for CustomField components.'
         );
 
-        SupplementalScanResult wfuResult  = findWorkflowFieldUpdates(jobId, nodeByFullName, fieldApiNames, objectApiNames);
-        SupplementalScanResult vrResult   = findValidationRuleReferences(jobId, nodeByFieldName, nodeByFullName, fieldApiNames, objectApiNames);
-        SupplementalScanResult cmtResult  = findCmtRecordReferences(jobId, nodeByLowerValue);
+        SupplementalScanResult workflowUpdateResult  = findWorkflowFieldUpdates(jobId, nodeByFullName, fieldApiNames, objectApiNames);
+        SupplementalScanResult validationRuleResult   = findValidationRuleReferences(jobId, nodeByFieldName, nodeByFullName, fieldApiNames, objectApiNames);
+        SupplementalScanResult customMetadataResult  = findCmtRecordReferences(jobId, nodeByLowerValue);
 
-        result.addNodes(wfuResult.nodes);
-        result.addNodes(vrResult.nodes);
-        result.addNodes(cmtResult.nodes);
+        result.addNodes(workflowUpdateResult.nodes);
+        result.addNodes(validationRuleResult.nodes);
+        result.addNodes(customMetadataResult.nodes);
         // Use addAll to merge pre-formatted error strings directly.
         // Sub-results call addError() internally, which stamps timestamp + [Supplemental] prefix.
         // Calling result.addError(e) here would double-wrap: [ts2][Supplemental][ts1][Supplemental]msg.
-        result.errors.addAll(wfuResult.errors);
-        result.errors.addAll(vrResult.errors);
-        result.errors.addAll(cmtResult.errors);
+        result.errors.addAll(workflowUpdateResult.errors);
+        result.errors.addAll(validationRuleResult.errors);
+        result.errors.addAll(customMetadataResult.errors);
 
         return result;
     }
@@ -174,7 +174,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             result.addError(msg);
             return result;
         }
-        Integer wfuSafeLimit = Math.max(1,
+        Integer workflowUpdateSafeLimit = Math.max(1,
             Limits.getLimitQueryRows() - Limits.getQueryRows() - QUERY_ROW_RESERVE);
 
         try {
@@ -188,20 +188,20 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
                 + ' FROM WorkflowFieldUpdate'
                 + ' WHERE Field IN :fieldApiNames'
                 + ' AND SobjectType IN :objectApiNames'
-                + ' LIMIT :wfuSafeLimit'
+                + ' LIMIT :workflowUpdateSafeLimit'
             );
-            if (updates.size() == wfuSafeLimit) {
+            if (updates.size() == workflowUpdateSafeLimit) {
                 String msg = 'CustomFieldDependencyHandler.findWorkflowFieldUpdates: result capped at '
-                    + wfuSafeLimit + ' records; some WorkflowFieldUpdate dependencies may be missing.';
+                    + workflowUpdateSafeLimit + ' records; some WorkflowFieldUpdate dependencies may be missing.';
                 System.debug(LoggingLevel.WARN, msg);
                 result.addError(msg);
             }
-            for (SObject wfu : updates) {
-                String wfuSobjectType = (String) wfu.get('SobjectType');
-                String wfuField       = (String) wfu.get('Field');
-                String wfuName        = (String) wfu.get('Name');
-                String wfuId          = (String) wfu.get('Id');
-                String fullName = (wfuSobjectType + '.' + wfuField).toLowerCase();
+            for (SObject workflowUpdate : updates) {
+                String workflowSobjectType = (String) workflowUpdate.get('SobjectType');
+                String workflowField       = (String) workflowUpdate.get('Field');
+                String workflowName        = (String) workflowUpdate.get('Name');
+                String workflowId          = (String) workflowUpdate.get('Id');
+                String fullName = (workflowSobjectType + '.' + workflowField).toLowerCase();
                 List<Metadata_Dependency__c> parents = nodeByFullName.get(fullName);
                 if (parents == null || parents.isEmpty()) {
                     continue;
@@ -211,20 +211,20 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
                 // uniqueness key; emitting one per parent would produce duplicate
                 // Unique_Component_Key__c values that crash the upsert. First parent wins.
                 // L1: pass null for uniqueKeySuffix - one node per Metadata_Id__c is correct here
-                // (the key formula defaults to jobId + ':' + metadataId = jobId + ':' + wfuId).
+                // (the key formula defaults to jobId + ':' + metadataId = jobId + ':' + workflowId).
                 // H1: buildNode returns null when the parent's Ancestor_Path__c is near the
                 // 32,000-char limit. Log the event and skip addNode().
-                Metadata_Dependency__c wfuNode = buildNode(
+                Metadata_Dependency__c workflowUpdateNode = buildNode(
                     jobId, parents.get(0),
-                    wfuId, 'WorkflowFieldUpdate', wfuSobjectType + '.' + wfuName,
+                    workflowId, 'WorkflowFieldUpdate', workflowSobjectType + '.' + workflowName,
                     CONFIDENCE_EXACT, false, null
                 );
-                if (wfuNode == null) {
+                if (workflowUpdateNode == null) {
                     result.addError('CustomFieldDependencyHandler.findWorkflowFieldUpdates: ancestor path '
                         + 'depth limit reached at parent ' + parents.get(0).Metadata_Id__c
                         + '; WorkflowFieldUpdate node not added.');
                 } else {
-                    result.addNode(wfuNode);
+                    result.addNode(workflowUpdateNode);
                 }
             }
         } catch (Exception e) {

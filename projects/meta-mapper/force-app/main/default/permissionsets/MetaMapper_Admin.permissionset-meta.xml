@@ -139,6 +139,11 @@
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
+        <editable>false</editable>
+        <field>Metadata_Scan_Job__c.Platform_Events_Auto_Suppressed__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
         <editable>true</editable>
         <field>Metadata_Scan_Job__c.Status__c</field>
         <readable>true</readable>

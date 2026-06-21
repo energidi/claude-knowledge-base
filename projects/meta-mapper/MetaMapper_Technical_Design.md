@@ -50,7 +50,7 @@ Each `Metadata_Dependency__c` stores a pipe-delimited `Ancestor_Path__c` chain. 
 - **Root node:** `Ancestor_Path__c = ''` (empty string).
 - **Path building:** `child.Ancestor_Path__c = (String.isBlank(parent.Ancestor_Path__c) ? '' : parent.Ancestor_Path__c + '|') + parent.Metadata_Id__c`
 - **Circular node:** keep full `Ancestor_Path__c`, set `Is_Circular__c = true`, `Dependencies_Fetched__c = true`. Append `{"cycleClosesAt": "<parentMetadataId>"}` to `Dependency_Context__c`.
-- **Depth guard:** before building path for any child, check if `(parent.Ancestor_Path__c?.length() ?? 0) + 20 > 32000`. If true, mark child as circular and log to `Engine_Diagnostic_Log__c`.
+- **Depth guard:** before building path for any child, check if `(parent.Ancestor_Path__c?.length() ?? 0) + 20 > 32000`. If true, mark child as circular and log to `Scan_Diagnostic_Log__c`.
 
 ### Cancellation
 
@@ -133,7 +133,7 @@ When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFile
 | `Target_Parent_Object__c` | Text 255 | Optional - required when type = CustomField |
 | `Active_Flows_Only__c` | Checkbox | Default true - drops inactive Flow versions |
 | `Status__c` | Picklist | Initializing, Processing, Completed, Failed, Cancelled, Paused |
-| `Engine_Diagnostic_Log__c` | Long Text 32768 | Full exception on failure + all engine diagnostic notices (PE suppression warnings, retry logs, HTTP 414 restarts). Populated by engine only. |
+| `Scan_Diagnostic_Log__c` | Long Text 32768 | Full exception on failure + all engine diagnostic notices (PE suppression warnings, retry logs, HTTP 414 restarts). Populated by engine only. |
 | `Components_Analyzed__c` | Number | Running counter for progress bar |
 | `Component_Type_Counts__c` | Long Text 32768 | JSON map `{"v": 1, MetadataType: count}` - populated on Completed by `ScanResultFileQueueable` before status transition. Null until Completed. |
 | `Status_Closed_At__c` | DateTime | Set when Status = Completed, Failed, or Cancelled. Not set on Paused. Used by cleanup batch. |
@@ -212,17 +212,17 @@ When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFile
 | Class | Role |
 |---|---|
 | `DependencyJobController` | `@AuraEnabled` (USER_MODE): `createJob()` with async + concurrency + storage + node cap + preflight, `getObjectList()`, `getJobStatus()`, `getNodeHierarchy()` (paginated â€” see Query Strategy), `cancelJob()`, `resumeJob()` |
-| `MetadataDependencyService` | Tooling API SOQL formatting, chunking, QueryMore, Active Flows filter, `buildContextData()`, `computeScore()`. URL-encode user-supplied `Target_API_Name__c` and `Target_Parent_Object__c` via `EncodingUtil.urlEncode(value, 'UTF-8')` before embedding in callout URL. Heap guard: check raw HTTP response string length > 500,000 chars BEFORE `JSON.deserializeUntyped()`. Transient retry: on HTTP 5xx or `CalloutException`, retry the same callout up to 2 times within the current execution before treating as fatal; log each retry to `Engine_Diagnostic_Log__c`. |
+| `MetadataDependencyService` | Tooling API SOQL formatting, chunking, QueryMore, Active Flows filter, `buildContextData()`, `computeScore()`. URL-encode user-supplied `Target_API_Name__c` and `Target_Parent_Object__c` via `EncodingUtil.urlEncode(value, 'UTF-8')` before embedding in callout URL. Heap guard: check raw HTTP response string length > 500,000 chars BEFORE `JSON.deserializeUntyped()`. Transient retry: on HTTP 5xx or `CalloutException`, retry the same callout up to 2 times within the current execution before treating as fatal; log each retry to `Scan_Diagnostic_Log__c`. |
 | `DependencyTypeHandlerFactory` | Returns correct `IDependencyTypeHandler` or no-op default |
 | `CustomFieldDependencyHandler` | WorkflowFieldUpdate (95), ValidationRule tokenized (65), CMT field value (75). FlexiPage + Lookup deferred. |
 | `ApexClassDependencyHandler` | CMT class-reference fields (85); all matches flagged `Is_Dynamic_Reference__c = true` |
 | `FlowDependencyHandler` | Gap notice for SubFlow XML parsing (deferred). No SOQL queries. |
 | `MetaMapperDescribeCache` | Transaction-level static cache for CMT `describeSObjects()` data. Shared by all handlers. |
 | `MetaMapperSettingsProvider` | Reads and caches `MetaMapper_Settings__mdt` Default record via `getInstance()` |
-| `SupplementalScanResult` | Return type for `IDependencyTypeHandler.findSupplemental()`. Guards `Engine_Diagnostic_Log__c` overflow via `appendErrorsSafe()`. |
+| `SupplementalScanResult` | Return type for `IDependencyTypeHandler.findSupplemental()`. Guards `Scan_Diagnostic_Log__c` overflow via `appendErrorsSafe()`. |
 | `DependencyQueueable` | Async engine. Savepoint/catch; cancel check; CMDT read; hot-loop detection; seven-limit guardrail; scoped dedup; two-tier cycle detection; callouts; HTTP 414/431 reactive split (max depth 5); handlers; one PE per execution; self-chain. On completion: enqueues `ScanResultFileQueueable`. |
 | `DependencyNotificationService` | `publishProgress()` with OrgLimits PE check + auto-suppress; `sendCompletionNotification()` |
-| `ScanSummaryQueueable` | One-shot: reads `Component_Type_Counts__c`, writes `Scan_Summary_Text__c`. Wrap core logic in try/catch: on failure set `Scan_Summary_Text__c = 'Summary unavailable. View component type counts in the stats tile.'` and append exception to `Engine_Diagnostic_Log__c`. Never leave `Scan_Summary_Text__c` null on a Completed job. |
+| `ScanSummaryQueueable` | One-shot: reads `Component_Type_Counts__c`, writes `Scan_Summary_Text__c`. Wrap core logic in try/catch: on failure set `Scan_Summary_Text__c = 'Summary unavailable. View component type counts in the stats tile.'` and append exception to `Scan_Diagnostic_Log__c`. Never leave `Scan_Summary_Text__c` null on a Completed job. |
 | `ScanResultFileQueueable` | Savepoint/rollback; heap pre-check before `JSON.serialize()`; creates `ContentVersion`; requeries `ContentDocumentId`; computes `Component_Type_Counts__c`; transitions to Completed; ring buffer; bulk-deletes nodes via `MetadataDependencyDeletionBatch(NODES_ONLY)`; enqueues `ScanSummaryQueueable`. Enqueues must remain inside the Savepoint scope â€” see Data Lifecycle ordering note. |
 | `DependencyCleanupBatch` | `Database.Stateful`. Discovers Failed/Cancelled jobs past `Retention_Hours__c`. Batch size 10. Max 4 child batch submissions per `finish()`. |
 | `MetadataDependencyDeletionBatch` | Node deletion. Constructor: `(String jobId, CleanupMode mode)`. `CleanupMode` enum: `NODES_ONLY` / `NODES_AND_JOB`. Batch size = `Cleanup_Chunk_Size__c` (default 2,000). |
@@ -267,7 +267,7 @@ Start at 100 IDs. Dynamic check: `if (80 + (batchIds.size() * 19) > 8000) { halv
 
 ### QueryMore
 
-Follow `nextRecordsUrl` iteratively until `done = true`. Wrap each `nextRecordsUrl` callout in try/catch for `INVALID_QUERY_LOCATOR` (cursor expiry). On catch: restart query from scratch with same ID batch. Log restart to `Engine_Diagnostic_Log__c`.
+Follow `nextRecordsUrl` iteratively until `done = true`. Wrap each `nextRecordsUrl` callout in try/catch for `INVALID_QUERY_LOCATOR` (cursor expiry). On catch: restart query from scratch with same ID batch. Log restart to `Scan_Diagnostic_Log__c`.
 
 ### Reactive HTTP 414 Handling
 
@@ -470,7 +470,7 @@ Node click = populates Node Details Panel (sidebar). "Open in Setup" is in the p
 | Scenario | UI |
 |---|---|
 | Zero results | Empty state + "No dependencies found for [API name]." |
-| Job failed | Error banner with first 200 chars of `Engine_Diagnostic_Log__c`. "View full error" expander. "Start a new scan" button. |
+| Job failed | Error banner with first 200 chars of `Scan_Diagnostic_Log__c`. "View full error" expander. "Start a new scan" button. |
 | Serializer failed (completed traversal but no file) | Detected by: `Status__c = 'Failed'` AND `Components_Analyzed__c > 0` AND `Result_File_Id__c` is null. Message: "Scan analysis is complete but results could not be saved." + "Download Partial Results" button. |
 | Loading | Skeleton shimmer (3 rows) in both tabs while `getNodeHierarchy()` resolves. |
 | Paused | Warning banner. "Resume at a slower speed" + "Resume with current settings" buttons. Both buttons disable on click with inline spinner. |

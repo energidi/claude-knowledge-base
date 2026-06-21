@@ -48,15 +48,17 @@
                         <input id="targetObject" type="text" class="slds-input"
                             placeholder="e.g. Account" value={targetObject}
                             oninput={handleTargetObjectInput} onblur={handleTargetObjectBlur}
+                            onkeydown={handleTypeaheadKeydown}
                             autocomplete="off" aria-autocomplete="list" aria-expanded={typeaheadOpen}
-                            aria-controls="typeahead-listbox" />
+                            aria-controls="typeahead-listbox" aria-activedescendant={activeTypeaheadOptionId} />
                     </div>
                     <template lwc:if={typeaheadOpen}>
                         <div id="typeahead-listbox" class="slds-dropdown slds-dropdown_length-5 slds-dropdown_fluid" role="listbox">
                             <ul class="slds-listbox slds-listbox_vertical" role="presentation">
                                 <template lwc:if={typeaheadResults.length}>
                                     <template for:each={typeaheadResults} for:item="result">
-                                        <li key={result.value} role="option" class="slds-listbox__item"
+                                        <li key={result.value} id={result.optionId} role="option"
+                                            class="slds-listbox__item" aria-selected={result.isFocused}
                                             data-value={result.value} onmousedown={handleTypeaheadSelect}>
                                             <span class="slds-media__body">{result.label}</span>
                                         </li>

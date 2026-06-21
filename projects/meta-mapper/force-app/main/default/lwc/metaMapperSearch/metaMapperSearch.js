@@ -43,8 +43,14 @@ export default class MetaMapperSearch extends LightningElement {
 
     _typeaheadTimer = null;
     _complexityTimer = null;
+    _focusedTypeaheadIdx = -1;
 
     get showTargetObject() { return this.selectedType === 'CustomField'; }
+
+    get activeTypeaheadOptionId() {
+        if (this._focusedTypeaheadIdx < 0 || !this.typeaheadResults[this._focusedTypeaheadIdx]) return null;
+        return this.typeaheadResults[this._focusedTypeaheadIdx].optionId;
+    }
     get showValidationRuleHelp() { return this.selectedType === 'ValidationRule'; }
     get apiNamePlaceholder() { return API_NAME_PLACEHOLDERS[this.selectedType] || API_NAME_PLACEHOLDERS.default; }
     get submitLabel() { return this.isSubmitting ? 'Starting analysis...' : 'Analyze Dependencies'; }
@@ -86,7 +92,7 @@ export default class MetaMapperSearch extends LightningElement {
 
     handleTargetObjectBlur() {
         // eslint-disable-next-line @lwc/lwc/no-async-operation
-        setTimeout(() => { this.typeaheadOpen = false; }, 150);
+        setTimeout(() => { this.typeaheadOpen = false; this._resetTypeaheadFocus(); }, 150);
         if (this.showTargetObject && !this.targetObject.trim()) {
             this.targetObjectError = 'Enter the API name of the parent object (e.g. Account).';
         }
@@ -96,6 +102,42 @@ export default class MetaMapperSearch extends LightningElement {
         this.targetObject = event.currentTarget.dataset.value;
         this.typeaheadOpen = false;
         this.targetObjectError = '';
+        this._resetTypeaheadFocus();
+    }
+
+    handleTypeaheadKeydown(event) {
+        if (!this.typeaheadOpen) return;
+        const key = event.key;
+        if (key === 'ArrowDown') {
+            event.preventDefault();
+            this._setTypeaheadFocus(Math.min(this._focusedTypeaheadIdx + 1, this.typeaheadResults.length - 1));
+        } else if (key === 'ArrowUp') {
+            event.preventDefault();
+            this._setTypeaheadFocus(Math.max(this._focusedTypeaheadIdx - 1, 0));
+        } else if (key === 'Enter') {
+            if (this._focusedTypeaheadIdx >= 0 && this.typeaheadResults[this._focusedTypeaheadIdx]) {
+                event.preventDefault();
+                this.targetObject = this.typeaheadResults[this._focusedTypeaheadIdx].value;
+                this.typeaheadOpen = false;
+                this.targetObjectError = '';
+                this._resetTypeaheadFocus();
+            }
+        } else if (key === 'Escape') {
+            this.typeaheadOpen = false;
+            this._resetTypeaheadFocus();
+        }
+    }
+
+    _setTypeaheadFocus(idx) {
+        this._focusedTypeaheadIdx = idx;
+        this.typeaheadResults = this.typeaheadResults.map((r, i) => ({ ...r, isFocused: i === idx }));
+    }
+
+    _resetTypeaheadFocus() {
+        this._focusedTypeaheadIdx = -1;
+        if (this.typeaheadResults.some(r => r.isFocused)) {
+            this.typeaheadResults = this.typeaheadResults.map(r => ({ ...r, isFocused: false }));
+        }
     }
 
     async _runTypeahead() {
@@ -103,7 +145,11 @@ export default class MetaMapperSearch extends LightningElement {
         this.typeaheadCalloutError = false;
         try {
             const results = await getObjectList({ searchTerm: this.targetObject });
-            this.typeaheadResults = (results || []).map(r => ({ label: r.QualifiedApiName, value: r.QualifiedApiName }));
+            this.typeaheadResults = (results || []).map((r, i) => ({
+                label: r.QualifiedApiName, value: r.QualifiedApiName,
+                optionId: `typeahead-option-${i}`, isFocused: false
+            }));
+            this._focusedTypeaheadIdx = -1;
             this.typeaheadOpen = true;
         } catch {
             this.typeaheadCalloutError = true;

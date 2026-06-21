@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 18, 2026 (Round 59 - sf-orchestrator full pass: 36 findings applied across Architecture, UX, and Naming lenses; LWC service module renamed metaMapperNodeFilters → metaMapperNodeServices)
+**Last Updated:** June 21, 2026 (Round 60 - sf-orchestrator full pass: 7 findings applied - permissionset FLS gap, elapsed timer freeze, typeahead keyboard nav, wfu/vr/cmt naming renames, Tech Design field name fix)
 **Date:** May 23, 2026
 
 ---
@@ -3630,6 +3630,23 @@ The following findings from the Round 15 external review were assessed and rejec
 | Gemini | CRLF bug in `appendErrorsSafe` dedup: `safeExisting.split('\n')` leaves trailing `\r` on extracted strings, defeating dedup | False positive. The code uses `safeExisting.contains(baseMsg)` and `existingBaseMsgs.contains(baseMsg)` - not split/set operations. Gemini described code that does not exist. Additionally, `Error_Progress_Label__c` is only written by Apex code in MetaMapper (always using `\n`), so CRLF is not possible in this field under normal operation. |
 | Gemini | `appendErrorsSafe` produces double-truncation notice when existing log is at capacity | Fixed in Round 15. Pre-truncation path returns immediately. |
 | Grok | `IsCustomizable = true` filter in `getCmtEntities()` is wrong for `__mdt` types - returns zero rows | Disputed and likely false positive. Custom Metadata Types (`__mdt`) are designed specifically for customization (adding custom fields is their primary purpose), so `IsCustomizable = true` should be correct for user-defined CMT types. The filter has been in place through 14 prior review rounds without evidence of failure. The filter correctly excludes managed-package CMT types that have `IsCustomizable = false` - which is intentional, since those types typically restrict field access and cannot be queried for record values anyway. |
+
+---
+
+## Round 60 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 7 findings applied (0 Critical, 1 High, 2 Medium, 4 Low). Architecture lens: GO (0 findings).
+
+**High - Security / FLS:**
+- D1 (`MetaMapper_Admin.permissionset-meta.xml`): `Platform_Events_Auto_Suppressed__c` field was missing from `Metadata_Scan_Job__c` field permissions. Added `<fieldPermissions>` block with `editable: false, readable: true`. Without this, `getJobStatus()` via `WITH USER_MODE` would throw a `FieldException` for non-sysadmin users.
+
+**Medium - UX correctness:**
+- U2 (`metaMapperProgress.js`): Elapsed timer never froze when `Status__c = 'Paused'`. Converted `@api job` to a getter/setter pair; setter captures `_elapsedFrozenSeconds` (seconds from `CreatedDate`) on Paused transition and clears it on resume. `elapsedFormatted` getter returns the frozen formatted value when `_elapsedFrozenSeconds !== null`.
+- U3 (`metaMapperSearch.html`/`.js`/`.css`): Typeahead `<ul role="listbox">` had no keyboard navigation. Added `handleTypeaheadKeydown` handler (ArrowDown/ArrowUp/Enter/Escape); `activeTypeaheadOptionId` getter; `aria-activedescendant` on input; `optionId`/`isFocused` fields on result items; CSS focus ring (`.slds-listbox__item[aria-selected="true"]`).
+
+**Low - Naming and docs:**
+- N4-N6 (`CustomFieldDependencyHandler.cls`): V-05 unapproved abbreviations. Renamed: `wfuResult` → `workflowUpdateResult`, `wfuSafeLimit` → `workflowUpdateSafeLimit`, loop var `wfu` → `workflowUpdate`, `wfuSobjectType` → `workflowSobjectType`, `wfuField` → `workflowField`, `wfuName` → `workflowName`, `wfuId` → `workflowId`, `wfuNode` → `workflowUpdateNode`, `vrResult` → `validationRuleResult`, `cmtResult` → `customMetadataResult`.
+- D7 (`MetaMapper_Technical_Design.md`): 7 occurrences of `Engine_Diagnostic_Log__c` replaced with `Scan_Diagnostic_Log__c` (correct field API name on `Metadata_Scan_Job__c`).
 
 ---
 

@@ -13,7 +13,6 @@ const RESUME_TIMEOUT           = 30000;
 
 export default class MetaMapperProgress extends LightningElement {
     @api jobId;
-    @api job;
     @api maxComponentsCap;
     @api batchSizeInUse;
 
@@ -32,6 +31,24 @@ export default class MetaMapperProgress extends LightningElement {
     @track showPollWarningBanner = false;
     @track showPollErrorBanner = false;
     @track showStreamingQuotaBanner = false;
+
+    _jobInternal = null;
+    _elapsedFrozenSeconds = null;
+
+    @api
+    get job() {
+        return this._jobInternal;
+    }
+    set job(val) {
+        const prevStatus = this._jobInternal && this._jobInternal.Status__c;
+        const nextStatus = val && val.Status__c;
+        if (prevStatus !== 'Paused' && nextStatus === 'Paused' && this._elapsedFrozenSeconds === null && val.CreatedDate) {
+            this._elapsedFrozenSeconds = Math.floor((Date.now() - new Date(val.CreatedDate).getTime()) / 1000);
+        } else if (prevStatus === 'Paused' && nextStatus !== 'Paused') {
+            this._elapsedFrozenSeconds = null;
+        }
+        this._jobInternal = val;
+    }
 
     _isMounted = false;
     _peSuppressionActiveProp = false;
@@ -127,8 +144,16 @@ export default class MetaMapperProgress extends LightningElement {
 
     get elapsedFormatted() {
         if (!this.job || !this.job.CreatedDate) return '00:00';
-        // Reference _elapsedTick so LWC re-evaluates this getter each second
-        return this._elapsedTick >= 0 ? formatElapsed(this.job.CreatedDate) : '00:00';
+        if (this._elapsedTick < 0) return '00:00';
+        if (this._elapsedFrozenSeconds !== null) {
+            const s = this._elapsedFrozenSeconds;
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+            return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        }
+        return formatElapsed(this.job.CreatedDate);
     }
 
     get resumeCurrentLabel() {
