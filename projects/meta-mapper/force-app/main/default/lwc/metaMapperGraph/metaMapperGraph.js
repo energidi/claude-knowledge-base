@@ -99,6 +99,9 @@ export default class MetaMapperGraph extends LightningElement {
     _ariaRebuildTimer = null;
     _ariaTableBusy = false;
     _graphAriaLiveText = '';
+    // Virtual focus index — tracks keyboard focus position within the canvas (WCAG 2.1 SC 2.1.1).
+    _activeNodeIndex = -1;
+    _orderedNodeIds = [];
 
     // ---- lifecycle ----
 
@@ -254,6 +257,18 @@ export default class MetaMapperGraph extends LightningElement {
             } else if (e.shiftKey && e.key === '?') {
                 e.preventDefault();
                 this._showShortcutLegend = true;
+            } else if (
+                (e.key === 'ArrowDown' || e.key === 'ArrowRight' ||
+                 e.key === 'ArrowUp'   || e.key === 'ArrowLeft') &&
+                !this._contextMenu && !this._showShortcutLegend
+            ) {
+                // Virtual focus navigation. preventDefault() also stops ECharts from panning
+                // on the same keypress so the two interactions don't fight each other.
+                e.preventDefault();
+                const delta = (e.key === 'ArrowDown' || e.key === 'ArrowRight') ? 1 : -1;
+                this._moveVirtualFocus(delta);
+            } else if (e.key === 'Enter' && !this._contextMenu && !this._showShortcutLegend) {
+                this._activateVirtualFocusNode();
             } else if (e.key === 'Escape') {
                 if (this._focusPath) {
                     this._clearFocusPath();
@@ -294,6 +309,20 @@ export default class MetaMapperGraph extends LightningElement {
         if (!this._chart) return;
         const visible = this._getVisibleNodes();
         this._nodeMap = new Map(visible.map((n) => [n.Metadata_Id__c, n]));
+        // Rebuild ordered node list for virtual focus traversal (depth ASC, then name ASC for
+        // deterministic arrow-key order regardless of force-layout position).
+        this._orderedNodeIds = visible
+            .slice()
+            .sort(
+                (a, b) =>
+                    (a.Dependency_Depth__c || 0) - (b.Dependency_Depth__c || 0) ||
+                    (a.Metadata_Name__c || '').localeCompare(b.Metadata_Name__c || '')
+            )
+            .map((n) => n.Metadata_Id__c);
+        // Clamp active index when filters reduce the visible set so it never goes out of bounds.
+        if (this._activeNodeIndex >= this._orderedNodeIds.length) {
+            this._activeNodeIndex = Math.max(0, this._orderedNodeIds.length - 1);
+        }
         const option = this._buildOption(visible);
         this._chart.setOption(option, true);
         this._scheduleAriaTableRebuild(visible);
@@ -325,10 +354,15 @@ export default class MetaMapperGraph extends LightningElement {
 
         const focusSet = this._focusPath;
         const highlights = this._searchHighlights;
+        const activeNodeId =
+            this._activeNodeIndex >= 0 && this._activeNodeIndex < this._orderedNodeIds.length
+                ? this._orderedNodeIds[this._activeNodeIndex]
+                : null;
 
         const echartsNodes = visibleNodes.map((n) => {
             const baseColor = TYPE_COLORS[n.Metadata_Type__c] || DEFAULT_COLOR;
             const isSelected = n.Metadata_Id__c === this._selectedNodeId;
+            const isActive = n.Metadata_Id__c === activeNodeId;
             const isFocused = !focusSet || focusSet.has(n.Metadata_Id__c);
             const isHighlighted = highlights && highlights.has(n.Metadata_Id__c);
 
@@ -336,8 +370,21 @@ export default class MetaMapperGraph extends LightningElement {
             if (!isFocused) opacity = 0.2;
             else if (highlights && !isHighlighted) opacity = 0.3;
 
-            const borderColor = isSelected || isHighlighted ? '#FFB81C' : baseColor;
-            const borderWidth = isSelected ? 3 : n.Is_Circular__c ? 2 : 1;
+            // Priority: virtual focus > selected/highlighted > circular > normal.
+            // Active (virtual keyboard focus) uses white 4px border so it is visually
+            // distinct from the yellow 3px selection ring even when both flags are set.
+            let borderColor;
+            let borderWidth;
+            if (isActive) {
+                borderColor = '#FFFFFF';
+                borderWidth = 4;
+            } else if (isSelected || isHighlighted) {
+                borderColor = '#FFB81C';
+                borderWidth = isSelected ? 3 : 2;
+            } else {
+                borderColor = baseColor;
+                borderWidth = n.Is_Circular__c ? 2 : 1;
+            }
             const borderType = n.Is_Circular__c ? 'dashed' : 'solid';
 
             const flags = [];
@@ -752,6 +799,46 @@ export default class MetaMapperGraph extends LightningElement {
         if (action === 'copy') this.handleCtxCopyName();
         else if (action === 'focus') this.handleCtxFocusPath();
         else if (action === 'collapse') this.handleCtxCollapseSubtree();
+    }
+
+    // ---- virtual focus ----
+
+    _moveVirtualFocus(delta) {
+        if (!this._orderedNodeIds.length) return;
+        if (this._activeNodeIndex < 0) {
+            // First arrow key press: always start at the root (index 0) regardless of direction.
+            this._activeNodeIndex = 0;
+        } else {
+            this._activeNodeIndex = Math.max(
+                0,
+                Math.min(this._orderedNodeIds.length - 1, this._activeNodeIndex + delta)
+            );
+        }
+        this._renderGraph();
+        const nodeId = this._orderedNodeIds[this._activeNodeIndex];
+        const node = this._nodeMap.get(nodeId);
+        if (node) {
+            const flags = [];
+            if (node.Is_Circular__c) flags.push('circular dependency');
+            if (node.Is_Dynamic_Reference__c) flags.push('dynamic reference');
+            const flagText = flags.length ? ', ' + flags.join(', ') : '';
+            this._announceAriaLive(
+                `${node.Metadata_Name__c || nodeId} (${node.Metadata_Type__c || 'Component'})` +
+                `${flagText}, depth ${node.Dependency_Depth__c || 0}. ` +
+                `${this._activeNodeIndex + 1} of ${this._orderedNodeIds.length}. ` +
+                `Press Enter to open details.`
+            );
+        }
+    }
+
+    _activateVirtualFocusNode() {
+        if (this._activeNodeIndex < 0 || !this._orderedNodeIds.length) return;
+        const nodeId = this._orderedNodeIds[this._activeNodeIndex];
+        const node = this._nodeMap.get(nodeId);
+        if (!node) return;
+        this._selectedNodeId = nodeId;
+        this._renderGraph();
+        this.dispatchEvent(new CustomEvent('nodeselected', { detail: { nodeId, node } }));
     }
 
     _fireToast(variant, title, message) {

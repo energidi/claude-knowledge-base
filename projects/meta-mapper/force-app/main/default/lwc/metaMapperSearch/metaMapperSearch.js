@@ -212,11 +212,18 @@ export default class MetaMapperSearch extends LightningElement {
                     detail: { jobId: activeId }, bubbles: true, composed: true
                 }));
             } else {
-                // Scan completed between the concurrency rejection and the link click.
+                // getActiveJobId() returned null. Two possible causes:
+                // (a) the blocking scan completed between rejection and this click (race condition), OR
+                // (b) the blocking scan belongs to another user (invisible due to Private OWD).
+                // Dismiss the banner so the "View running scan" link disappears, but use copy
+                // that covers both cases rather than claiming the scan "finished".
                 this.submissionError = '';
                 this.isRunningScanError = false;
                 this.dispatchEvent(new CustomEvent('showtoast', {
-                    detail: { message: 'The scan finished while this message was showing. You can start a new scan now.', variant: 'info' },
+                    detail: {
+                        message: "The running scan isn’t visible to your account. It may belong to another user or have just completed. Try starting a new scan — if one is still running you will see this message again.",
+                        variant: 'info'
+                    },
                     bubbles: true, composed: true
                 }));
             }

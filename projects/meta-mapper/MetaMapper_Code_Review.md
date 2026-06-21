@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 21, 2026 (Round 62 - sf-orchestrator full pass: 8 findings applied - "View running scan" navigation, tour modal focus/Esc, tab-specific loading states, controller DML extraction, complexity debounce, resume label, toast ARIA)
+**Last Updated:** June 21, 2026 (Round 63 - sf-orchestrator full pass: 3 findings applied - cross-user "View running scan" toast copy, stale heap comment, ECharts virtual focus index)
 **Date:** May 23, 2026
 
 ---
@@ -15,8 +15,7 @@ Findings listed here appeared in one or more prior review rounds and were **deli
 
 | Area | Issue | Round First Seen | Reason Accepted |
 |---|---|---|---|
-| `setup/CONTRAST_MATRIX.md` | File not yet created - required WCAG contrast gate before LWC implementation | Round 18 | Pre-implementation gate document; required only when LWC node coloring work begins |
-| ECharts canvas - keyboard nav | `<canvas>` has no per-node DOM targets; virtual focus index not yet implemented | Round 41 | Deferred until LWC graph component is built; off-screen ARIA summary table is the interim accessibility mechanism per spec |
+| *(no open skipped findings)* | | | |
 
 ---
 
@@ -3628,6 +3627,24 @@ The following findings from the Round 15 external review were assessed and rejec
 | Gemini | CRLF bug in `appendErrorsSafe` dedup: `safeExisting.split('\n')` leaves trailing `\r` on extracted strings, defeating dedup | False positive. The code uses `safeExisting.contains(baseMsg)` and `existingBaseMsgs.contains(baseMsg)` - not split/set operations. Gemini described code that does not exist. Additionally, `Error_Progress_Label__c` is only written by Apex code in MetaMapper (always using `\n`), so CRLF is not possible in this field under normal operation. |
 | Gemini | `appendErrorsSafe` produces double-truncation notice when existing log is at capacity | Fixed in Round 15. Pre-truncation path returns immediately. |
 | Grok | `IsCustomizable = true` filter in `getCmtEntities()` is wrong for `__mdt` types - returns zero rows | Disputed and likely false positive. Custom Metadata Types (`__mdt`) are designed specifically for customization (adding custom fields is their primary purpose), so `IsCustomizable = true` should be correct for user-defined CMT types. The filter has been in place through 14 prior review rounds without evidence of failure. The filter correctly excludes managed-package CMT types that have `IsCustomizable = false` - which is intentional, since those types typically restrict field access and cannot be queried for record values anyway. |
+
+---
+
+## Round 63 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 3 findings applied (0 Critical, 0 High, 1 Medium, 1 Low). 2 SKIPPED findings resolved and removed from the Known Skipped Findings table. Overall verdict: GO.
+
+**Medium - UX copy (cross-user concurrency):**
+- Finding 1 (`metaMapperSearch.js:handleViewRunningScan`): When the concurrency rejection was caused by another user's scan, `getActiveJobId()` (WITH USER_MODE / Private OWD) returned null and the LWC showed "The scan finished while this message was showing" - incorrect because the scan was still running under another user. Updated the null-branch toast copy to: "The running scan isn't visible to your account. It may belong to another user or have just completed. Try starting a new scan - if one is still running you will see this message again." Copy now covers both the race-condition-complete and cross-user-invisible scenarios without making a false claim.
+
+**Low - Architecture comment:**
+- Finding 2 (`ScanResultFileQueueable.cls:132`): Comment said "the 3x factor covers the JSON String and Blob copy" but `HEAP_AMPLIFICATION = 2`. The 2x constant was correct (established in Round 57); the comment was never updated. Changed "3x factor" to "2x factor".
+
+**SKIPPED resolved - `setup/CONTRAST_MATRIX.md`:**
+- The file was confirmed present and fully populated (contrast ratios for all 8 node colors against both backgrounds, plus search highlight and progress bar). Removed from Known Skipped Findings.
+
+**SKIPPED resolved - ECharts virtual focus index:**
+- Implemented in `metaMapperGraph.js`: added `_activeNodeIndex` (-1 = inactive) and `_orderedNodeIds` (visible nodes sorted depth ASC, name ASC). `_renderGraph()` rebuilds the ordered list and clamps the index on filter changes. `_attachCtrlK()` now intercepts ArrowDown/ArrowRight (next), ArrowUp/ArrowLeft (prev), and Enter (select) when no context menu or shortcut legend is open; `preventDefault()` stops ECharts from also panning on the same keypress. Active node renders with a white 4px border (distinct from the yellow 3px selection ring). `_moveVirtualFocus()` announces the newly focused node name, type, depth, and position via `_announceAriaLive()`. `_activateVirtualFocusNode()` fires `nodeselected` to open the Node Details Panel. Removed from Known Skipped Findings.
 
 ---
 

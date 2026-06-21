@@ -129,7 +129,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
         // Sample actual per-node serialization cost rather than relying on a fixed estimate.
         // A fixed 5KB/node average fires at ~666 nodes (far below the intended 2000-3000 ceiling);
         // sampling from real data gives an accurate estimate for the current scan's depth/breadth.
-        // The SObject list is already in memory; the 3x factor covers the JSON String and Blob copy.
+        // The SObject list is already in memory; the 2x factor covers the JSON String and Blob copy.
         if (!nodes.isEmpty()) {
             Integer sampleSize = Math.min(HEAP_SAMPLE_SIZE, nodes.size());
             Long totalSampleSerializedChars = 0;
