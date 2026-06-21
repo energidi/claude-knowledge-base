@@ -259,6 +259,37 @@ private class DependencyJobControllerTest {
     }
 
     // -----------------------------------------------------------------------
+    // getActiveJobId
+    // -----------------------------------------------------------------------
+
+    @IsTest
+    static void getActiveJobId_withProcessingJob_returnsId() {
+        Metadata_Scan_Job__c job = buildJob('Processing');
+        Test.startTest();
+        Id result = DependencyJobController.getActiveJobId();
+        Test.stopTest();
+        Assert.areEqual(job.Id, result, 'Should return the ID of the active Processing job');
+    }
+
+    @IsTest
+    static void getActiveJobId_withInitializingJob_returnsId() {
+        Metadata_Scan_Job__c job = buildJob('Initializing');
+        Test.startTest();
+        Id result = DependencyJobController.getActiveJobId();
+        Test.stopTest();
+        Assert.areEqual(job.Id, result, 'Should return the ID of the active Initializing job');
+    }
+
+    @IsTest
+    static void getActiveJobId_noActiveJob_returnsNull() {
+        buildJob('Completed');
+        Test.startTest();
+        Id result = DependencyJobController.getActiveJobId();
+        Test.stopTest();
+        Assert.isNull(result, 'Should return null when no Initializing or Processing job exists');
+    }
+
+    // -----------------------------------------------------------------------
     // isCopilotEnabled
     // -----------------------------------------------------------------------
 

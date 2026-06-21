@@ -159,6 +159,7 @@ export default class MetaMapperResults extends LightningElement {
 
     // --- Computed getters ---
 
+    get isTreeTab()   { return this.activeTab === 'tree'; }
     get isCompleted() { return this.job && this.job.Status__c === 'Completed'; }
     get hasResults()  { return !this.isLoading && !this.loadError; }
     get isZeroResults() { return this.hasResults && this.allNodes.length === 0; }

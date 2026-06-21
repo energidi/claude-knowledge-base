@@ -150,6 +150,11 @@ export default class MetaMapperApp extends LightningElement {
         if (!localStorage.getItem(TOUR_KEY) && this.view === 'search') {
             this._tourTriggerElement = document.activeElement;
             this.showTour = true;
+            // eslint-disable-next-line @lwc/lwc/no-async-operation
+            setTimeout(() => {
+                const modal = this.template.querySelector('section[aria-label="MetaMapper first-time tour"]');
+                if (modal) modal.focus();
+            }, 0);
         }
 
         this._subscribePE();
@@ -288,12 +293,22 @@ export default class MetaMapperApp extends LightningElement {
         this.view = 'search';
     }
 
-    handleViewRunningScan() {
-        this._showToast('The scan finished while this message was showing. You can start a new scan now.', 'info');
+    handleViewRunningScan(event) {
+        const jobId = event.detail && event.detail.jobId;
+        if (!jobId) return;
+        this.jobId = jobId;
+        this._refreshJob().then(() => { this.view = 'progress'; });
     }
 
     handleLearnMore() { this.showLearnMoreModal = true; }
     closeLearnMore()  { this.showLearnMoreModal = false; }
+
+    handleTourKeyDown(event) {
+        if (event.key === 'Escape') {
+            event.stopPropagation();
+            this.closeTour();
+        }
+    }
 
     handleTourNext() {
         if (this.tourSlide < 3) {

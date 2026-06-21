@@ -2,6 +2,7 @@ import { LightningElement, track } from 'lwc';
 import createJob from '@salesforce/apex/DependencyJobController.createJob';
 import getObjectList from '@salesforce/apex/DependencyJobController.getObjectList';
 import getComponentCount from '@salesforce/apex/DependencyJobController.getComponentCount';
+import getActiveJobId from '@salesforce/apex/DependencyJobController.getActiveJobId';
 
 const TYPE_OPTIONS = [
     { label: 'Apex Class',       value: 'ApexClass' },
@@ -163,7 +164,7 @@ export default class MetaMapperSearch extends LightningElement {
         clearTimeout(this._complexityTimer);
         if (!this.apiName.trim()) { this.complexityBucket = null; return; }
         // eslint-disable-next-line @lwc/lwc/no-async-operation
-        this._complexityTimer = setTimeout(() => this._fetchComplexity(), 500);
+        this._complexityTimer = setTimeout(() => this._fetchComplexity(), 300);
     }
 
     async _fetchComplexity() {
@@ -205,7 +206,20 @@ export default class MetaMapperSearch extends LightningElement {
         this.viewScanLoading = true;
         this.viewScanError = '';
         try {
-            this.dispatchEvent(new CustomEvent('viewrunningscan', { bubbles: true, composed: true }));
+            const activeId = await getActiveJobId();
+            if (activeId) {
+                this.dispatchEvent(new CustomEvent('viewrunningscan', {
+                    detail: { jobId: activeId }, bubbles: true, composed: true
+                }));
+            } else {
+                // Scan completed between the concurrency rejection and the link click.
+                this.submissionError = '';
+                this.isRunningScanError = false;
+                this.dispatchEvent(new CustomEvent('showtoast', {
+                    detail: { message: 'The scan finished while this message was showing. You can start a new scan now.', variant: 'info' },
+                    bubbles: true, composed: true
+                }));
+            }
         } catch {
             this.viewScanError = 'Could not load the running scan. Try again.';
         } finally {

@@ -1,9 +1,20 @@
 <template>
-    <!-- Loading state -->
+    <!-- Loading state (tab-specific per spec) -->
     <template lwc:if={isLoading}>
-        <div class="slds-align_absolute-center slds-var-p-around_large">
-            <lightning-spinner variant="brand" size="large" alternative-text="Loading results..."></lightning-spinner>
-        </div>
+        <!-- Tree tab: shimmer rows -->
+        <template lwc:if={isTreeTab}>
+            <div class="slds-var-p-around_medium">
+                <div class="slds-skeleton slds-skeleton__text slds-var-m-bottom_small" style="width:100%;height:18px;"></div>
+                <div class="slds-skeleton slds-skeleton__text slds-var-m-bottom_small" style="width:85%;height:18px;"></div>
+                <div class="slds-skeleton slds-skeleton__text" style="width:70%;height:18px;"></div>
+            </div>
+        </template>
+        <!-- Graph tab: centered spinner -->
+        <template lwc:else>
+            <div class="slds-align_absolute-center slds-var-p-around_large">
+                <lightning-spinner variant="brand" size="large" alternative-text="Loading results..."></lightning-spinner>
+            </div>
+        </template>
     </template>
 
     <!-- Error state -->

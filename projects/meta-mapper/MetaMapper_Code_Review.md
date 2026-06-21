@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 21, 2026 (Round 61 - sf-orchestrator full pass: 3 findings applied - Failed status navigation inconsistency, undocumented utility LWC modules, tab event API)
+**Last Updated:** June 21, 2026 (Round 62 - sf-orchestrator full pass: 8 findings applied - "View running scan" navigation, tour modal focus/Esc, tab-specific loading states, controller DML extraction, complexity debounce, resume label, toast ARIA)
 **Date:** May 23, 2026
 
 ---
@@ -17,8 +17,6 @@ Findings listed here appeared in one or more prior review rounds and were **deli
 |---|---|---|---|
 | `setup/CONTRAST_MATRIX.md` | File not yet created - required WCAG contrast gate before LWC implementation | Round 18 | Pre-implementation gate document; required only when LWC node coloring work begins |
 | ECharts canvas - keyboard nav | `<canvas>` has no per-node DOM targets; virtual focus index not yet implemented | Round 41 | Deferred until LWC graph component is built; off-screen ARIA summary table is the interim accessibility mechanism per spec |
-| LWC components (all 8) | No LWC source files present in `force-app/` | Round 18 | Full LWC sprint is a separate phase; engine Apex is the current scope |
-| `MetadataDependencyDeletionBatch` - `Database.emptyRecycleBin` | Deleted records occupy Recycle Bin storage until nightly auto-purge | Round 17 | `emptyRecycleBin` was added in Round 17 (fix #18). **Resolved - remove from table if still appearing.** |
 
 ---
 
@@ -3630,6 +3628,34 @@ The following findings from the Round 15 external review were assessed and rejec
 | Gemini | CRLF bug in `appendErrorsSafe` dedup: `safeExisting.split('\n')` leaves trailing `\r` on extracted strings, defeating dedup | False positive. The code uses `safeExisting.contains(baseMsg)` and `existingBaseMsgs.contains(baseMsg)` - not split/set operations. Gemini described code that does not exist. Additionally, `Error_Progress_Label__c` is only written by Apex code in MetaMapper (always using `\n`), so CRLF is not possible in this field under normal operation. |
 | Gemini | `appendErrorsSafe` produces double-truncation notice when existing log is at capacity | Fixed in Round 15. Pre-truncation path returns immediately. |
 | Grok | `IsCustomizable = true` filter in `getCmtEntities()` is wrong for `__mdt` types - returns zero rows | Disputed and likely false positive. Custom Metadata Types (`__mdt`) are designed specifically for customization (adding custom fields is their primary purpose), so `IsCustomizable = true` should be correct for user-defined CMT types. The filter has been in place through 14 prior review rounds without evidence of failure. The filter correctly excludes managed-package CMT types that have `IsCustomizable = false` - which is intentional, since those types typically restrict field access and cannot be queried for record values anyway. |
+
+---
+
+## Round 62 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 8 findings applied (0 Critical, 1 High, 3 Medium, 4 Low). 2 stale Known Skipped Findings entries removed. Overall verdict: GO.
+
+**High - UX interaction:**
+- Finding 1 (`metaMapperApp.js:291`, `metaMapperSearch.js:204`, `DependencyJobController.cls`): `handleViewRunningScan()` in the app always showed a "scan finished" toast without querying or navigating to the active job. Added `getActiveJobId()` `@AuraEnabled` method to `DependencyJobController` (queries `Metadata_Scan_Job__c WHERE Status__c IN ('Initializing','Processing') LIMIT 1`). Moved the query into `metaMapperSearch.handleViewRunningScan()` which now calls `getActiveJobId()`, dispatches `viewrunningscan` with `{jobId}` on success, or shows toast if no active job found. App handler now reads `event.detail.jobId` and navigates to the progress view. Added 3 test methods to `DependencyJobControllerTest`.
+
+**Medium - Accessibility (tour modal):**
+- Finding 2 (`metaMapperApp.js:150`, `_handleHealthCheckPassed`): Tour modal opened with no initial focus - screen readers would not announce the dialog. Added `setTimeout` (0ms) after `this.showTour = true` to programmatically focus the `section[aria-label="MetaMapper first-time tour"]` container element.
+- Finding 3 (`metaMapperApp.html:76`, `metaMapperApp.js`): Tour modal had no Esc key dismiss handler. Added `onkeydown={handleTourKeyDown}` to the tour `<section>` element and added `handleTourKeyDown(event)` to the JS that calls `closeTour()` when `event.key === 'Escape'`.
+
+**Medium - UX loading states:**
+- Finding 4 (`metaMapperResults.html:3`, `metaMapperResults.js`): `getNodeHierarchy()` loading showed a single top-level `lightning-spinner` covering both tabs. Spec requires shimmer rows in Tree tab and centered spinner in Graph tab. Replaced with two conditional blocks keyed on `isTreeTab` getter (`activeTab === 'tree'`).
+
+**Low - Controller DML:**
+- Finding 5 (`DependencyJobController.cls:360-386`): `getNodeHierarchy()` contained `update as user logTruncJob` DML directly in an `@AuraEnabled` method, violating the "no DML directly in controller methods" principle. Extracted to private static `writeQueryCapWarning(Id jobId)` so the public method is DML-free.
+
+**Low - Debounce timing:**
+- Finding 6 (`metaMapperSearch.js:166`): Complexity preview debounce was 500ms; spec specifies 300ms. Changed `setTimeout(..., 500)` to `setTimeout(..., 300)`.
+
+**Low - Copy:**
+- Finding 7 (`metaMapperProgress.html:43`): Resume button label was "Resume at slower speed" - missing "a". Changed to "Resume at a slower speed" to match spec.
+
+**Low - ARIA semantics:**
+- Finding 8 (`metaMapperApp.html:114`): Toast element used `role="status"` (implicit `aria-live="polite"`) combined with explicit `aria-live="assertive"` - conflicting semantics. Changed to `role="alert"` which implicitly carries `aria-live="assertive"` without the conflict.
 
 ---
 

@@ -360,29 +360,35 @@ public with sharing class DependencyJobController {
         // ---- All other statuses: query live records ----
         List<Metadata_Dependency__c> nodes =
             new MetadataDependencySelector().getNodeHierarchyForJob(jobId);
-        // Truncation detection: MAX_NODE_QUERY_LIMIT is the hard ceiling on this query path.
-        // If the result set equals the limit, some nodes may be missing from the display.
-        // Append a diagnostic notice so admins have visibility without requiring debug logs.
         if (nodes.size() == MetadataDependencySelector.MAX_NODE_QUERY_LIMIT) {
-            try {
-                Metadata_Scan_Job__c logTruncJob = new MetadataScanJobSelector().getByIdForLogAppend(jobId);
-                if (logTruncJob != null) {
-                    String notice = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] '
-                        + 'WARNING: result set hit the query cap of '
-                        + MetadataDependencySelector.MAX_NODE_QUERY_LIMIT
-                        + ' nodes. Some nodes may be missing from the live view. '
-                        + 'Download the result file for the complete dataset.';
-                    logTruncJob.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
-                        logTruncJob.Scan_Diagnostic_Log__c, notice);
-                    update as user logTruncJob;
-                }
-            } catch (Exception e) {
-                System.debug(LoggingLevel.WARN,
-                    'DependencyJobController.getNodeHierarchy: truncation notice write failed - '
-                    + e.getMessage());
-            }
+            writeQueryCapWarning(jobId);
         }
         return nodes;
+    }
+
+    /**
+     * Appends a query-cap warning to the job's diagnostic log when the live node
+     * query returns the maximum allowed rows. Extracted from getNodeHierarchy() so
+     * that the public @AuraEnabled method itself contains no DML.
+     */
+    private static void writeQueryCapWarning(Id jobId) {
+        try {
+            Metadata_Scan_Job__c logTruncJob = new MetadataScanJobSelector().getByIdForLogAppend(jobId);
+            if (logTruncJob != null) {
+                String notice = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] '
+                    + 'WARNING: result set hit the query cap of '
+                    + MetadataDependencySelector.MAX_NODE_QUERY_LIMIT
+                    + ' nodes. Some nodes may be missing from the live view. '
+                    + 'Download the result file for the complete dataset.';
+                logTruncJob.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+                    logTruncJob.Scan_Diagnostic_Log__c, notice);
+                update as user logTruncJob;
+            }
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN,
+                'DependencyJobController.writeQueryCapWarning: truncation notice write failed - '
+                + e.getMessage());
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -507,6 +513,24 @@ public with sharing class DependencyJobController {
             job.Active_Flows_Only__c,
             overrideBatchSize
         ));
+    }
+
+    /**
+     * Returns the ID of the first active scan job (Initializing or Processing).
+     * Used by the concurrency error banner to navigate to the running scan.
+     * Returns null when no active job exists (scan completed between rejection and click).
+     */
+    @AuraEnabled
+    public static Id getActiveJobId() {
+        List<Metadata_Scan_Job__c> jobs = [
+            SELECT Id
+            FROM Metadata_Scan_Job__c
+            WHERE Status__c IN ('Initializing', 'Processing')
+            WITH USER_MODE
+            ORDER BY CreatedDate ASC
+            LIMIT 1
+        ];
+        return jobs.isEmpty() ? null : jobs[0].Id;
     }
 
     /**
