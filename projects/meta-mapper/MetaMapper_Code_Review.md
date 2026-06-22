@@ -3875,3 +3875,23 @@ The following 21 fixes were applied to Phase 4 source files after the Round 17 e
 | 19 | `DependencyOptions.cls` + `DependencyQueueable.cls` | Changed `System.now().format()` to `System.now().formatGmt('yyyy-MM-dd''T''HH:mm:ss''Z'')` in `DependencyOptions.addError()` and `DependencyQueueable.appendToLog()`. `format()` is locale-dependent; ISO 8601 UTC is deterministic across all org locales. |
 | 20 | `MetadataDependencyService.cls` | Added `static` modifier to `mergeMaps()`. It has no instance state dependency; marking it static enforces this and avoids unnecessary instance dispatch overhead. |
 | 21 | `MetadataDependencyService.cls` | Applied `String.escapeSingleQuotes()` to each ID in `fetchWithRetry()` before building the SOQL IN clause string. Prevents SOQL injection if a malformed or adversarial ID contains a single-quote character. |
+
+---
+
+## Round 66 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 findings applied (0 Critical, 0 High, 3 Medium, 1 Low; all NEW). Overall verdict: GO.
+
+**Medium - Architecture (inter-handler heap guard missing):**
+- Finding 1 (`DependencyQueueable.cls:694`): The inter-handler budget check guarded CPU and SOQL query count but not heap. After Tooling API callouts and child-list building, heap can be 15-25% higher than at the pre-batch guardrail check. A supplemental handler returning large SObject lists could push heap past the 12MB async limit without triggering a chain. Added `handlerHeapPct = Limits.getHeapSize() / Limits.getLimitHeapSize()` and appended `|| handlerHeapPct >= MID_LOOP_HEAP_THRESHOLD` to the inter-handler if-condition, matching the existing `MID_LOOP_HEAP_THRESHOLD = 0.75` constant already used by the mid-loop guard.
+
+**Medium - UX (programmatic tab switch bypasses isTransitioning guard):**
+- Finding 2 (`metaMapperResults.js:344`): `handleGraphPathRequest()` set `this.activeTab = 'graph'` directly. `lightning-tabset` only fires `ontabactivate` on user-initiated tab clicks, not on programmatic attribute sets, so `handleTabActivate` was never called. Result: `isTransitioning` stayed `false`, the `inert` attribute was never applied, the 3-second hard timeout was never started, and node-click events were not blocked during graph rendering - the entire `isTransitioning` guard was bypassed for the "View path in Graph" right-click action. Extracted the transition setup into a private `_activateTab(tabValue)` method (sets `activeTab`, `isTransitioning = true`, calls `_updateTabInert(true)`, starts the hard-timeout timer). `handleTabActivate` and `handleGraphPathRequest` both now delegate to `_activateTab`.
+
+**Medium - UX (hard-timeout cancel race in handleTabReady):**
+- Finding 3 (`metaMapperResults.js:263`): `clearTimeout(this._tabReadyTimer)` was called inside the 300ms `setTimeout` callback in `handleTabReady()`. If `tabready` fired within 300ms of the 3-second hard timeout, the hard timeout fired and called `_reconcileJobStatus()` before the 300ms callback ran; the callback then called `_reconcileJobStatus()` again - a double call. Fixed by moving `clearTimeout(this._tabReadyTimer)` to immediately before the `setTimeout(...)` call in `handleTabReady()`, outside the callback body, so the hard-timeout timer is cancelled the instant `tabready` fires.
+
+**Low - Architecture (unconditional reconciliation during polling):**
+- Finding 4 (`metaMapperResults.js:288`): `_reconcileJobStatus()` fired on every tab transition with no check for PE suppression state. Spec: "Only applies when PE is active (not suppressed); when polling is already running, the next scheduled poll cycle covers this automatically." Added `@api peSuppressionActive = false` prop to `metaMapperResults`. Both callers of `_reconcileJobStatus()` (in `_activateTab`'s hard-timeout callback and in `handleTabReady`'s 300ms callback) are now guarded with `if (!this.peSuppressionActive)`. Bound `pe-suppression-active={_peSuppressionActive}` on `c-meta-mapper-results` in `metaMapperApp.html` (the `_peSuppressionActive` field was already tracked and populated from `_storeJobResult()`).
+
+---

@@ -26,6 +26,7 @@ export default class MetaMapperResults extends LightningElement {
     @api job;
     @api orgId = '';
     @api retentionHours = 72;
+    @api peSuppressionActive = false;
 
     @track allNodes = [];
     @track filters = { ...DEFAULT_FILTERS };
@@ -245,7 +246,11 @@ export default class MetaMapperResults extends LightningElement {
 
     handleTabActivate(event) {
         const tabValue = event.detail && event.detail.value;
-        if (tabValue) this.activeTab = tabValue;
+        if (tabValue) this._activateTab(tabValue);
+    }
+
+    _activateTab(tabValue) {
+        this.activeTab = tabValue;
         this.isTransitioning = true;
         this._updateTabInert(true);
         clearTimeout(this._tabReadyTimer);
@@ -254,18 +259,18 @@ export default class MetaMapperResults extends LightningElement {
             if (!this._isMounted) return;
             this.isTransitioning = false;
             this._updateTabInert(false);
-            this._reconcileJobStatus();
+            if (!this.peSuppressionActive) { this._reconcileJobStatus(); }
         }, TAB_TRANSITION_TIMEOUT);
     }
 
     handleTabReady() {
+        clearTimeout(this._tabReadyTimer);
         // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             if (!this._isMounted) return;
             this.isTransitioning = false;
             this._updateTabInert(false);
-            clearTimeout(this._tabReadyTimer);
-            this._reconcileJobStatus();
+            if (!this.peSuppressionActive) { this._reconcileJobStatus(); }
             if (this._pendingFocusNodeId) {
                 const nodeId = this._pendingFocusNodeId;
                 this._pendingFocusNodeId = null;
@@ -343,7 +348,7 @@ export default class MetaMapperResults extends LightningElement {
 
     handleGraphPathRequest(event) {
         this._pendingFocusNodeId = event.detail && event.detail.nodeId;
-        this.activeTab = 'graph';
+        this._activateTab('graph');
     }
     handleDownloadPartialCsv() {
         const exportEl = this.template.querySelector('c-meta-mapper-export');

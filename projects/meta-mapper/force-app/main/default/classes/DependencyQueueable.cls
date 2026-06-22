@@ -687,13 +687,18 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         Map<String, Metadata_Dependency__c> suppByKey = new Map<String, Metadata_Dependency__c>();
         DependencyTypeHandlerFactory factory = new DependencyTypeHandlerFactory();
         for (String metaType : byType.keySet()) {
-            // Inter-handler budget check: stop before exhausting SOQL or CPU for remaining handlers.
+            // Inter-handler budget check: stop before exhausting SOQL, CPU, or heap for remaining handlers.
             // CPU exhaustion in a supplemental handler throws a non-catchable platform-level
             // termination (LimitException may not reach the catch block for CPU violations).
-            // Checking CPU here prevents entering a handler that is likely to exhaust the budget.
-            Decimal handlerCpuPct = (Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime();
+            // Heap is checked here because the pre-batch guardrail ran before Tooling API callouts
+            // and child-list building; by the time handlers run, heap can be 15-25% higher than
+            // at pre-batch check time. A supplemental handler returning large SObject lists can
+            // then push heap past the 12MB async limit without a chain trigger.
+            Decimal handlerCpuPct  = (Decimal) Limits.getCpuTime()  / Limits.getLimitCpuTime();
+            Decimal handlerHeapPct = (Decimal) Limits.getHeapSize() / Limits.getLimitHeapSize();
             if ((Limits.getLimitQueries() - Limits.getQueries()) < HANDLER_SOQL_RESERVE
-                || handlerCpuPct >= CPU_CHAIN_THRESHOLD) {
+                || handlerCpuPct  >= CPU_CHAIN_THRESHOLD
+                || handlerHeapPct >= MID_LOOP_HEAP_THRESHOLD) {
                 job.Scan_Diagnostic_Log__c = appendToLog(
                     job.Scan_Diagnostic_Log__c,
                     'Supplemental scan skipped for remaining types: SOQL query budget below '
