@@ -206,7 +206,7 @@ export default class MetaMapperApp extends LightningElement {
         // H1: include peSuppressionActive so the progress component can activate polling fallback
         if (prog) prog.handleStatusEvent({ ...payload, peSuppressionActive: this._peSuppressionActive });
         const res = this.template.querySelector('c-meta-mapper-results');
-        if (res) res.notifyStatusChange(this.job);
+        if (res) res.notifyStatusChange({ ...(this.job || {}), Status__c: newStatus });
     }
 
     async _refreshJob() {

@@ -208,6 +208,7 @@ export default class MetaMapperProgress extends LightningElement {
                 if (elapsed > TIMEOUT_THRESHOLD_SEC && this.isProcessing) {
                     this.showTimeoutBanner = true;
                     this.showLongRunningBanner = false;
+                    this.showPollingNotice = false;
                     this._stopPolling();
                 } else if (elapsed > LONG_RUN_THRESHOLD_SEC && this.isProcessing && !this.longRunningBannerDismissed) {
                     this.showLongRunningBanner = true;

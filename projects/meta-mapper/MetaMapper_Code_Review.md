@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 21, 2026 (Round 65 - sf-orchestrator full pass: 10 findings applied - 1 Critical fix, 2 High fixes, 4 Medium fixes, 3 Low fixes)
+**Last Updated:** June 22, 2026 (Round 67 - sf-orchestrator full pass: 4 findings applied - 0 Critical, 0 High, 2 Medium, 2 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3893,5 +3893,23 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 
 **Low - Architecture (unconditional reconciliation during polling):**
 - Finding 4 (`metaMapperResults.js:288`): `_reconcileJobStatus()` fired on every tab transition with no check for PE suppression state. Spec: "Only applies when PE is active (not suppressed); when polling is already running, the next scheduled poll cycle covers this automatically." Added `@api peSuppressionActive = false` prop to `metaMapperResults`. Both callers of `_reconcileJobStatus()` (in `_activateTab`'s hard-timeout callback and in `handleTabReady`'s 300ms callback) are now guarded with `if (!this.peSuppressionActive)`. Bound `pe-suppression-active={_peSuppressionActive}` on `c-meta-mapper-results` in `metaMapperApp.html` (the `_peSuppressionActive` field was already tracked and populated from `_storeJobResult()`).
+
+---
+
+## Round 67 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 findings applied (0 Critical, 0 High, 2 Medium, 2 Low; all NEW). Overall verdict: GO.
+
+**Medium - UX (`showReloadBanner` never fires on Completed PE when viewing partial results):**
+- Finding 1 (`metaMapperApp.js:209`): `_handlePEEvent()` called `res.notifyStatusChange(this.job)` synchronously before `_refreshJob()` resolved. `this.job` still had `Status__c = 'Processing'` at the time of the call, so `notifyStatusChange` never saw `Status__c = 'Completed'` and `showReloadBanner` was never set. The "Scan complete! [Reload results]" banner never appeared when the user was viewing partial results and the scan completed via PE. Fixed by spreading `this.job` and overriding `Status__c` with the PE payload value: `res.notifyStatusChange({ ...(this.job || {}), Status__c: newStatus })`.
+
+**Medium - Architecture (CLAUDE.md `countActiveQueueables()` spec out of sync with implementation):**
+- Finding 2 (CLAUDE.md Concurrency Guard section): The spec's code snippet listed `AND Status IN ('Processing', 'Preparing')`. The actual `MetadataScanJobSelector.countActiveQueueables()` implementation correctly uses `AND Status IN ('Processing', 'Preparing', 'Queued', 'Holding')` to account for Queueables sitting in the flex queue under heavy org load. Updated the CLAUDE.md snippet to include `'Queued'` and `'Holding'` with an explanatory inline comment.
+
+**Low - UX (`showPollingNotice` survives 60-minute timeout banner):**
+- Finding 3 (`metaMapperProgress.js:_startElapsedTimer()`): When the 60-minute timeout fired, `showTimeoutBanner = true` and `_stopPolling()` were called but `showPollingNotice` remained `true`. The "Live updates paused - refreshing every X seconds." label persisted alongside the timeout banner, with polling actually stopped - a contradictory UI state. Fixed by adding `this.showPollingNotice = false;` in the timeout branch immediately after `this.showTimeoutBanner = true`.
+
+**Low - Architecture (`DependencyNotificationService.pendingPublishFailureNotices` encapsulation):**
+- Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
 
 ---

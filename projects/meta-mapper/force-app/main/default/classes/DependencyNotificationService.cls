@@ -49,7 +49,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
     // DML inside an EventBus callback is disallowed in some governor contexts. Instead,
     // accumulate notices here and let DependencyQueueable drain them via
     // getAndClearPendingNotices() after the PE section completes.
-    public static List<String> pendingPublishFailureNotices = new List<String>();
+    private static List<String> pendingPublishFailureNotices = new List<String>();
 
     /**
      * Returns and clears the accumulated PE publish failure notices.

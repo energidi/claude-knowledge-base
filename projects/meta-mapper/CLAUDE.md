@@ -197,7 +197,10 @@ Integer activeQueueables = [
     SELECT COUNT() FROM AsyncApexJob
     WHERE JobType = 'Queueable'
     AND ApexClass.Name = 'DependencyQueueable'
-    AND Status IN ('Processing', 'Preparing')
+    // 'Queued' and 'Holding' included: under heavy flex queue load, active Queueables
+    // enter these states before 'Processing'. Omitting them allows createJob() to bypass
+    // Max_Concurrent_Jobs__c when the org is under heavy async load.
+    AND Status IN ('Processing', 'Preparing', 'Queued', 'Holding')
 ];
 Integer maxConcurrent = (Integer) settings.Max_Concurrent_Jobs__c; // default 2
 if (activeQueueables >= maxConcurrent) {
