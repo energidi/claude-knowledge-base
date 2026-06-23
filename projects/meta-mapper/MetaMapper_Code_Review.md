@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 22, 2026 (Round 67 - sf-orchestrator full pass: 4 findings applied - 0 Critical, 0 High, 2 Medium, 2 Low)
+**Last Updated:** June 23, 2026 (Round 68 - sf-orchestrator full pass: 2 findings applied - 0 Critical, 0 High, 2 Medium, 0 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3911,5 +3911,17 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 
 **Low - Architecture (`DependencyNotificationService.pendingPublishFailureNotices` encapsulation):**
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
+
+---
+
+## Round 68 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 2 findings applied (0 Critical, 0 High, 2 Medium, 0 Low; all NEW). Overall verdict: GO.
+
+**Medium - Architecture/UX (`handleSwitchToTree()` bypasses `_activateTab()` flow):**
+- Finding 1 (`metaMapperResults.js`): `handleSwitchToTree()` set `this.activeTab = 'tree'` directly, bypassing `_activateTab()`. Consequence: `isTransitioning` was never set (node-click events not dropped during switch), filter panel `inert` attribute not applied, 3-second hard-timeout not armed, and `_reconcileJobStatus()` not called. This path triggers when the user clicks "Switch to Tree View" from the large-graph performance warning banner in `metaMapperGraph`. Fixed by changing the call to `this._activateTab('tree')`.
+
+**Medium - Architecture/UX (Hard tab transition timeout does not signal child tab error state):**
+- Finding 2 (`metaMapperResults.js` - `_activateTab()` timeout callback): When the 3-second `TAB_TRANSITION_TIMEOUT` fallback fired, `isTransitioning` was cleared but no error state was shown to the user. Added `@track tabLoadFailed = false`. Hard timeout now sets it `true`; `_activateTab()` resets it `false` at start; `handleTabReady()` resets it `false` on success. Added `showTreeLoadError`/`showGraphLoadError` getters scoped to the active tab. HTML now conditionally renders "Tree/Graph could not be loaded. [Retry]" per tab; Retry calls `handleRetryTab()` which re-invokes `_activateTab(this.activeTab)`.
 
 ---

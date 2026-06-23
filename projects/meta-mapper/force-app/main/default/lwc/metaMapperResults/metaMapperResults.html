@@ -147,26 +147,42 @@
             <lightning-tabset active-tab-value={activeTab} onactive={handleTabActivate}>
                 <lightning-tab label="Tree View" value="tree">
                     <div class={tabContentClass} aria-disabled={isTransitioningStr} data-tab-content="tree">
-                        <c-meta-mapper-tree
-                            nodes={filteredNodes}
-                            filters={filters}
-                            selected-node-id={selectedNodeId}
-                            ontabready={handleTabReady}
-                            onnodeselected={handleNodeSelected}>
-                        </c-meta-mapper-tree>
+                        <template lwc:if={showTreeLoadError}>
+                            <div class="tab-load-error" role="alert">
+                                <p>Tree could not be loaded.</p>
+                                <lightning-button label="Retry" onclick={handleRetryTab}></lightning-button>
+                            </div>
+                        </template>
+                        <template lwc:else>
+                            <c-meta-mapper-tree
+                                nodes={filteredNodes}
+                                filters={filters}
+                                selected-node-id={selectedNodeId}
+                                ontabready={handleTabReady}
+                                onnodeselected={handleNodeSelected}>
+                            </c-meta-mapper-tree>
+                        </template>
                     </div>
                 </lightning-tab>
                 <lightning-tab label="Graph View" value="graph">
                     <div class={tabContentClass} aria-disabled={isTransitioningStr} data-tab-content="graph">
-                        <c-meta-mapper-graph
-                            nodes={filteredNodes}
-                            filters={filters}
-                            selected-node-id={selectedNodeId}
-                            ontabready={handleTabReady}
-                            onnodeselected={handleNodeSelected}
-                            onswitchtotree={handleSwitchToTree}
-                            ongraphpathrequest={handleGraphPathRequest}>
-                        </c-meta-mapper-graph>
+                        <template lwc:if={showGraphLoadError}>
+                            <div class="tab-load-error" role="alert">
+                                <p>Graph could not be loaded.</p>
+                                <lightning-button label="Retry" onclick={handleRetryTab}></lightning-button>
+                            </div>
+                        </template>
+                        <template lwc:else>
+                            <c-meta-mapper-graph
+                                nodes={filteredNodes}
+                                filters={filters}
+                                selected-node-id={selectedNodeId}
+                                ontabready={handleTabReady}
+                                onnodeselected={handleNodeSelected}
+                                onswitchtotree={handleSwitchToTree}
+                                ongraphpathrequest={handleGraphPathRequest}>
+                            </c-meta-mapper-graph>
+                        </template>
                     </div>
                 </lightning-tab>
             </lightning-tabset>

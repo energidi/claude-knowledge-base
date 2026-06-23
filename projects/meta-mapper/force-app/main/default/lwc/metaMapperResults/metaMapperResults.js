@@ -45,6 +45,7 @@ export default class MetaMapperResults extends LightningElement {
     @track showPartialBanner = false;
     @track isTransitioning = false;
     @track activeTab = 'tree';
+    @track tabLoadFailed = false;
 
     _summaryPollTimer = null;
     _summaryPollCount = 0;
@@ -172,6 +173,8 @@ export default class MetaMapperResults extends LightningElement {
     // --- Computed getters ---
 
     get isTreeTab()   { return this.activeTab === 'tree'; }
+    get showTreeLoadError()  { return this.tabLoadFailed && this.activeTab === 'tree'; }
+    get showGraphLoadError() { return this.tabLoadFailed && this.activeTab === 'graph'; }
     get isCompleted() { return this.job && this.job.Status__c === 'Completed'; }
     get hasResults()  { return !this.isLoading && !this.loadError; }
     get isZeroResults() { return this.hasResults && this.allNodes.length === 0; }
@@ -252,12 +255,14 @@ export default class MetaMapperResults extends LightningElement {
     _activateTab(tabValue) {
         this.activeTab = tabValue;
         this.isTransitioning = true;
+        this.tabLoadFailed = false;
         this._updateTabInert(true);
         clearTimeout(this._tabReadyTimer);
         // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._tabReadyTimer = setTimeout(() => {
             if (!this._isMounted) return;
             this.isTransitioning = false;
+            this.tabLoadFailed = true;
             this._updateTabInert(false);
             if (!this.peSuppressionActive) { this._reconcileJobStatus(); }
         }, TAB_TRANSITION_TIMEOUT);
@@ -269,6 +274,7 @@ export default class MetaMapperResults extends LightningElement {
         setTimeout(() => {
             if (!this._isMounted) return;
             this.isTransitioning = false;
+            this.tabLoadFailed = false;
             this._updateTabInert(false);
             if (!this.peSuppressionActive) { this._reconcileJobStatus(); }
             if (this._pendingFocusNodeId) {
@@ -344,7 +350,8 @@ export default class MetaMapperResults extends LightningElement {
         if (exportEl) exportEl.exportCsv();
     }
 
-    handleSwitchToTree() { this.activeTab = 'tree'; }
+    handleSwitchToTree() { this._activateTab('tree'); }
+    handleRetryTab() { this._activateTab(this.activeTab); }
 
     handleGraphPathRequest(event) {
         this._pendingFocusNodeId = event.detail && event.detail.nodeId;
