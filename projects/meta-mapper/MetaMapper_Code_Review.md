@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 23, 2026 (Round 68 - sf-orchestrator full pass: 2 findings applied - 0 Critical, 0 High, 2 Medium, 0 Low)
+**Last Updated:** June 23, 2026 (Round 69 - sf-orchestrator full pass: 6 findings applied - 0 Critical, 1 High, 3 Medium, 2 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3911,6 +3911,30 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 
 **Low - Architecture (`DependencyNotificationService.pendingPublishFailureNotices` encapsulation):**
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
+
+---
+
+## Round 69 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 6 findings applied (0 Critical, 1 High, 3 Medium, 2 Low; all NEW). Overall verdict: GO.
+
+**High - UX (Keyboard trigger missing for right-click context menu - WCAG 2.1.1):**
+- Finding 1 (CLAUDE.md - Graph View, Tree View, keyboard legend): No keyboard alternative (Shift+F10 / Menu key) was defined for the right-click context menu in either the Graph or Tree view, and the keyboard shortcut legend omitted the entry entirely. Added `Shift+F10` (or platform Menu key) keyboard trigger to the Graph context menu dismiss spec, the Tree `metaMapperTree` right-click spec, and the "?" keyboard shortcut legend dialog. Listener scoped to the graph canvas wrapper element (same scoping rule as Ctrl+K).
+
+**Medium - Architecture (Upsert partial failures not logged):**
+- Finding 2 (CLAUDE.md - `DependencyQueueable`): After each bulk upsert call the spec did not define handling for partial `Database.UpsertResult` errors. Silent node drops (e.g. from `Metadata_Id_Must_Be_18_Characters` validation rule rejections) would disappear from the dependency tree with no admin visibility. Added spec to iterate `Database.UpsertResult[]` after each upsert, accumulate failure messages, and append them to `Scan_Diagnostic_Log__c` via `SupplementalScanResult.appendNoticeSafe()`. Job does not fail - dropped nodes are treated as best-effort losses.
+
+**Medium - UX (Paused banner copy inconsistency across components):**
+- Finding 3 (CLAUDE.md - metaMapperProgress Paused state machine, Resume state machine, Status Labels table; `DependencyQueueable.cls`; `metaMapperProgress.js`): The Paused banner text was inconsistent across six spec locations - some included `[Target_API_Name__c]`, others used "Analysis paused" without the API name, and some omitted the resume instruction sentence. Unified all Paused banner copy to: "Analysis of [Target_API_Name__c] paused - encountered a complex component. You can resume at a slower speed or with current settings." Applied to CLAUDE.md (6 locations), `DependencyQueueable.cls` PE message, and `metaMapperProgress.js` `pauseBannerText` getter.
+
+**Medium - UX (Clipboard failure message inconsistency):**
+- Finding 4 (CLAUDE.md - AI Summary Card, `metaMapperComponentDetailsPanel`; `metaMapperComponentDetailsPanel.js`; `metaMapperResults.js`): Two clipboard failure messages diverged - the Summary Card used "Select the text manually instead." while the Details Panel used "Select and copy the URL manually instead." Standardized both to: "Could not copy to clipboard. Your browser may require clipboard permission. Select and copy the text manually instead." Applied to CLAUDE.md (2 locations) and both JS files.
+
+**Low - UX (Focus path keyboard focus missing for right-click activation path):**
+- Finding 5 (CLAUDE.md - Graph right-click spec): The existing "Focus path to root" spec documented that keyboard focus moves to the "Clear Focus" button when focus path is activated via toolbar/direct activation, but did not specify this behavior for the right-click menu path. Added clarification that context-menu-triggered "Focus path to root" also moves keyboard focus to the "Clear Focus" button, identical to direct activation.
+
+**Low - Architecture (Ring buffer null `Result_File_Id__c` guard missing):**
+- Finding 6 (CLAUDE.md - Ring Buffer section): The ring buffer eviction spec did not define behavior when the oldest completed job has a null `Result_File_Id__c` (data corruption or historical record). Added null guard: skip `ContentDocument` delete, proceed with job record deletion, and append a diagnostic notice to the current job's `Scan_Diagnostic_Log__c` via `SupplementalScanResult.appendNoticeSafe()`.
 
 ---
 

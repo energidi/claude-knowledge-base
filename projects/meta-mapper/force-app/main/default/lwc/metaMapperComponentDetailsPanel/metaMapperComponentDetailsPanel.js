@@ -158,7 +158,7 @@ export default class MetaMapperComponentDetailsPanel extends LightningElement {
                 composed: true,
                 detail: {
                     title: 'Error',
-                    message: 'Could not copy to clipboard. Select and copy the URL manually instead.',
+                    message: 'Could not copy to clipboard. Your browser may require clipboard permission. Select and copy the text manually instead.',
                     variant: 'error'
                 }
             }));

@@ -331,7 +331,7 @@ export default class MetaMapperResults extends LightningElement {
             }, 2000);
         }).catch(() => {
             this.dispatchEvent(new CustomEvent('showtoast', {
-                detail: { title: 'Error', message: 'Could not copy to clipboard. Select the text manually instead.', variant: 'error' },
+                detail: { title: 'Error', message: 'Could not copy to clipboard. Your browser may require clipboard permission. Select and copy the text manually instead.', variant: 'error' },
                 bubbles: true, composed: true
             }));
         });

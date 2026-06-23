@@ -169,7 +169,8 @@ export default class MetaMapperProgress extends LightningElement {
         if (reason === 'NodeCapReached') {
             return 'Analysis paused - the component limit was reached. Raise Max_Components__c in MetaMapper Settings to continue.';
         }
-        return 'Analysis paused - encountered a complex component. You can resume at a slower speed or with current settings.';
+        const apiName = (this.job && this.job.Target_API_Name__c) ? this.job.Target_API_Name__c : 'the component';
+        return `Analysis of ${apiName} paused - encountered a complex component. You can resume at a slower speed or with current settings.`;
     }
 
     _effectiveBatchSize() {
