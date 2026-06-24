@@ -281,6 +281,8 @@ export default class MetaMapperResults extends LightningElement {
                 const nodeId = this._pendingFocusNodeId;
                 this._pendingFocusNodeId = null;
                 this.selectedNodeId = nodeId;
+                const graphEl = this.template.querySelector('c-meta-mapper-graph');
+                if (graphEl) graphEl.activateFocusPath(nodeId);
             }
         }, TAB_TRANSITION_MIN_MS);
     }

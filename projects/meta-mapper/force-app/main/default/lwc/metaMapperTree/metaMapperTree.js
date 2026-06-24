@@ -300,6 +300,28 @@ export default class MetaMapperTree extends LightningElement {
     handleMenuKeyDown(event) {
         if (event.key === 'Escape') {
             this._closeContextMenu();
+            return;
+        }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp'
+                || event.key === 'Home' || event.key === 'End') {
+            event.preventDefault();
+            const items = [
+                ...this.template.querySelectorAll('.context-menu [role="menuitem"]')
+            ];
+            if (!items.length) return;
+            const current = this.template.querySelector(
+                '.context-menu [role="menuitem"]:focus'
+            );
+            const idx = items.indexOf(current);
+            if (event.key === 'ArrowDown') {
+                items[(idx + 1) % items.length].focus();
+            } else if (event.key === 'ArrowUp') {
+                items[(idx - 1 + items.length) % items.length].focus();
+            } else if (event.key === 'Home') {
+                items[0].focus();
+            } else {
+                items[items.length - 1].focus();
+            }
         }
     }
 
@@ -316,6 +338,27 @@ export default class MetaMapperTree extends LightningElement {
             return;
         }
         if (this._contextMenu) return;
+
+        // Keyboard context menu trigger required by WCAG 2.1.1 (finding #2).
+        if ((event.shiftKey && event.key === 'F10') || event.key === 'ContextMenu') {
+            event.preventDefault();
+            const row = this._flatRows[this._activeIndex];
+            if (row) {
+                const rowEl = this.template.querySelector(`[data-node-id="${row.Metadata_Id__c}"]`);
+                const rect = rowEl ? rowEl.getBoundingClientRect() : null;
+                this._contextMenu = {
+                    x: rect ? rect.left : 0,
+                    y: rect ? rect.bottom : 0,
+                    node: row
+                };
+                // eslint-disable-next-line @lwc/lwc/no-async-operation
+                setTimeout(() => {
+                    const firstItem = this.template.querySelector('.context-menu [role="menuitem"]');
+                    if (firstItem) firstItem.focus();
+                }, 0);
+            }
+            return;
+        }
 
         const total = this._flatRows.length;
         if (!total) return;

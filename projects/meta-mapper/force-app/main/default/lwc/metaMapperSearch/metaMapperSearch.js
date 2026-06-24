@@ -1,4 +1,4 @@
-import { LightningElement, track } from 'lwc';
+import { LightningElement, api, track } from 'lwc';
 import createJob from '@salesforce/apex/DependencyJobController.createJob';
 import getObjectList from '@salesforce/apex/DependencyJobController.getObjectList';
 import getComponentCount from '@salesforce/apex/DependencyJobController.getComponentCount';
@@ -47,6 +47,12 @@ export default class MetaMapperSearch extends LightningElement {
     _focusedTypeaheadIdx = -1;
 
     get showTargetObject() { return this.selectedType === 'CustomField'; }
+
+    @api
+    focusFirstInput() {
+        const el = this.template.querySelector('input, select, button, [tabindex="0"]');
+        if (el) el.focus();
+    }
 
     get activeTypeaheadOptionId() {
         if (this._focusedTypeaheadIdx < 0 || !this.typeaheadResults[this._focusedTypeaheadIdx]) return null;

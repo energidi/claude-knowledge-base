@@ -99,6 +99,7 @@ export default class MetaMapperGraph extends LightningElement {
     _ariaRebuildTimer = null;
     _ariaTableBusy = false;
     _graphAriaLiveText = '';
+    _lastFocusBeforeMenu = null;
     // Virtual focus index — tracks keyboard focus position within the canvas (WCAG 2.1 SC 2.1.1).
     _activeNodeIndex = -1;
     _orderedNodeIds = [];
@@ -201,6 +202,12 @@ export default class MetaMapperGraph extends LightningElement {
                 if (!this._isMounted) return;
                 if (params.dataType === 'node') {
                     params.event.event.preventDefault();
+                    // Track pre-menu focus for restoration on close (finding #6).
+                    this._lastFocusBeforeMenu = document.activeElement;
+                    // Spec: focus path must clear synchronously before the menu renders (finding #4).
+                    if (this._focusPath) {
+                        this._clearFocusPath();
+                    }
                     this._contextMenu = {
                         x: params.event.event.clientX,
                         y: params.event.event.clientY,
@@ -276,6 +283,34 @@ export default class MetaMapperGraph extends LightningElement {
                     this._graphSearchTerm = '';
                     this._searchHighlights = null;
                     this._renderGraph();
+                }
+            } else if (
+                ((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu') &&
+                !this._contextMenu && !this._showShortcutLegend
+            ) {
+                // Keyboard context menu trigger required by WCAG 2.1.1 (finding #1).
+                e.preventDefault();
+                const activeNodeId =
+                    this._activeNodeIndex >= 0 && this._activeNodeIndex < this._orderedNodeIds.length
+                        ? this._orderedNodeIds[this._activeNodeIndex]
+                        : null;
+                if (activeNodeId) {
+                    const wrapper = this.template.querySelector('.graph-canvas-wrapper');
+                    const rect = wrapper ? wrapper.getBoundingClientRect() : { left: 0, top: 0, width: 200, height: 200 };
+                    this._lastFocusBeforeMenu = document.activeElement;
+                    if (this._focusPath) { this._clearFocusPath(); }
+                    this._contextMenu = {
+                        x: rect.left + rect.width / 2,
+                        y: rect.top + rect.height / 2,
+                        nodeId: activeNodeId,
+                        node: this._nodeMap.get(activeNodeId),
+                    };
+                    // eslint-disable-next-line @lwc/lwc/no-async-operation
+                    setTimeout(() => {
+                        if (!this._isMounted) return;
+                        const first = this.template.querySelector('.ctx-menu [role="menuitem"]');
+                        if (first) first.focus();
+                    }, 0);
                 }
             }
         };
@@ -460,6 +495,13 @@ export default class MetaMapperGraph extends LightningElement {
 
     // ---- focus path ----
 
+    @api
+    activateFocusPath(nodeId) {
+        if (nodeId && this._chartReady) {
+            this._activateFocusPath(nodeId);
+        }
+    }
+
     _activateFocusPath(nodeId) {
         const pathSet = new Set([nodeId]);
         const nm = this._nodeMap;
@@ -597,6 +639,8 @@ export default class MetaMapperGraph extends LightningElement {
     }
 
     handleExpandAll() {
+        this._expandAllTriggerEl = this.template.activeElement
+            || this.template.querySelector('[data-id="expand-all-btn"]');
         const visible = this._getVisibleNodes();
         if (visible.length > 1000) {
             this._expandAllModal = {
@@ -621,10 +665,18 @@ export default class MetaMapperGraph extends LightningElement {
         this._maxVisibleDepth = 9999;
         this._collapsedNodes = new Set();
         this._renderGraph();
+        if (this._expandAllTriggerEl) {
+            this._expandAllTriggerEl.focus();
+            this._expandAllTriggerEl = null;
+        }
     }
 
     handleExpandAllCancel() {
         this._expandAllModal = null;
+        if (this._expandAllTriggerEl) {
+            this._expandAllTriggerEl.focus();
+            this._expandAllTriggerEl = null;
+        }
     }
 
     handleShowShortcuts() {
@@ -707,14 +759,18 @@ export default class MetaMapperGraph extends LightningElement {
 
     closeContextMenu() {
         const lastMenu = this._contextMenu;
+        const savedFocus = this._lastFocusBeforeMenu;
         this._contextMenu = null;
+        this._lastFocusBeforeMenu = null;
         if (lastMenu) {
-            // Return focus to canvas wrapper
             // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => {
                 if (!this._isMounted) return;
-                const wrapper = this.template.querySelector('.graph-canvas-wrapper');
-                if (wrapper) wrapper.focus();
+                // Restore pre-menu focus; fall back to canvas wrapper (finding #6).
+                const target = (savedFocus && document.contains(savedFocus))
+                    ? savedFocus
+                    : this.template.querySelector('.graph-canvas-wrapper');
+                if (target) target.focus();
             }, 0);
         }
     }

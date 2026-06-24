@@ -68,6 +68,7 @@ export default class MetaMapperApp extends LightningElement {
     @track showLearnMoreModal = false;
     @track showTour = false;
     @track tourSlide = 1;
+    @track tourDontShow = false;
     @track toastMessage = '';
     @track toastVariant = 'info';
 
@@ -346,14 +347,15 @@ export default class MetaMapperApp extends LightningElement {
             // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => {
                 const search = this.template.querySelector('c-meta-mapper-search');
-                if (search) {
-                    const firstFocusable = search.querySelector('input, select, button, [tabindex="0"]');
-                    if (firstFocusable) firstFocusable.focus();
-                }
+                if (search) search.focusFirstInput();
             }, 0);
         } else if (this._tourTriggerElement) {
             this._tourTriggerElement.focus();
         }
+    }
+
+    handleTourDontShowChange(event) {
+        this.tourDontShow = event.target.checked;
     }
 
     handleShowError(event) {

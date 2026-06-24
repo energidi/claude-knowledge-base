@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 23, 2026 (Round 69 - sf-orchestrator full pass: 6 findings applied - 0 Critical, 1 High, 3 Medium, 2 Low)
+**Last Updated:** June 24, 2026 (Round 71 - sf-orchestrator full pass: 6 findings applied - 1 Critical, 2 High, 2 Medium, 1 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3911,6 +3911,69 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 
 **Low - Architecture (`DependencyNotificationService.pendingPublishFailureNotices` encapsulation):**
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
+
+---
+
+## Round 71 Fixes Applied
+
+Full sf-orchestrator review (all lenses). 6 findings applied (1 Critical, 2 High, 2 Medium, 1 Low; 4 NEW, 2 PARTIAL-FIX). Overall verdict: NO-GO resolved.
+
+**Critical - UX / Accessibility (`metaMapperGraph` Shift+F10 documented but not handled - WCAG 2.1.1):**
+- Finding 1 (`metaMapperGraph.js`, `_attachCtrlK`): The shortcut legend listed "Shift+F10 = Open context menu on focused node" (added Round 70) but `_attachCtrlK` had no handler for `shiftKey + F10` or `ContextMenu` key. Pressing the shortcut did nothing - WCAG 2.1.1 violation. Added `else if ((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu')` branch that opens the context menu centered on the canvas for the current virtual-focus node (`_orderedNodeIds[_activeNodeIndex]`), captures `_lastFocusBeforeMenu`, clears any active focus path, and focuses the first menu item via `setTimeout`.
+
+**High - UX / Accessibility (`metaMapperTree` Shift+F10 keyboard context menu trigger missing - WCAG 2.1.1):**
+- Finding 2 (`metaMapperTree.js`, `handleKeyDown`): Spec requires Shift+F10 / Menu key to open the context menu on the focused treeitem (WCAG 2.1.1 keyboard alternative to right-click). Handler was absent from `handleKeyDown`. Added `if ((event.shiftKey && event.key === 'F10') || event.key === 'ContextMenu')` branch: finds the active flat row by `_activeIndex`, queries the row DOM element by `data-node-id` to get viewport coordinates, sets `_contextMenu` at that position, and focuses the first menu item via `setTimeout`.
+
+**High - UX (`metaMapperResults` "View path in Graph" missing focus path activation):**
+- Finding 3 (`metaMapperResults.js`, `handleTabReady` at line 280-283; `metaMapperGraph.js`): "View path in Graph" tree context menu action set `selectedNodeId` only - it did not activate Focus Path to Root mode. `_activateFocusPath` was private with no `@api` method. Added `@api activateFocusPath(nodeId)` wrapper on `metaMapperGraph` that delegates to `_activateFocusPath` when the chart is ready. In `metaMapperResults.handleTabReady()`, after clearing `_pendingFocusNodeId`, now queries `c-meta-mapper-graph` and calls `graphEl.activateFocusPath(nodeId)`.
+
+**Medium - UX (`metaMapperGraph` context menu doesn't clear focus path on open):**
+- Finding 4 (`metaMapperGraph.js`, ECharts `chart.on('contextmenu')` handler): Spec requires the focus path to clear synchronously before the context menu renders ("canvas undims before menu appears"). The clear only happened when the user selected "Focus path to root" from the menu, not on menu open. Added `if (this._focusPath) { this._clearFocusPath(); }` before `this._contextMenu = {...}` in the ECharts contextmenu handler. Same guard added in the Shift+F10 keyboard handler.
+
+**Medium - UX (`metaMapperApp` mobile tour close uses shadow DOM traversal that fails in LWC):**
+- Finding 5 (`metaMapperApp.js`, `closeTour()` at lines 349-352): On mobile, `search.querySelector('input, select, button, [tabindex="0"]')` was called on a child LWC component host element. LWC shadow DOM encapsulation prevents parent components from traversing into a child's shadow root; this always returned null and focus management silently failed. Added `@api focusFirstInput()` public method to `metaMapperSearch` (with corresponding `api` import); `metaMapperApp.closeTour()` now calls `search.focusFirstInput()` instead.
+
+**Low - UX (`metaMapperGraph` context menu close doesn't restore pre-menu focus element):**
+- Finding 6 (`metaMapperGraph.js`, `closeContextMenu()`): Spec requires tracking `this._lastFocusBeforeMenu = document.activeElement` at menu-open time and restoring it on close. `closeContextMenu()` always restored focus to `.graph-canvas-wrapper` (correct fallback, but not the spec's primary path). Added `_lastFocusBeforeMenu = null` instance field. Captured at menu-open time in both the ECharts contextmenu handler and the Shift+F10 keyboard handler. `closeContextMenu()` now uses `(savedFocus && document.contains(savedFocus)) ? savedFocus : wrapper` to restore focus, then nulls the reference.
+
+---
+
+## Round 70 Fixes Applied
+
+Full sf-orchestrator review (Architecture + UX + Naming lenses; Design lens rate-limited). 11 findings applied (0 Critical, 2 High, 4 Medium, 5 Low; all NEW). Overall verdict: NO-GO resolved.
+
+**High - Architecture (`DependencyJobController.cancelJob()` blind status overwrite):**
+- Finding 1 (`DependencyJobController.cls` lines 448-455): `cancelJob()` issued a blind `Status__c = 'Cancelled'` update without reading current status first. A job that raced to Completed or Failed between the LWC cancel click and the DML commit would be incorrectly overwritten. Added `SELECT Id, Status__c FOR UPDATE` pre-check inside the try block. If current status is `Completed`, `Failed`, or `Cancelled`, the method returns immediately with no DML. Added `DependencyJobException` re-throw to preserve typed exception propagation through the generic catch. Added two new test methods: `cancelJob_completedJob_isNoop()` and `cancelJob_failedJob_isNoop()` in `DependencyJobControllerTest.cls`.
+
+**High - UX (`metaMapperGraph` "Expand All" modal - no focus capture or restore):**
+- Finding 2 (`metaMapperGraph.js` lines 600-628): `handleExpandAll()` did not capture `this.template.activeElement` before opening the guard modal. `handleExpandAllConfirm()` and `handleExpandAllCancel()` therefore could not restore focus on close, violating WCAG 2.4.3. Added `this._expandAllTriggerEl` capture at the top of `handleExpandAll()`. Both close handlers now call `this._expandAllTriggerEl.focus()` and null out the reference.
+
+**Medium - Architecture (`MetadataDependencyService.resolveRootId()` uses `getBody()` directly):**
+- Finding 3 (`MetadataDependencyService.cls` line 606): `resolveRootId()` used `res.getBody()` rather than `res.getBodyAsBlob().toString()`. Changed to `res.getBodyAsBlob().toString()` to match the heap pre-check pattern used throughout the rest of the service.
+
+**Medium - UX (`metaMapperTree` context menu missing arrow-key navigation):**
+- Finding 4 (`metaMapperTree.js` lines 300-304): `handleMenuKeyDown()` only handled `Escape`. Arrow keys (`ArrowDown`, `ArrowUp`), `Home`, and `End` were not handled, blocking keyboard-only users from moving between menu items (WCAG 2.1.1). Added `ArrowDown`/`ArrowUp` wrapping navigation and `Home`/`End` jump-to-boundary via `[role="menuitem"]` querySelectorAll.
+
+**Medium - UX (Tour "Don't show again" checkbox not a controlled component):**
+- Finding 5 (`metaMapperApp.html` lines 95-98, `metaMapperApp.js`): The `lightning-input` checkbox had no `name`, no `checked` binding, and no `onchange` handler, making it interactive in the ARIA tree but with no functional response to user interaction. Added `name="tour-dont-show"`, `checked={tourDontShow}`, and `onchange={handleTourDontShowChange}`. Added `@track tourDontShow = false` and `handleTourDontShowChange()` to the JS. Dismissal behavior unchanged (flag always set on any close path per spec).
+
+**Medium - Naming (`Last_Query_Row_Count__c` label mismatch - V-07):**
+- Finding 6 (`Last_Query_Row_Count__c.field-meta.xml`): Label was "Last Result Count" - does not match API name. Changed to "Last Query Row Count".
+
+**Low - Architecture (`DependencyQueueable` Paused status rejected in serializer gate):**
+- Finding 7 (`DependencyQueueable.cls` line 197): The empty-batch serializer gate checked `cancelStatus != 'Processing'`, causing Paused jobs with an empty unprocessed queue to exit without enqueuing `ScanResultFileQueueable`. A job that was paused mid-run and then had its final batch complete on resume would never transition to Completed. Changed gate to `cancelStatus != 'Processing' && cancelStatus != 'Paused'`. Added test `execute_pausedJobNoUnprocessedNodes_enqueuesSerializer()` in `DependencyQueueableTest.cls`.
+
+**Low - UX (`metaMapperProgress` long-running banner uses `role="status"` instead of `role="alert"`):**
+- Finding 8 (`metaMapperProgress.html` line 17): Long-running scan banner (>15 min) used `role="status"` (polite). Spec mandates `role="alert"` (assertive) for banners signalling a potential problem. Changed to `role="alert"`.
+
+**Low - UX (`metaMapperGraph` shortcut legend missing `Shift+F10` entry):**
+- Finding 9 (`metaMapperGraph.html` lines 266-270): Keyboard shortcut legend dialog did not list `Shift+F10` / Menu key for context menu activation (added in Round 69). Added entry: `Shift+F10 / Menu key` = "Open context menu on focused node (canvas focus only)".
+
+**Low - Naming (`Result_Save_Attempted__c` label mismatch - V-07):**
+- Finding 10 (`Result_Save_Attempted__c.field-meta.xml`): Label was "Result Export Attempted". Changed to "Result Save Attempted".
+
+**Low - Naming (`Unique_Component_Key__c` label mismatch - V-07):**
+- Finding 11 (`Unique_Component_Key__c.field-meta.xml`): Label was "Dependency Deduplication Key". Changed to "Unique Component Key".
 
 ---
 
