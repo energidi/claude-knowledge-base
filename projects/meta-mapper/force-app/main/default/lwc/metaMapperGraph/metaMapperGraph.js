@@ -92,6 +92,9 @@ export default class MetaMapperGraph extends LightningElement {
     _isMounted = false;
     _isMobileState = false;
     _tabReadyTimeout = null;
+    _showMobileGraphTip = false;
+    _lastTapMs = 0;
+    _lastTapNodeId = null;
 
     _handleCtrlK = null;
     _handleResize = null;
@@ -115,6 +118,14 @@ export default class MetaMapperGraph extends LightningElement {
             this._spanningNoticeDismissed = false;
         }
         this._isMobileState = window.innerWidth < 1024;
+        if (this._isMobileState) {
+            try {
+                this._showMobileGraphTip =
+                    sessionStorage.getItem('metaMapper_mobileGraphTip_v1') !== 'true';
+            } catch {
+                this._showMobileGraphTip = false;
+            }
+        }
         this._handleResize = () => {
             if (this._chart) {
                 this._chart.resize();
@@ -185,6 +196,39 @@ export default class MetaMapperGraph extends LightningElement {
 
             this._chart.on('click', (params) => {
                 if (!this._isMounted) return;
+                // On mobile, single tap dismisses the tip; double-tap (same node within 300ms) selects.
+                if (this._isMobileState) {
+                    if (this._showMobileGraphTip) {
+                        this._showMobileGraphTip = false;
+                        try { sessionStorage.setItem('metaMapper_mobileGraphTip_v1', 'true'); } catch { /* ignore */ }
+                        return;
+                    }
+                    if (params.dataType === 'node') {
+                        const nodeId = params.data.id;
+                        const now = Date.now();
+                        if (nodeId === this._lastTapNodeId && now - this._lastTapMs < 300) {
+                            // Double-tap — select the node
+                            this._lastTapNodeId = null;
+                            this._lastTapMs = 0;
+                            const node = this._nodeMap.get(nodeId);
+                            if (node) {
+                                this._selectedNodeId = nodeId;
+                                this._renderGraph();
+                                this.dispatchEvent(
+                                    new CustomEvent('nodeselected', { detail: { nodeId, node } })
+                                );
+                            }
+                        } else {
+                            // First tap — record for double-tap detection, no selection
+                            this._lastTapNodeId = nodeId;
+                            this._lastTapMs = now;
+                        }
+                    } else {
+                        this._lastTapNodeId = null;
+                        this._lastTapMs = 0;
+                    }
+                    return;
+                }
                 if (params.dataType === 'node') {
                     const nodeId = params.data.id;
                     const node = this._nodeMap.get(nodeId);
@@ -564,6 +608,9 @@ export default class MetaMapperGraph extends LightningElement {
         );
     }
 
+    get showShortcutLegendButton() { return !this.isMobile; }
+    get showMobileGraphTip() { return this._showMobileGraphTip; }
+
     get showLargeGraphWarningBanner() {
         if (this._showLargeGraphDismissed) return false;
         if (this.isMobile) return false;
@@ -810,13 +857,16 @@ export default class MetaMapperGraph extends LightningElement {
             });
     }
 
+    handleCanvasTap() {
+        if (!this._isMobileState || !this._showMobileGraphTip) return;
+        this._showMobileGraphTip = false;
+        try { sessionStorage.setItem('metaMapper_mobileGraphTip_v1', 'true'); } catch { /* ignore */ }
+    }
+
     handleCtxFocusPath() {
         const nodeId = this._contextMenu?.nodeId;
         this.closeContextMenu();
         if (!nodeId) return;
-        if (this._focusPath) {
-            this._clearFocusPath();
-        }
         this._activateFocusPath(nodeId);
     }
 

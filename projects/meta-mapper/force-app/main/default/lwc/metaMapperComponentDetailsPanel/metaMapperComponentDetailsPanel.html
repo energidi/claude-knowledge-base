@@ -44,14 +44,14 @@
                 <!-- Flags -->
                 <template if:true={selectedNode.Is_Circular__c}>
                     <div class="flag-row">
-                        <lightning-icon icon-name="utility:rotate" size="x-small" alternative-text="Circular dependency"></lightning-icon>
+                        <lightning-icon icon-name="utility:rotate" size="x-small" aria-hidden="true"></lightning-icon>
                         <span>Circular dependency — these components depend on each other in a loop.</span>
                     </div>
                 </template>
 
                 <template if:true={selectedNode.Is_Dynamic_Reference__c}>
                     <div class="flag-row">
-                        <lightning-icon icon-name="utility:warning" size="x-small" alternative-text="Dynamic reference" class="icon-dynamic"></lightning-icon>
+                        <lightning-icon icon-name="utility:warning" size="x-small" aria-hidden="true" class="icon-dynamic"></lightning-icon>
                         <span>Dynamic reference — cannot be statically resolved. Verify manually.</span>
                     </div>
                 </template>
@@ -98,17 +98,17 @@
                     title={setupButtonTitle}
                     aria-label="Open in Setup"
                 >
-                    <lightning-icon icon-name="utility:settings" size="x-small" alternative-text="Setup"></lightning-icon>
+                    <lightning-icon icon-name="utility:settings" size="x-small" aria-hidden="true"></lightning-icon>
                     Open in Setup
                 </button>
 
                 <button class="slds-button slds-button_neutral copy-link-btn" onclick={handleCopyLink}>
                     <template if:false={_copyLinkSuccess}>
-                        <lightning-icon icon-name="utility:copy" size="x-small" alternative-text="Copy"></lightning-icon>
+                        <lightning-icon icon-name="utility:copy" size="x-small" aria-hidden="true"></lightning-icon>
                         Copy Link
                     </template>
                     <template if:true={_copyLinkSuccess}>
-                        <lightning-icon icon-name="utility:check" size="x-small" alternative-text="Copied"></lightning-icon>
+                        <lightning-icon icon-name="utility:check" size="x-small" aria-hidden="true"></lightning-icon>
                         Link copied!
                     </template>
                 </button>

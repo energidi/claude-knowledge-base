@@ -356,8 +356,17 @@ export default class MetaMapperResults extends LightningElement {
     handleRetryTab() { this._activateTab(this.activeTab); }
 
     handleGraphPathRequest(event) {
-        this._pendingFocusNodeId = event.detail && event.detail.nodeId;
-        this._activateTab('graph');
+        const nodeId = event.detail && event.detail.nodeId;
+        if (!nodeId) return;
+        if (this.activeTab === 'graph' && !this.isTransitioning) {
+            // Graph already rendered — activate focus path directly without tab switch.
+            this.selectedNodeId = nodeId;
+            const graphEl = this.template.querySelector('c-meta-mapper-graph');
+            if (graphEl) graphEl.activateFocusPath(nodeId);
+        } else {
+            this._pendingFocusNodeId = nodeId;
+            this._activateTab('graph');
+        }
     }
     handleDownloadPartialCsv() {
         const exportEl = this.template.querySelector('c-meta-mapper-export');

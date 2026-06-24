@@ -53,8 +53,8 @@ private class MetadataDependencyServiceTest {
         Assert.areEqual('MyClass',
             result.get('a002000000000001AAA')[0].Metadata_Name__c,
             'Node name should match');
-        Assert.areEqual(1, opts.lastResultCount,
-            'lastResultCount should reflect first page size');
+        Assert.areEqual(1, opts.maxResultCount,
+            'maxResultCount should reflect first page size');
     }
 
     @IsTest
@@ -106,7 +106,7 @@ private class MetadataDependencyServiceTest {
 
     @IsTest
     static void fetchDependencies_queryMore_followsNextPageAndTracksMaxCount() {
-        // Finding #16: lastResultCount must reflect the max first-page size across chunks,
+        // Finding #16: maxResultCount must reflect the max first-page size across chunks,
         // not just the last chunk processed.
         // This mock returns page 1 with a nextRecordsUrl, then page 2 with done=true.
         Test.setMock(HttpCalloutMock.class, new QueryMoreMock());
@@ -120,9 +120,9 @@ private class MetadataDependencyServiceTest {
         Assert.isFalse(result.isEmpty(), 'QueryMore should yield results from both pages');
         Assert.areEqual(2, result.get('a002000000000001AAA').size(),
             'Both pages should contribute records');
-        // lastResultCount tracks page 1 size (1 record) not the total.
-        Assert.areEqual(1, opts.lastResultCount,
-            'lastResultCount should reflect the first-page record count');
+        // maxResultCount tracks page 1 size (1 record) not the total.
+        Assert.areEqual(1, opts.maxResultCount,
+            'maxResultCount should reflect the first-page record count');
     }
 
     @IsTest

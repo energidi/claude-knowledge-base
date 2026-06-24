@@ -103,14 +103,16 @@
                 >
                     Expand All
                 </button>
-                <button
-                    class="shortcut-legend-btn slds-button"
-                    aria-label="Show keyboard shortcuts (Shift+?)"
-                    title="Keyboard shortcuts (Shift+?)"
-                    onclick={handleShowShortcuts}
-                >
-                    ?
-                </button>
+                <template lwc:if={showShortcutLegendButton}>
+                    <button
+                        class="shortcut-legend-btn slds-button"
+                        aria-label="Show keyboard shortcuts (Shift+?)"
+                        title="Keyboard shortcuts (Shift+?)"
+                        onclick={handleShowShortcuts}
+                    >
+                        ?
+                    </button>
+                </template>
 
                 <!-- Graph live region for announcements -->
                 <span
@@ -127,7 +129,13 @@
                 aria-label={canvasAriaLabel}
                 onkeydown={handleCanvasKeyDown}
                 oncontextmenu={handleCanvasContextMenu}
+                onclick={handleCanvasTap}
             >
+                <template lwc:if={showMobileGraphTip}>
+                    <div class="mobile-graph-tip" role="status">
+                        Double-tap a node to view its details.
+                    </div>
+                </template>
                 <template if:true={_loadError}>
                     <div class="load-error">
                         <span>Graph could not be loaded.</span>
@@ -264,6 +272,10 @@
                             <span>Select node (open Node Details Panel)</span>
                         </li>
                         <li>
+                            <kbd>Shift+F10</kbd> / <kbd>Menu key</kbd>
+                            <span>Open context menu on focused node (canvas focus only)</span>
+                        </li>
+                        <li>
                             <kbd>Right-click</kbd>
                             <span>Context menu</span>
                         </li>
@@ -295,6 +307,7 @@
                 </div>
                 <div class="modal-footer">
                     <button
+                        data-id="keepCollapsedBtn"
                         class="slds-button slds-button_neutral"
                         aria-label="Cancel. Do not expand all nodes - return to filtered view."
                         onclick={handleExpandAllCancel}

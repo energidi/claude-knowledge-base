@@ -26,7 +26,7 @@ public class DependencyFetchContext {
      * guardrail reflects the largest chunk seen (a chunk returning 1,900+ rows means
      * QueryMore is likely on next execution, even if later chunks returned fewer rows).
      */
-    public Integer lastResultCount;
+    public Integer maxResultCount;
 
     /** Diagnostic error messages accumulated during fetchDependencies(). */
     public List<String> errors;
@@ -49,7 +49,7 @@ public class DependencyFetchContext {
 
     public DependencyFetchContext() {
         this.activeFlowsOnly      = false;
-        this.lastResultCount      = 0;
+        this.maxResultCount      = 0;
         this.errors               = new List<String>();
         this.queryMoreFailed      = false;
         this.failedParentMetaIds  = new Set<String>();

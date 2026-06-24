@@ -1,6 +1,8 @@
 .progress-container { padding: 1rem; }
-.status-label { font-size: 0.875rem; margin-bottom: 0.5rem; }
-.elapsed-row { display: flex; justify-content: flex-end; font-size: 0.75rem; color: #706e6b; }
+.status-elapsed-wrapper { display: flex; justify-content: space-between; align-items: center; }
+.status-label { font-size: 0.875rem; flex: 1; white-space: normal; }
+.elapsed-row { font-size: 0.75rem; color: #706e6b; white-space: nowrap; }
 @media (max-width: 767px) {
-    .elapsed-row { flex-direction: column; align-items: flex-end; }
+    .status-elapsed-wrapper { flex-direction: column; align-items: stretch; }
+    .elapsed-row { align-self: flex-end; }
 }

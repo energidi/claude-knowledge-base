@@ -25,6 +25,7 @@
                     placeholder={apiNamePlaceholder}
                     value={apiName}
                     message-when-value-missing="Enter the API name of the component you want to scan."
+                    message-when-bad-input="Use the exact API name as it appears in Salesforce Setup (e.g. Account.My_Field__c)."
                     onblur={handleApiNameBlur}
                     onchange={handleApiNameChange}>
                 </lightning-input>
@@ -86,7 +87,7 @@
                 <lightning-input type="checkbox" name="activeFlows"
                     label="Only analyze active Flow versions"
                     checked={activeFlowsOnly}
-                    field-level-help="When checked, inactive and deprecated Flow versions are excluded. Uncheck to include all Flow versions, including inactive ones."
+                    field-level-help="When checked, inactive and deprecated Flow versions are excluded from results. This reduces scan scope and processing time. Uncheck to include all Flow versions, including inactive ones."
                     onchange={handleActiveFlowsChange}>
                 </lightning-input>
             </div>

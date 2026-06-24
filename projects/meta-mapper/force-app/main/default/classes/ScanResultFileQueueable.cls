@@ -156,21 +156,21 @@ public without sharing class ScanResultFileQueueable implements Queueable {
         // FirstPublishLocationId = jobId causes Salesforce to auto-create the
         // ContentDocumentLink tied to the job. Do NOT create the link manually.
         String jsonBody = JSON.serialize(nodes);
-        ContentVersion cv = new ContentVersion(
+        ContentVersion contentVersion = new ContentVersion(
             Title                  = 'MetaMapper_' + jobId,
             PathOnClient           = 'MetaMapper_' + jobId + '.json',
             VersionData            = Blob.valueOf(jsonBody),
             FirstPublishLocationId = jobId
         );
-        insert cv;
+        insert contentVersion;
 
         // --- 4. Requery ContentDocumentId ---
-        cv = nodeSelector.getVersionContentDocumentId(cv.Id);
+        contentVersion = nodeSelector.getVersionContentDocumentId(contentVersion.Id);
 
         // --- 5. Set ContentDocumentLink visibility ---
         List<ContentDocumentLink> links =
             new MetadataDependencySelector().getContentDocumentLinkForJob(
-                cv.ContentDocumentId, jobId
+                contentVersion.ContentDocumentId, jobId
             );
         if (!links.isEmpty()) {
             links[0].ShareType  = 'V';
@@ -185,7 +185,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
             }
         } else {
             String warn = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] ContentDocumentLink not found for '
-                + cv.ContentDocumentId + '; file visibility may not be restricted to InternalUsers.';
+                + contentVersion.ContentDocumentId + '; file visibility may not be restricted to InternalUsers.';
             job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
                 job.Scan_Diagnostic_Log__c, warn);
         }
@@ -241,7 +241,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
 
         // Component_Type_Counts__c must be populated BEFORE transitioning to Completed so that
         // ScanSummaryQueueable has data to work with when it reads the job record.
-        job.Result_File_Id__c        = cv.ContentDocumentId;
+        job.Result_File_Id__c        = contentVersion.ContentDocumentId;
         job.Component_Type_Counts__c = typeCountsJson;
         job.Status__c                = 'Completed';
         job.Status_Closed_At__c      = System.now();
@@ -343,7 +343,12 @@ public without sharing class ScanResultFileQueueable implements Queueable {
                     String existing = fallbackJob.Scan_Diagnostic_Log__c;
                     fallbackJob.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
                         existing, warn);
-                    update fallbackJob;
+                    if (Limits.getLimitDmlStatements() - Limits.getDmlStatements() >= 1
+                            && Limits.getLimitDmlRows() - Limits.getDmlRows() >= 1) {
+                        update fallbackJob;
+                    } else {
+                        appendWarningToJob(job, warn);
+                    }
                 }
             } catch (Exception fallbackEx) {
                 System.debug(LoggingLevel.WARN,

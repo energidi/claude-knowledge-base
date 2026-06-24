@@ -243,7 +243,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
             // queryMorePossible flag in the next execution's guardrail reflects
             // the worst-case chunk (not the last chunk processed).
             if (isFirstPage) {
-                fetchContext.lastResultCount = Math.max(fetchContext.lastResultCount, records.size());
+                fetchContext.maxResultCount = Math.max(fetchContext.maxResultCount, records.size());
             }
         }
 
@@ -423,14 +423,14 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         List<List<String>> nameChunks = new List<List<String>>();
         List<String> currentChunk = new List<String>();
         Integer currentLen = 100;
-        for (String fn : flowNames) {
-            Integer nameCost = String.escapeSingleQuotes(fn).length() + 3; // opening quote + escaped name + closing quote + comma
+        for (String flowName : flowNames) {
+            Integer nameCost = String.escapeSingleQuotes(flowName).length() + 3; // opening quote + escaped name + closing quote + comma
             if (!currentChunk.isEmpty() && currentLen + nameCost > URL_BUDGET) {
                 nameChunks.add(currentChunk);
                 currentChunk = new List<String>();
                 currentLen = 100;
             }
-            currentChunk.add(fn);
+            currentChunk.add(flowName);
             currentLen += nameCost;
         }
         if (!currentChunk.isEmpty()) {
@@ -452,8 +452,8 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
             }
             try {
                 List<String> safeNames = new List<String>();
-                for (String fn : chunk) {
-                    safeNames.add(String.escapeSingleQuotes(fn));
+                for (String flowName : chunk) {
+                    safeNames.add(String.escapeSingleQuotes(flowName));
                 }
                 String nameList = '\'' + String.join(safeNames, '\',\'') + '\'';
                 String soql = 'SELECT DeveloperName FROM FlowDefinition'
@@ -491,9 +491,9 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
                     // should never appear here. This is defensive for correctness.
                     Boolean done = (Boolean) parsed.get('done');
                     String nextUrl = (String) parsed.get('nextRecordsUrl');
-                    Integer flowQmDepth = 0;
+                    Integer flowQueryMoreDepth = 0;
                     while (Boolean.FALSE.equals(done) && String.isNotBlank(nextUrl)
-                        && flowQmDepth < MAX_QUERY_MORE_PAGES) {
+                        && flowQueryMoreDepth < MAX_QUERY_MORE_PAGES) {
                         if ((Limits.getLimitCallouts() - Limits.getCallouts()) < 2) {
                             fetchContext.addError('MetadataDependencyService.filterInactiveFlows: '
                                 + 'QueryMore callout budget exhausted. Some active Flow names '
@@ -507,26 +507,26 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
                                     + 'Remaining pages skipped; affected versions retained (fail-open).');
                                 break;
                             }
-                            String qmPath = nextUrl.substringAfter('/tooling/');
-                            HttpRequest qmReq = new HttpRequest();
-                            qmReq.setEndpoint(NAMED_CREDENTIAL + NEXT_RECORDS_PATH + qmPath);
-                            qmReq.setMethod('GET');
-                            qmReq.setHeader('Content-Type', 'application/json');
-                            HttpResponse qmRes = new Http().send(qmReq);
-                            Blob qmBlob = qmRes.getBodyAsBlob();
-                            Integer qmSize = qmBlob != null ? qmBlob.size() : 0;
-                            if (qmRes.getStatusCode() != 200 || qmSize > MAX_RESPONSE_BODY_SIZE) {
+                            String queryMorePath = nextUrl.substringAfter('/tooling/');
+                            HttpRequest queryMoreReq = new HttpRequest();
+                            queryMoreReq.setEndpoint(NAMED_CREDENTIAL + NEXT_RECORDS_PATH + queryMorePath);
+                            queryMoreReq.setMethod('GET');
+                            queryMoreReq.setHeader('Content-Type', 'application/json');
+                            HttpResponse queryMoreRes = new Http().send(queryMoreReq);
+                            Blob queryMoreBlob = queryMoreRes.getBodyAsBlob();
+                            Integer queryMoreSize = queryMoreBlob != null ? queryMoreBlob.size() : 0;
+                            if (queryMoreRes.getStatusCode() != 200 || queryMoreSize > MAX_RESPONSE_BODY_SIZE) {
                                 fetchContext.addError('MetadataDependencyService.filterInactiveFlows: '
-                                    + 'QueryMore HTTP ' + qmRes.getStatusCode()
+                                    + 'QueryMore HTTP ' + queryMoreRes.getStatusCode()
                                     + '. Remaining pages skipped; affected versions retained (fail-open).');
                                 break;
                             }
-                            Map<String, Object> qmParsed =
+                            Map<String, Object> queryMoreParsed =
                                 (Map<String, Object>) JSON.deserializeUntyped(
-                                    qmBlob != null ? qmBlob.toString() : '{}');
-                            List<Object> qmRecords = (List<Object>) qmParsed.get('records');
-                            if (qmRecords != null) {
-                                for (Object rec : qmRecords) {
+                                    queryMoreBlob != null ? queryMoreBlob.toString() : '{}');
+                            List<Object> queryMoreRecords = (List<Object>) queryMoreParsed.get('records');
+                            if (queryMoreRecords != null) {
+                                for (Object rec : queryMoreRecords) {
                                     Map<String, Object> rawRecord = (Map<String, Object>) rec;
                                     String devName = (String) rawRecord.get('DeveloperName');
                                     if (String.isNotBlank(devName)) {
@@ -534,12 +534,12 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
                                     }
                                 }
                             }
-                            done = (Boolean) qmParsed.get('done');
-                            nextUrl = (String) qmParsed.get('nextRecordsUrl');
-                            flowQmDepth++;
-                        } catch (Exception qmEx) {
+                            done = (Boolean) queryMoreParsed.get('done');
+                            nextUrl = (String) queryMoreParsed.get('nextRecordsUrl');
+                            flowQueryMoreDepth++;
+                        } catch (Exception queryMoreEx) {
                             fetchContext.addError('MetadataDependencyService.filterInactiveFlows: '
-                                + 'QueryMore exception - ' + qmEx.getMessage()
+                                + 'QueryMore exception - ' + queryMoreEx.getMessage()
                                 + '. Remaining pages skipped; affected versions retained (fail-open).');
                             break;
                         }
@@ -603,7 +603,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         if (res.getStatusCode() != 200) {
             return null;
         }
-        String body = res.getBody();
+        String body = res.getBodyAsBlob().toString();
         if (String.isBlank(body) || body.length() > 500000) {
             return null;
         }

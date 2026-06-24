@@ -61,6 +61,23 @@
     min-height: 400px;
     position: relative;
     outline: none;
+    touch-action: manipulation;
+}
+
+/* Mobile double-tap tip */
+.mobile-graph-tip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.72);
+    color: #ffffff;
+    font-size: 0.8125rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 10;
+    white-space: nowrap;
 }
 
 .graph-canvas-wrapper:focus {

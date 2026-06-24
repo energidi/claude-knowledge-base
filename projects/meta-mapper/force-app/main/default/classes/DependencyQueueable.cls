@@ -194,7 +194,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             // ScanResultFileQueueable has its own FOR UPDATE guard, but this avoids
             // enqueuing an unnecessary Queueable job for a job that is already Cancelled.
             String cancelStatus = jobSelector.getStatusOnly(jobId);
-            if (cancelStatus != null && cancelStatus != 'Processing') {
+            if (cancelStatus != null && cancelStatus != 'Processing' && cancelStatus != 'Paused') {
                 return;
             }
             System.enqueueJob(new ScanResultFileQueueable(jobId));
@@ -229,7 +229,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                 + 'Resume at a slower speed or with current settings.'
             );
             update job;
-            publishSafe('Paused', intOf(job.Components_Analyzed__c),
+            publishSafe('Paused', toIntValue(job.Components_Analyzed__c),
                 'Analysis of ' + job.Target_API_Name__c + ' paused - encountered a complex component.');
             return;
         }
@@ -253,7 +253,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                 + 'your org data storage. Raise Max_Components__c in MetaMapper Settings to continue.'
             );
             update job;
-            publishSafe('Paused', intOf(job.Components_Analyzed__c),
+            publishSafe('Paused', toIntValue(job.Components_Analyzed__c),
                 'Analysis paused - node limit reached.');
             return;
         }
@@ -313,7 +313,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         DependencyFetchContext fetchContext = new DependencyFetchContext();
         fetchContext.jobId           = jobId;
         fetchContext.activeFlowsOnly = activeFlowsOnly;
-        fetchContext.lastResultCount = 0;
+        fetchContext.maxResultCount = 0;
 
         IMetadataDependencyService service = new MetadataDependencyService();
         Map<String, List<Metadata_Dependency__c>> resultsByParent =
@@ -640,7 +640,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             job.Last_Progress_Cycle__c = cycles;
         }
 
-        job.Last_Query_Row_Count__c = fetchContext.lastResultCount != null ? fetchContext.lastResultCount : 0;
+        job.Last_Query_Row_Count__c = fetchContext.maxResultCount != null ? fetchContext.maxResultCount : 0;
 
         // Errors from fetchContext.errors already carry individual timestamps from addError().
         // Use appendNoticeSafe (no extra timestamp added) to stay on the two-path mandate.
@@ -842,20 +842,22 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         update jobUpdate;
 
         // Step 19 - one Platform Event per execution (after final commit)
-        publishSafe('Processing', intOf(job.Components_Analyzed__c),
-            'Analyzing metadata... ' + intOf(job.Components_Analyzed__c) + ' components found so far');
+        publishSafe('Processing', toIntValue(job.Components_Analyzed__c),
+            'Analyzing metadata... ' + toIntValue(job.Components_Analyzed__c) + ' components found so far');
 
         // Drain any PE publish failure notices accumulated during this execution.
         // These cannot be written inside the EventBus callback (DML restriction), so
         // DependencyNotificationService queues them here for safe log-append after the PE section.
+        // Re-query Scan_Diagnostic_Log__c before appending: publishProgress() may have written
+        // a suppression notice to the DB directly, making the in-memory value stale.
         List<String> peNotices = DependencyNotificationService.getAndClearPendingNotices();
         if (!peNotices.isEmpty()) {
             String combined = String.join(peNotices, '\n');
-            job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
-                job.Scan_Diagnostic_Log__c, combined);
+            Metadata_Scan_Job__c freshLog = new MetadataScanJobSelector().getByIdForLogAppend(jobId);
+            String currentLog = freshLog != null ? freshLog.Scan_Diagnostic_Log__c : job.Scan_Diagnostic_Log__c;
             update new Metadata_Scan_Job__c(
                 Id = job.Id,
-                Scan_Diagnostic_Log__c = job.Scan_Diagnostic_Log__c
+                Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(currentLog, combined)
             );
         }
 
@@ -922,7 +924,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         return SupplementalScanResult.appendNoticeSafe(existing, timestamped);
     }
 
-    private Integer intOf(Decimal d) {
+    private Integer toIntValue(Decimal d) {
         return d != null ? d.intValue() : 0;
     }
 

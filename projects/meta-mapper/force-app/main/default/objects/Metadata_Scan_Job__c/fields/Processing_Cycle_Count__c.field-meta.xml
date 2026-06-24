@@ -3,7 +3,7 @@
     <fullName>Processing_Cycle_Count__c</fullName>
     <description>Number of times the async engine has processed a batch for this scan. Incremented on every Queueable execution. Compared against Last_Progress_Cycle__c to detect stall loops. Do not edit manually.</description>
     <defaultValue>0</defaultValue>
-    <label>Total Analysis Steps</label>
+    <label>Processing Cycle Count</label>
     <precision>18</precision>
     <scale>0</scale>
     <type>Number</type>

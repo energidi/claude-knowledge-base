@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 24, 2026 (Round 71 - sf-orchestrator full pass: 6 findings applied - 1 Critical, 2 High, 2 Medium, 1 Low)
+**Last Updated:** June 24, 2026 (Round 72 - sf-orchestrator full pass: 23 findings applied - 0 Critical, 4 High, 11 Medium, 8 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3911,6 +3911,79 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 
 **Low - Architecture (`DependencyNotificationService.pendingPublishFailureNotices` encapsulation):**
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
+
+---
+
+## Round 72 Fixes Applied
+
+Full sf-orchestrator review (all lenses). 23 findings applied (0 Critical, 4 High, 11 Medium, 8 Low; 2 FALSE POSITIVE confirmed). Overall verdict: NO-GO resolved.
+
+**High - Architecture (`ScanResultFileQueueable` DML budget unguarded before `update fallbackJob`):**
+- Finding #6 (`ScanResultFileQueueable.cls`, fallback catch block): The `update fallbackJob` inside `catch (Exception fallbackEx)` was unguarded against limit exhaustion. `LimitException` extends `Error`, not `Exception`, so a DML limit breach here would escape the catch and leave the job stuck. Added `if (Limits.getLimitDmlStatements() - Limits.getDmlStatements() >= 1 && Limits.getLimitDmlRows() - Limits.getDmlRows() >= 1)` guard before the update.
+
+**High - Architecture (`DependencyQueueable` PE drain uses stale in-memory log):**
+- Finding #7 (`DependencyQueueable.cls`, Step 19 PE drain block): `publishProgress()` may write a suppression notice to the DB directly via `enqueueDeployment()`, making the in-memory `job.Scan_Diagnostic_Log__c` stale. The drain block was appending PE notices onto the stale value and overwriting the DB. Added a fresh `MetadataScanJobSelector.getByIdForLogAppend(jobId)` query before the drain DML to always read the current log from the database.
+
+**High - Architecture (`MetadataDependencySelector.getNodeExistenceByJobs` LIMIT too small):**
+- Finding #8 (`MetadataDependencySelector.cls`, `getNodeExistenceByJobs`): `LIMIT :jobIds.size()` bounded results to the input set size (1-5 when called from ring buffer). A job with many nodes would be misreported as node-free if `jobIds.size()` was smaller than the actual row count. Changed to `LIMIT 200`.
+
+**High - UX (`metaMapperGraph` `?` shortcut button missing mobile hide):**
+- Finding #3 (`metaMapperGraph.html/.js`): Spec requires the `?` keyboard legend button to be hidden on mobile (< 1024px). Added `showShortcutLegendButton` getter (`return !this.isMobile`) and wrapped the button with `lwc:if={showShortcutLegendButton}`.
+
+**Medium - UX (Mobile double-tap detection missing in `metaMapperGraph`):**
+- Finding #4 (`metaMapperGraph.html/.css/.js`): Spec requires double-tap to select a node on mobile (single tap = pan). Added `touch-action: manipulation` to `.graph-canvas-wrapper`, `_lastTapMs`/`_lastTapNodeId` instance vars, double-tap detection in the `chart.on('click')` handler, and a one-time dismissible mobile tip overlay (`showMobileGraphTip`).
+
+**Medium - UX (`metaMapperProgress` status/elapsed layout breaks on mobile):**
+- Finding #9 (`metaMapperProgress.html/.css`): Elapsed time and status label were siblings outside a flex container, causing incorrect stacking on narrow viewports. Wrapped both in `.status-elapsed-wrapper` with `flex-direction: column` at < 768px; elapsed is `align-self: flex-end`.
+
+**Medium - UX (`metaMapperSearch` `message-when-bad-input` missing):**
+- Finding #10 (`metaMapperSearch.html`): API Name `lightning-input` was missing `message-when-bad-input`. Added spec-required text: "Use the exact API name as it appears in Salesforce Setup (e.g. Account.My_Field__c)."
+
+**Medium - UX (Decorative icons need `aria-hidden="true"` in `metaMapperComponentDetailsPanel`):**
+- Finding #11 (`metaMapperComponentDetailsPanel.html`): Five `lightning-icon` elements used `alternative-text` (read by screen readers) instead of `aria-hidden="true"` (decorative). Changed all five to `aria-hidden="true"`.
+
+**Medium - UX (Polling notice not cleared on terminal PE event in `metaMapperProgress`):**
+- Finding #12 (`metaMapperProgress.js`): `showPollingNotice` persisted after job reached Completed/Failed/Cancelled via a PE event. Added clear on terminal status in `handleStatusEvent`.
+
+**Medium - UX (`metaMapperResults` "View path in Graph" switches tab but doesn't activate focus path):**
+- Finding #13 (`metaMapperResults.js`): `handleGraphPathRequest` always switched tabs even when the graph was already active, and never called `activateFocusPath` for the already-active case. Added guard: if `activeTab === 'graph' && !isTransitioning`, call `activateFocusPath` directly; otherwise set `_pendingFocusNodeId` and switch tabs.
+
+**Medium - UX (Polling not resumed after PE event on `metaMapperProgress` while polling notice visible):**
+- Finding #15 (`metaMapperProgress.js`): A PE event with `Status__c = Processing` while `showPollingNotice = true` did not restart the polling loop, leaving the UI stuck relying on PE only. Added `_startPolling()` call in `handleStatusEvent` for this case.
+
+**Medium - UX (`metaMapperSearch` Active Flows tooltip incomplete):**
+- Finding #16 (`metaMapperSearch.html`): Tooltip was missing "This reduces scan scope and processing time." sentence from spec. Added it after "excluded from results."
+
+**Medium - UX (`metaMapperGraph` context menu double-clears focus path):**
+- Finding #17 (`metaMapperGraph.js`): `handleCtxFocusPath` had a redundant `_clearFocusPath()` call; the ECharts contextmenu handler already clears the focus path synchronously at lines 207-210 before the menu opens. Removed the duplicate block from `handleCtxFocusPath`.
+
+**Low - Naming (`DependencyQueueable.cls` `intOf` → `toIntValue`):**
+- Finding #18: Renamed private helper method `intOf` to `toIntValue` (definition + all 4 call sites in `DependencyQueueable.cls`).
+
+**Low - Naming (`DependencyJobController.cls` `cnt` → `count`):**
+- Finding #19: Renamed local variable `cnt` to `count` in `getComponentCount()` (3 references).
+
+**Low - Naming (`MetadataDependencyService.cls` `fn` → `flowName`):**
+- Finding #20: Renamed loop variable `fn` to `flowName` across two loops in `filterInactiveFlows()`.
+
+**Low - Naming (`MetadataDependencyService.cls` `flowQmDepth` → `flowQueryMoreDepth`):**
+- Finding #21: Renamed loop depth counter with full descriptive name (definition + 2 references).
+
+**Low - Naming (`MetadataDependencyService.cls` `qm*` → `queryMore*`):**
+- Finding #22: Renamed 7 `qm`-prefixed local variables to `queryMore*` equivalents inside `filterInactiveFlows()` QueryMore loop.
+
+**Low - Naming (`ScanResultFileQueueable.cls` `cv` → `contentVersion`):**
+- Finding #23: Renamed `cv` variable to `contentVersion` across 5 references (declaration, insert, requery, ContentDocumentLink query, Result_File_Id assignment).
+
+**Low - Naming (`DependencyFetchContext.cls` `lastResultCount` → `maxResultCount`):**
+- Finding #24: Renamed public field `lastResultCount` to `maxResultCount` in `DependencyFetchContext.cls`, `DependencyFetchContext.cls-meta.xml`, `DependencyQueueable.cls`, `MetadataDependencyService.cls`, and `MetadataDependencyServiceTest.cls`.
+
+**Low - Naming (`Processing_Cycle_Count__c` field label mismatch):**
+- Finding #25 (`Processing_Cycle_Count__c.field-meta.xml`): Label read "Total Analysis Steps" - misaligned with the field API name and CLAUDE.md spec. Changed to "Processing Cycle Count".
+
+**FALSE POSITIVES confirmed (no fix):**
+- Finding #1: `fetchWithRetry` oversized single-ID path — the early return at line 173 fires only when `ids.size() == 1` AND the URL budget is still exceeded; the delta check at lines 183-186 is unreachable for that path but harmless. No action.
+- Finding #5: `System.enqueueJob(new ScanResultFileQueueable)` followed immediately by `return` — nothing between the enqueue and return can throw; the concern was a phantom risk. No action.
 
 ---
 

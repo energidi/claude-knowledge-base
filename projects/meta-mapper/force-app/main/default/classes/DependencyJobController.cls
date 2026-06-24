@@ -241,7 +241,7 @@ public with sharing class DependencyJobController {
             return null;
         }
         try {
-            Integer cnt = [
+            Integer count = [
                 SELECT COUNT()
                 FROM MetadataComponentDependency
                 WHERE RefMetadataComponentId IN (
@@ -251,9 +251,9 @@ public with sharing class DependencyJobController {
                 )
                 WITH USER_MODE
             ];
-            if (cnt <= 100)  { return 'Small'; }
-            if (cnt <= 500)  { return 'Medium'; }
-            if (cnt <= 2000) { return 'Large'; }
+            if (count <= 100)  { return 'Small'; }
+            if (count <= 500)  { return 'Medium'; }
+            if (count <= 2000) { return 'Large'; }
             return 'Very Large';
         } catch (Exception e) {
             return null;
@@ -446,12 +446,31 @@ public with sharing class DependencyJobController {
             );
         }
         try {
+            // Read current status FOR UPDATE before writing to prevent overwriting a
+            // Completed or Failed job that raced to a terminal state after the cancel click.
+            List<Metadata_Scan_Job__c> jobs = [
+                SELECT Id, Status__c
+                FROM Metadata_Scan_Job__c
+                WHERE Id = :jobId
+                WITH USER_MODE
+                FOR UPDATE
+                LIMIT 1
+            ];
+            if (jobs.isEmpty()) {
+                throw new DependencyJobException('Job not found or you do not have access to it.');
+            }
+            String currentStatus = jobs[0].Status__c;
+            if (currentStatus == 'Completed' || currentStatus == 'Failed' || currentStatus == 'Cancelled') {
+                return; // Already terminal — nothing to cancel.
+            }
             Metadata_Scan_Job__c job = new Metadata_Scan_Job__c(
                 Id        = jobId,
                 Status__c = 'Cancelled',
                 Status_Closed_At__c = System.now()
             );
             update as user job;
+        } catch (DependencyJobException e) {
+            throw e;
         } catch (Exception e) {
             throw new DependencyJobException(
                 'Unable to cancel: insufficient permissions to update job status. '

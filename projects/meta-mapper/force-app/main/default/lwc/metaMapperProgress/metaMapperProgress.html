@@ -14,7 +14,7 @@
 
         <!-- Long-running scan banner (> 15 min) -->
         <template lwc:if={showLongRunningBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="status">
+            <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="alert">
                 <p>This scan is taking longer than usual.
                     <a onclick={handleViewPartialResults}> View partial results so far</a> — this will not cancel the scan.
                 </p>
@@ -54,12 +54,19 @@
             </div>
         </template>
 
-        <!-- Status label (hidden when paused or timeout) -->
-        <template lwc:if={showStatusLabel}>
-            <div class="status-label" aria-live="polite">
-                <span>{statusLabel}</span>
-            </div>
-        </template>
+        <!-- Status label + elapsed time (flex row on desktop, flex column on mobile < 768px) -->
+        <div class="status-elapsed-wrapper">
+            <template lwc:if={showStatusLabel}>
+                <div class="status-label" aria-live="polite">
+                    <span>{statusLabel}</span>
+                </div>
+            </template>
+            <template lwc:if={showElapsed}>
+                <div class="elapsed-row">
+                    <span class="elapsed-label">Elapsed: {elapsedFormatted}</span>
+                </div>
+            </template>
+        </div>
 
         <!-- View partial results link + Start new scan (Cancelled state) -->
         <template lwc:if={isCancelled}>
@@ -81,13 +88,6 @@
         <template lwc:if={showProgressSpinner}>
             <div class="slds-var-m-vertical_small slds-align_absolute-center">
                 <lightning-spinner variant="brand" size="small" alternative-text="Scanning..."></lightning-spinner>
-            </div>
-        </template>
-
-        <!-- Elapsed time -->
-        <template lwc:if={showElapsed}>
-            <div class="elapsed-row">
-                <span class="elapsed-label">Elapsed: {elapsedFormatted}</span>
             </div>
         </template>
 

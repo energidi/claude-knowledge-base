@@ -265,7 +265,7 @@ public without sharing class MetadataDependencySelector {
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c IN :jobIds
             ORDER BY Metadata_Scan_Job__c ASC, Id ASC
-            LIMIT :jobIds.size()
+            LIMIT 200
         ];
     }
 

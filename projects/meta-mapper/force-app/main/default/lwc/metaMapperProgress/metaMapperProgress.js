@@ -106,6 +106,14 @@ export default class MetaMapperProgress extends LightningElement {
             this.showCancellingSubtext = false;
             clearTimeout(this._cancelTimeoutTimer);
         }
+        if (eventData && ['Completed', 'Failed', 'Cancelled'].includes(eventData.Status__c)) {
+            this.showPollingNotice = false;
+        }
+        // When PE fires a Processing transition (e.g. after resume from Paused), refresh the
+        // polling notice text so it no longer says "every 10 seconds" if polling is active.
+        if (eventData && eventData.Status__c === 'Processing' && this.showPollingNotice) {
+            this._startPolling();
+        }
     }
 
     dismissStreamingQuotaBanner() {
