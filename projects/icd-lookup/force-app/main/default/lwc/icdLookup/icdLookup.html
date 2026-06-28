@@ -34,16 +34,18 @@
                             required={mandatory}
                             onchange={handleSearchChange}>
                         </lightning-input>
-                        <template lwc:if={isLoading}>
-                            <div class="slds-input__icon-group slds-input__icon-group_right">
-                                <lightning-spinner alt="Loading" size="small" variant="brand"></lightning-spinner>
-                            </div>
-                        </template>
                     </div>
                     <div class="slds-dropdown slds-dropdown_fluid">
                         <ul id="icd-listbox"
                             role="listbox"
                             class="slds-listbox slds-listbox_vertical">
+                            <template lwc:if={isLoading}>
+                                <li role="presentation" class="slds-listbox__item">
+                                    <div class="slds-align_absolute-center slds-p-around_medium">
+                                        <lightning-spinner alt="Loading" size="small" variant="brand"></lightning-spinner>
+                                    </div>
+                                </li>
+                            </template>
                             <template for:each={processedResults} for:item="res">
                                 <li key={res.code}
                                     id={res.optionId}

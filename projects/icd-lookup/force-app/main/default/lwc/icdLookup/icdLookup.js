@@ -87,7 +87,7 @@ export default class IcdLookup extends LightningElement {
     }
 
     get dropdownClass() {
-        return (this.icdResults.length > 0 || this.showNoResults)
+        return (this.isLoading || this.icdResults.length > 0 || this.showNoResults)
             ? 'slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click slds-is-open'
             : 'slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click';
     }
@@ -107,7 +107,7 @@ export default class IcdLookup extends LightningElement {
     }
 
     get isOpen() {
-        return this.icdResults.length > 0 || this.showNoResults;
+        return this.isLoading || this.icdResults.length > 0 || this.showNoResults;
     }
 
     get displayError() {
