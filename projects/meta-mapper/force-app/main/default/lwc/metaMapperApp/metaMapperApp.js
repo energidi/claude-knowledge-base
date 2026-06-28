@@ -371,7 +371,8 @@ export default class MetaMapperApp extends LightningElement {
     }
 
     handleAskCopilot() {
-        // Copilot integration is org-specific - no-op placeholder
+        // Extension point: handle the 'askcopilot' event in an org-specific wrapper component.
+        // Event carries { detail: { summaryText } }. See CLAUDE.md "Ask Copilot" button spec.
     }
 
     _showToast(message, variant) {

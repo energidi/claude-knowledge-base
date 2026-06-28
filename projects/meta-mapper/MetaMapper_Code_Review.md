@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 24, 2026 (Round 72 - sf-orchestrator full pass: 23 findings applied - 0 Critical, 4 High, 11 Medium, 8 Low)
+**Last Updated:** June 28, 2026 (Round 73 - sf-orchestrator full pass: 4 findings applied - 0 Critical, 0 High, 3 Medium, 1 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3913,6 +3913,15 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
 
 ---
+
+## Round 73 Fixes Applied
+
+Full sf-orchestrator review (all lenses). 4 findings applied (0 Critical, 0 High, 3 Medium, 1 Low). Overall verdict: GO.
+
+- Finding 1 (Architecture - CLAUDE.md, Medium): `DependencyQueueable` description said "Node cap check: at the start of each execution" - misleading spec that would cause a reimplementor to produce a broken ordering where a final execution completing at exactly `Max_Components__c` triggers a spurious Paused transition. Fixed: updated description to state the cap check runs after the batch fetch and empty-batch exit check, and only when the batch is non-empty. Added `batch fetch` and `empty-batch exit` to the execution sequence narrative. Removed "the check fires at the start of the next execution" phrasing.
+- Finding 2 (UX/Accessibility - `metaMapperResults`, Medium): Stats tile type counts had no `aria-live` region - screen readers were not notified when counts changed on data load. Fixed: added `<span aria-live="polite" aria-atomic="true" class="slds-assistive-text" lwc:ref="statsLiveRegion">` inside the stats card in `metaMapperResults.html`. Added `_scheduleStatsAnnouncement()` method in `metaMapperResults.js` that fires 150ms after nodes load and populates the live region with a count summary.
+- Finding 3 (UX - `metaMapperApp.handleAskCopilot()`, Medium): Spec said the "Ask Copilot" button "Opens Einstein Copilot" but no mechanism was defined; `metaMapperApp.handleAskCopilot()` was a no-op placeholder. Fixed: updated CLAUDE.md to document the actual event contract (`askcopilot` custom event carrying `{ detail: { summaryText } }`); renamed event detail key from `text` to `summaryText` in `metaMapperResults.js`; clarified `metaMapperApp.js` comment as an intentional extension point.
+- Finding 4 (Naming - CLAUDE.md, Low): Three `Metadata_Scan_Job__c` fields (`Job_Type__c`, `Pause_Reason__c`, `Platform_Events_Auto_Suppressed__c`) and one `MetaMapper_Settings__mdt` field (`Custom_Settings_Saved__c`) were missing from the CLAUDE.md Metadata Component Descriptions section. Fixed: added all four entries to the descriptions tables.
 
 ## Round 72 Fixes Applied
 

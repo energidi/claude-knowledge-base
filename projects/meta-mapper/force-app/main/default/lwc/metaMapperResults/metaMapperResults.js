@@ -102,6 +102,7 @@ export default class MetaMapperResults extends LightningElement {
             this.allNodes = nodes || [];
             this._invalidateCaches();
             this._syncFiltersToNodes();
+            this._scheduleStatsAnnouncement();
             this._startSummaryPollIfNeeded();
             if (this._pendingNodeId) {
                 this.selectedNodeId = this._pendingNodeId;
@@ -127,6 +128,16 @@ export default class MetaMapperResults extends LightningElement {
         this.filters = result;
         this._invalidateCaches();
         saveFilters(this.filters);
+    }
+
+    _scheduleStatsAnnouncement() {
+        // eslint-disable-next-line @lwc/lwc/no-async-operation
+        setTimeout(() => {
+            if (!this._isMounted) return;
+            const region = this.refs && this.refs.statsLiveRegion;
+            if (!region || !this.typeCounts.length) return;
+            region.textContent = 'Type counts updated: ' + this.typeCounts.map(tc => `${tc.label} (${tc.count})`).join(', ');
+        }, 150);
     }
 
     _startSummaryPollIfNeeded() {
@@ -341,7 +352,7 @@ export default class MetaMapperResults extends LightningElement {
 
     handleAskCopilot() {
         this.dispatchEvent(new CustomEvent('askcopilot', {
-            detail: { text: this.summaryText }, bubbles: true, composed: true
+            detail: { summaryText: this.summaryText }, bubbles: true, composed: true
         }));
     }
 
