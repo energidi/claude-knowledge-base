@@ -8,7 +8,14 @@ ISP-6429 - Salesforce DX project implementing a real-time ICD-10 code autocomple
 
 **GitHub:** https://github.com/energidi/claude-knowledge-base/tree/main/projects/icd-lookup
 
-To push changes to GitHub: clone `https://github.com/energidi/claude-knowledge-base.git`, copy changed files into `projects/icd-lookup/`, then commit and push. The project does not have its own git repo - it lives as a subdirectory of that monorepo.
+**This project has no standalone git repo.** It is published via a knowledge-base monorepo already cloned at:
+`C:\Users\GidiAbramovich\Documents\Claude\claude-knowledge-base`
+
+**To push to GitHub:**
+1. Copy changed files (e.g. `CLAUDE.md`) into `projects/icd-lookup/` inside that local clone.
+2. `cd` into that clone, `git add`, `git pull --rebase`, then `git push`.
+
+**To deploy to Salesforce:** run `sf project deploy start` from this project directory.
 
 ## Commands
 
