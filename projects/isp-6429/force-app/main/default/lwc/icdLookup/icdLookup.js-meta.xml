@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>67.0</apiVersion>
+    <isExposed>true</isExposed>
+    <targets>
+        <target>lightning__FlowScreen</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__FlowScreen">
+            <property name="automationApiName" type="String" label="Automation API Name" description="API name of the Screen Flow using this component. Used to load configuration from the ICD_Lookup__mdt Custom Metadata Type."/>
+            <property name="fieldLabel" type="String" label="Field Label" default="ICD-10 Diagnosis" description="Label displayed above the search input. Overridden by ICD_Lookup__mdt.Field_Label__c when Automation API Name is set."/>
+            <property name="fieldPlaceholder" type="String" label="Placeholder Text" default="Search by code or description..." description="Placeholder text inside the search input. Overridden by ICD_Lookup__mdt.Field_Placeholder__c when Automation API Name is set."/>
+            <property name="noResultsMessage" type="String" label="No Results Message" default="No matching codes found." description="Message shown when the search returns no results. Overridden by ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c when Automation API Name is set."/>
+            <property name="mandatory" type="Boolean" label="Mandatory" default="false" description="When true, blocks Flow progression if no code is selected. Overridden by ICD_Lookup__mdt.Mandatory__c when Automation API Name is set."/>
+            <property name="fieldId" type="String" label="Field ID" description="Optional identifier for this instance. Useful when multiple instances appear on the same screen (e.g., ICD10-1 through ICD10-5)."/>
+            <property name="selectedCode" type="String" label="Selected ICD Code" role="outputOnly" default=""/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>

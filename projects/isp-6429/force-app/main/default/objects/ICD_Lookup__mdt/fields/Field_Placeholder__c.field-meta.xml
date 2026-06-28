@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Field_Placeholder__c</fullName>
+    <description>The faint placeholder text rendered inside the input box before user entry (e.g., "Search by code or description..."). ref: ISP-6038</description>
+    <externalId>false</externalId>
+    <label>Field Placeholder</label>
+    <length>255</length>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>
