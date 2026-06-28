@@ -19,7 +19,9 @@
                      aria-expanded={isOpen}
                      aria-labelledby="icd-label"
                      aria-owns="icd-listbox"
-                     aria-controls="icd-listbox">
+                     aria-controls="icd-listbox"
+                     aria-activedescendant={activeDescendant}
+                     onkeydown={handleDropdownKeydown}>
                     <div class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right" role="none">
                         <lightning-input
                             id="icd-input"
@@ -40,10 +42,11 @@
                         <ul id="icd-listbox"
                             role="listbox"
                             class="slds-listbox slds-listbox_vertical">
-                            <template for:each={icdResults} for:item="res">
+                            <template for:each={processedResults} for:item="res">
                                 <li key={res.code}
+                                    id={res.optionId}
                                     role="option"
-                                    aria-selected="false"
+                                    aria-selected={res.isActive}
                                     class="slds-listbox__item"
                                     onclick={handleSelect}
                                     data-code={res.code}

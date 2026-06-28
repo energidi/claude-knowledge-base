@@ -40,11 +40,12 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `automationApiName` | String | `''` | API name of the host Flow. Used to load the matching `ICD_Lookup__mdt` record. |
-| `fieldLabel` | String | `'ICD-10 Diagnosis'` | Label above the input. Overridden by `ICD_Lookup__mdt.Field_Label__c`. |
+| `label` | String | `'ICD-10 Diagnosis'` | Label above the input. Overridden by `ICD_Lookup__mdt.Field_Label__c`. |
 | `fieldPlaceholder` | String | `'Search by code or description...'` | Input placeholder. Overridden by `ICD_Lookup__mdt.Field_Placeholder__c`. |
 | `noResultsMessage` | String | `'No matching codes found.'` | Message shown on zero results. Overridden by `ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c`. |
 | `mandatory` | Boolean | `false` | Blocks Flow progression if no code is selected. Overridden by `ICD_Lookup__mdt.Mandatory__c`. |
-| `fieldId` | String | `''` | Optional instance identifier. Use when 5 instances share one screen (e.g. `"ICD10-1"`). |
+| `defaultValue` | String | `''` | Pre-populates the field with an existing code (e.g. from a record). Must be in `CODE: Description` format. |
+| `tooltip` | String | `''` | Tooltip text shown via `lightning-helptext` next to the label. Overridden by `ICD_Lookup__mdt.Tooltip__c`. |
 
 **Flow screen validation:** The component implements `@api validate()`. When `mandatory` is true and `selectedCode` is empty, `validate()` returns `{ isValid: false, errorMessage: '...' }` to block navigation.
 
@@ -53,9 +54,9 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 `force-app/main/default/classes/ICDLookupController.cls`
 
 **`searchIcd10(String searchTerm)`** - `@AuraEnabled` (no cacheable - live callout)
-Makes a GET callout to the NIH Clinical Tables API:
+Makes a GET callout to the NIH Clinical Tables API via Named Credential `NihClinicalTables`:
 ```
-https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search?terms=<encoded>&sf=code,name&maxList=10
+callout:NihClinicalTables/api/icd10cm/v3/search?terms=<encoded>&sf=code,name&maxList=10
 ```
 - Searches by both code and name (`sf=code,name`).
 - Guards: blank/< 3 chars returns empty list; > 100 chars throws. Timeout: 10 seconds.
@@ -66,7 +67,7 @@ https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search?terms=<encoded>&sf=code
 **`getIcdLookupConfig(String automationApiName)`** - `@AuraEnabled(cacheable=true)` (SOQL only - no callout)
 Queries `ICD_Lookup__mdt` by `Automation_API_Name__c` where `Active__c = true`. Returns the matching record or `null`.
 
-**Remote Site Setting required:** `https://clinicaltables.nlm.nih.gov` must be whitelisted in Salesforce Setup > Remote Site Settings before callouts will succeed.
+**Named Credential required:** Deploy `NihClinicalTables` Named Credential (`force-app/main/default/namedCredentials/NihClinicalTables.namedCredential-meta.xml`) via `sf project deploy start` before callouts will succeed. The credential points to `https://clinicaltables.nlm.nih.gov` with no authentication (public API).
 
 ### Custom Metadata: `ICD_Lookup__mdt`
 
@@ -82,6 +83,7 @@ Drives per-flow configuration for every `icdLookup` instance. One record per Scr
 | No Matching Codes Found Message | `No_Matching_Codes_Found_Message__c` | Text(255) | - |
 | Mandatory? | `Mandatory__c` | Checkbox | false |
 | Active? | `Active__c` | Checkbox | true |
+| Tooltip | `Tooltip__c` | Text(255) | - |
 | Description | `Description__c` | LongTextArea(32768) | - |
 
 Records (in `force-app/main/default/customMetadata/`):

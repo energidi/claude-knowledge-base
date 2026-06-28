@@ -1,1 +1,4 @@
-/* styles */
+.selection-confirmed .slds-combobox__form-element {
+    border-color: var(--slds-g-color-success-base-50, #2e844a);
+    box-shadow: 0 0 0 1px var(--slds-g-color-success-base-50, #2e844a);
+}

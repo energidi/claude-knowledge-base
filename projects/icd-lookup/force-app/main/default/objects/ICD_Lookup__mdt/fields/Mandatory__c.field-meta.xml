@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Mandatory__c</fullName>
-    <description>When true, the ICD-10 code field is required before the Flow screen can advance. ref: ISP-6038</description>
+    <description>When true, the ICD-10 code field is required before the Flow screen can advance. Note: the API name uses "Mandatory" but all user-facing labels use "Required" - these refer to the same concept. When Automation API Name is set on the LWC, this CMT value always overrides the mandatory input property set in Flow Properties. ref: ISP-6429</description>
     <defaultValue>false</defaultValue>
     <externalId>false</externalId>
     <label>Required?</label>

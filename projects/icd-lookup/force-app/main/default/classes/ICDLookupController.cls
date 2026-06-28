@@ -7,7 +7,7 @@ public with sharing class ICDLookupController {
         if (String.isBlank(searchTerm) || searchTerm.trim().length() < 3) return results;
         if (searchTerm.length() > 100) throw new AuraHandledException('Search term too long.');
 
-        String endpoint = 'https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search?terms='
+        String endpoint = 'callout:NihClinicalTables/api/icd10cm/v3/search?terms='
                           + EncodingUtil.urlEncode(searchTerm.trim(), 'UTF-8')
                           + '&sf=code,name&maxList=10';
 
@@ -69,7 +69,7 @@ public with sharing class ICDLookupController {
     public static ICD_Lookup__mdt getIcdLookupConfig(String automationApiName) {
         if (String.isBlank(automationApiName)) return null;
         List<ICD_Lookup__mdt> configs = [
-            SELECT Field_Placeholder__c, No_Matching_Codes_Found_Message__c, Mandatory__c, Tooltip__c
+            SELECT Field_Label__c, Field_Placeholder__c, No_Matching_Codes_Found_Message__c, Mandatory__c, Tooltip__c
             FROM ICD_Lookup__mdt
             WHERE Automation_API_Name__c = :automationApiName AND Active__c = true
             LIMIT 1
