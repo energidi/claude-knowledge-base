@@ -69,8 +69,8 @@ public with sharing class ICDLookupController {
     public static ICD_Lookup__mdt getIcdLookupConfig(String automationApiName) {
         if (String.isBlank(automationApiName)) return null;
         List<ICD_Lookup__mdt> configs = [
-            SELECT DeveloperName, MasterLabel, Field_Label__c, Field_Placeholder__c,
-                   No_Matching_Codes_Found_Message__c, Mandatory__c, Tooltip__c
+            SELECT DeveloperName, MasterLabel, Field_Placeholder__c,
+                   No_Matching_Codes_Found_Message__c, Required__c, Tooltip__c
             FROM ICD_Lookup__mdt
             WHERE Flow_API_Name__c = :automationApiName AND Active__c = true
             LIMIT 1

@@ -62,12 +62,11 @@ export default class IcdLookup extends LightningElement {
             getIcdLookupConfig({ automationApiName: this.flowApiName })
                 .then(config => {
                     if (config) {
-                        if (config.Field_Label__c) this.label = config.Field_Label__c;
                         if (config.Field_Placeholder__c) this.fieldPlaceholder = config.Field_Placeholder__c;
                         if (config.No_Matching_Codes_Found_Message__c) this.noResultsMessage = config.No_Matching_Codes_Found_Message__c;
                         if (config.Tooltip__c) this.tooltip = config.Tooltip__c;
-                        if (config.Mandatory__c !== null && config.Mandatory__c !== undefined) {
-                            this._mandatory = config.Mandatory__c;
+                        if (config.Required__c !== null && config.Required__c !== undefined) {
+                            this._mandatory = config.Required__c;
                         }
                     }
                 })

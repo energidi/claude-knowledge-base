@@ -39,7 +39,7 @@
             </layoutItems>
             <layoutItems>
                 <behavior>Edit</behavior>
-                <field>Mandatory__c</field>
+                <field>Required__c</field>
             </layoutItems>
             <layoutItems>
                 <behavior>Edit</behavior>
@@ -47,7 +47,7 @@
             </layoutItems>
             <layoutItems>
                 <behavior>Edit</behavior>
-                <field>Automation_API_Name__c</field>
+                <field>Flow_API_Name__c</field>
             </layoutItems>
         </layoutColumns>
         <layoutColumns>
