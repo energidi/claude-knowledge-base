@@ -1,11 +1,16 @@
 <template>
     <div class={formElementClass}>
-        <label id="icd-label" class="slds-form-element__label">
-            <template lwc:if={mandatory}>
-                <abbr class="slds-required" title="required">*</abbr>
+        <div class="slds-form-element__label-container">
+            <label id="icd-label" class="slds-form-element__label">
+                <template lwc:if={mandatory}>
+                    <abbr class="slds-required" title="required">*</abbr>
+                </template>
+                {label}
+            </label>
+            <template lwc:if={tooltip}>
+                <lightning-helptext content={tooltip}></lightning-helptext>
             </template>
-            {fieldLabel}
-        </label>
+        </div>
         <div class="slds-form-element__control">
             <div class={comboboxContainerClass}>
                 <div class={dropdownClass}
@@ -14,15 +19,18 @@
                      aria-expanded={isOpen}
                      aria-labelledby="icd-label"
                      aria-owns="icd-listbox"
-                     aria-controls="icd-listbox">
+                     aria-controls="icd-listbox"
+                     aria-activedescendant={activeDescendant}
+                     onkeydown={handleDropdownKeydown}>
                     <div class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right" role="none">
                         <lightning-input
                             id="icd-input"
                             type="search"
                             variant="label-hidden"
-                            label={fieldLabel}
+                            label={label}
                             placeholder={fieldPlaceholder}
                             value={searchTerm}
+                            required={mandatory}
                             onchange={handleSearchChange}>
                         </lightning-input>
                         <template lwc:if={isLoading}>
@@ -35,10 +43,11 @@
                         <ul id="icd-listbox"
                             role="listbox"
                             class="slds-listbox slds-listbox_vertical">
-                            <template for:each={icdResults} for:item="res">
+                            <template for:each={processedResults} for:item="res">
                                 <li key={res.code}
+                                    id={res.optionId}
                                     role="option"
-                                    aria-selected="false"
+                                    aria-selected={res.isActive}
                                     class="slds-listbox__item"
                                     onclick={handleSelect}
                                     data-code={res.code}
@@ -53,11 +62,8 @@
                                 </li>
                             </template>
                             <template lwc:if={showNoResults}>
-                                <li role="option"
-                                    aria-disabled="true"
-                                    aria-selected="false"
-                                    class="slds-listbox__item">
-                                    <div class="slds-align_absolute-center slds-p-around_small">
+                                <li role="presentation" class="slds-listbox__item">
+                                    <div role="status" class="slds-align_absolute-center slds-p-around_small slds-text-color_error">
                                         {noResultsMessage}
                                     </div>
                                 </li>

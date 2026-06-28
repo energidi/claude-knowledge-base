@@ -4,7 +4,7 @@
     <description>Administrative flag used to toggle whether a specific metadata configuration record is evaluated at runtime. ref: ISP-6038</description>
     <defaultValue>true</defaultValue>
     <externalId>false</externalId>
-    <label>Active?</label>
+    <label>Active</label>
     <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

@@ -1,6 +1,6 @@
 # ISP-6429 Code Review Log
 
-Last Updated: June 28, 2026
+Last Updated: June 28, 2026 (Round 3)
 
 ---
 
@@ -8,7 +8,7 @@ Last Updated: June 28, 2026
 
 **Reviewer:** sf-orchestrator (Claude Code)
 **Verdict:** NO-GO → fixed (33 findings applied; test class deferred)
-**Files changed:** `ICDLookupController.cls`, `icdLookup.html`, `icdLookup.js`, `icdLookup.js-meta.xml`, `icdLookup.css` (new), plus 11 new CMT metadata files
+**Files changed:** `ICDLookupController.cls`, `icdLookup.html`, `icdLookup.js`, `icdLookup.js-meta.xml`, `icdLookup.css` (new), plus 11 new CMT object/field metadata files
 
 ### Findings Summary
 
@@ -24,7 +24,7 @@ Last Updated: June 28, 2026
 
 | # | Severity | Area | Fix |
 |---|---|---|---|
-| 1 | Critical | CMT | Created `ICD_Lookup__mdt` object, 7 fields, 3 CMT records |
+| 1 | Critical | CMT | Created `ICD_Lookup__mdt` object and 7 fields |
 | 2 | Critical | LWC JS | Added `@api mandatory`, `@api validate()`, required asterisk, `validationError` state |
 | 3 | Critical | Apex/Test | **DEFERRED** - test class to be written separately |
 | 4 | Critical | LWC HTML | `fieldLabel` driven by `@api` + CMT override; `{fieldLabel}` bound in template |
@@ -64,5 +64,88 @@ Last Updated: June 28, 2026
 | # | Finding | Reason |
 |---|---|---|
 | 3 | No Apex test class | Deferred by user - to be written in a separate session |
+
+---
+
+## Round 2 - June 28, 2026
+
+**Reviewer:** sf-orchestrator (Claude Code)
+**Verdict:** NO-GO → fixed (14 of 15 findings applied; finding #2 pending org retrieve confirmation)
+**Files changed:** `icdLookup.js`, `icdLookup.html`, `icdLookup.css`, `icdLookup.js-meta.xml`, `ICDLookupController.cls`, `ICDLookupController.cls-meta.xml`, `Tooltip__c.field-meta.xml`, `Automation_API_Name__c.field-meta.xml`, `Mandatory__c.field-meta.xml`, `ICD_Lookup__mdt.object-meta.xml` (updated); `Field_Label__c.field-meta.xml`, `NihClinicalTables.namedCredential-meta.xml`, `ICDLookupControllerTest.cls`, `ICDLookupControllerTest.cls-meta.xml` (created)
+
+### Findings Summary
+
+| Severity | Total | Applied | Skipped/N-A |
+|---|---|---|---|
+| Critical | 1 | 1 | 0 |
+| High | 1 | 0 (pending) | 1 (pending org retrieve) |
+| Medium | 6 | 6 | 0 |
+| Low | 7 | 6 | 1 (N/A - see #11) |
+| **Total** | **15** | **13** | **2** |
+
+### Applied Fixes
+
+| # | Severity | Area | Fix |
+|---|---|---|---|
+| 1 | Critical | LWC HTML + JS | Added `aria-activedescendant`, `onkeydown={handleDropdownKeydown}` on combobox div; `handleDropdownKeydown` handles ArrowDown/ArrowUp/Enter/Esc; `processedResults` getter with `optionId` and `isActive` per item; `_focusedIndex` and `activeDescendant` getter added |
+| 2 | High | Source Control | Retrieved `ICD_Lookup.A1.md-meta.xml` from org. The 3 flows listed in prior docs (`Community_Rare_eTRF`, `Community_Reproductive_eTRF`, `Authorization_Order_Revision`) have no CMT records - they were never created. CLAUDE.md updated to remove the stale record list. |
+| 3 | Medium | LWC JS + meta XML + Apex + CMT | `@api label = 'ICD-10 Diagnosis'` default added; `Field_Label__c.field-meta.xml` created; `Field_Label__c` added to SOQL; CMT override `if (config.Field_Label__c) this.label = config.Field_Label__c;` added |
+| 4 | Medium | LWC CSS | `.selection-confirmed` styles added: success-state border + box-shadow using SLDS token |
+| 5 | Medium | LWC JS | `_searchCompleted` flag added; set `true` in `fetchIcdResults().finally()`; reset on outside-click and `handleSearchChange`; `showNoResults` getter updated to check `_searchCompleted` |
+| 6 | Medium | LWC HTML + JS | `aria-selected` bound to `{res.isActive}` via `processedResults` getter; `_focusedIndex = -1` resets on selection, outside-click, and search |
+| 7 | Medium | Apex + metadata | Hardcoded NIH URL replaced with `callout:NihClinicalTables/...`; `NihClinicalTables.namedCredential-meta.xml` created |
+| 8 | Medium | CMT metadata | `<description>` added to `Tooltip__c.field-meta.xml` |
+| 9 | Low | Apex test | `ICDLookupControllerTest.cls` created with 8 test methods covering search results, blank/short/long inputs, non-200 response, and config null cases |
+| 10 | Low | CMT metadata | `<unique>true</unique>` set on `Automation_API_Name__c.field-meta.xml` |
+| 11 | Low | LWC meta XML | `default=""` on `role="outputOnly"` is NOT valid - the `default` attribute only applies to inputOnly/inputOutput properties. Round 1 fix #34 was incorrectly documented. No change applied. |
+| 12 | Low | CMT metadata | Terminology clarification note added to `Mandatory__c.field-meta.xml` description explaining "Mandatory" vs "Required" terminology |
+| 13 | Low | LWC meta XML | `description` attribute added to `label` property in `icdLookup.js-meta.xml` |
+| 14 | Low | CMT metadata | `ICD_Lookup__mdt.object-meta.xml` description updated - removed incorrect "dynamic styling" reference |
+| 15 | Low | Apex metadata | `ICDLookupController.cls-meta.xml` API version updated from 66.0 to 67.0 |
+
+### Known Skipped Findings (Round 2 carry-forward)
+
+| # | Finding | Reason |
+|---|---|---|
+| 3 (R1) | No Apex test class | Resolved in Round 2 finding #9 - test class created |
+
+---
+
+## Round 3 - June 28, 2026
+
+**Reviewer:** sf-orchestrator (Claude Code)
+**Verdict:** GO (9 findings, all applied)
+**Files changed:** `ICDLookupController.cls`, `icdLookup.js`, `icdLookup.html`, `icdLookup.js-meta.xml`, `Active__c.field-meta.xml`, `Mandatory__c.field-meta.xml`; deleted `NIH.remoteSite-meta.xml`; also fixed `NihClinicalTables.namedCredential-meta.xml` (invalid `<name>` element removed - deploy blocker)
+
+### Findings Summary
+
+| Severity | Total | Applied | Skipped |
+|---|---|---|---|
+| Critical | 0 | - | - |
+| High | 0 | - | - |
+| Medium | 4 | 4 | 0 |
+| Low | 5 | 5 | 0 |
+| **Total** | **9** | **9** | **0** |
+
+### Applied Fixes
+
+| # | Status | Severity | Area | Fix |
+|---|---|---|---|---|
+| 1 | PARTIAL-FIX | Low | remoteSiteSettings | Deleted redundant `NIH.remoteSite-meta.xml` - stale artifact from before Named Credential was added in Round 2 |
+| 2 | NEW | Medium | Apex | `catch (Exception e)` now throws generic `'Search failed. Please try again.'` instead of exposing `e.getMessage()` |
+| 3 | NEW | Medium | LWC JS | `this.icdResults = []` added at start of new search in `handleSearchChange` to clear stale results immediately |
+| 4 | NEW | Medium | LWC HTML | `required={mandatory}` added to `lightning-input` to set `aria-required="true"` for screen readers |
+| 5 | NEW | Medium | LWC HTML | No-results `<li>` changed from `role="option" aria-disabled="true"` to `role="presentation"` with inner `role="status"` div |
+| 6 | NEW | Low | LWC JS | `isLoading = true` moved inside `setTimeout` callback so spinner only appears when a callout is actually in flight |
+| 7 | NEW | Low | CMT metadata | `Active__c` label changed from `"Active?"` to `"Active"` |
+| 8 | NEW | Low | CMT metadata | `Mandatory__c` label changed from `"Required?"` to `"Required"` |
+| 9 | NEW | Low | LWC meta XML | `selectedCode` output property given `description` attribute in `icdLookup.js-meta.xml` |
+
+### Out-of-band fix (not in findings table)
+`NihClinicalTables.namedCredential-meta.xml` had an invalid `<name>` element causing deploy failure. Removed during session. API name is derived from the filename - no `<name>` tag belongs in the file body.
+
+### Known Skipped Findings (Round 3 carry-forward)
+
+None.
 
 ---
