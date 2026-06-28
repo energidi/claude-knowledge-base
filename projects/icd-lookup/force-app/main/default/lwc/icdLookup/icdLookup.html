@@ -21,7 +21,8 @@
                      aria-owns="icd-listbox"
                      aria-controls="icd-listbox"
                      aria-activedescendant={activeDescendant}
-                     onkeydown={handleDropdownKeydown}>
+                     onkeydown={handleDropdownKeydown}
+                     onfocusout={handleFocusOut}>
                     <div class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right" role="none">
                         <lightning-input
                             id="icd-input"
@@ -30,6 +31,7 @@
                             label={label}
                             placeholder={fieldPlaceholder}
                             value={searchTerm}
+                            required={mandatory}
                             onchange={handleSearchChange}>
                         </lightning-input>
                         <template lwc:if={isLoading}>
@@ -61,11 +63,8 @@
                                 </li>
                             </template>
                             <template lwc:if={showNoResults}>
-                                <li role="option"
-                                    aria-disabled="true"
-                                    aria-selected="false"
-                                    class="slds-listbox__item">
-                                    <div class="slds-align_absolute-center slds-p-around_small slds-text-color_error">
+                                <li role="presentation" class="slds-listbox__item">
+                                    <div role="status" class="slds-align_absolute-center slds-p-around_small slds-text-color_error">
                                         {noResultsMessage}
                                     </div>
                                 </li>

@@ -53,7 +53,8 @@ export default class IcdLookup extends LightningElement {
                     }
                 })
                 .catch(error => {
-                    console.error('Config load error:', error);
+                    console.error('ICD Lookup: config load failed. Using Flow property defaults.', error);
+                    this.errorMessage = 'Field configuration could not be loaded.';
                 });
         }
     }
@@ -137,8 +138,9 @@ export default class IcdLookup extends LightningElement {
         clearTimeout(this.searchDebounceTimer);
 
         if (this.searchTerm.length >= 3) {
-            this.isLoading = true;
+            this.icdResults = [];
             this.searchDebounceTimer = setTimeout(() => {
+                this.isLoading = true;
                 this.fetchIcdResults();
             }, 400);
         } else {
@@ -160,6 +162,14 @@ export default class IcdLookup extends LightningElement {
                 this.isLoading = false;
                 this._searchCompleted = true;
             });
+    }
+
+    handleFocusOut(event) {
+        if (!this.template.contains(event.relatedTarget)) {
+            this.icdResults = [];
+            this._searchCompleted = false;
+            this._focusedIndex = -1;
+        }
     }
 
     handleDropdownKeydown(event) {

@@ -1,20 +1,20 @@
 import { LightningElement, api } from 'lwc';
 import { FlowAttributeChangeEvent } from 'lightning/flowSupport';
 
-export default class CheckboxRadioButton extends LightningElement {
+export default class RecordChoiceSelector extends LightningElement {
     @api label;
     @api helpText;
-    @api styleOption = 'Checkbox'; 
+    @api selectionMode = 'Checkbox';
     @api inputRecords = [];
     @api displayField = 'Name';
-    @api field1API;
-    @api field2API;
+    @api outputField1ApiName;
+    @api outputField2ApiName;
     @api isRequired = false;
     @api defaultValue;
 
     @api selectedRecordId;
-    @api outputValue1;
-    @api outputValue2;
+    @api outputFieldValue1;
+    @api outputFieldValue2;
 
     connectedCallback() {
         if (!this.defaultValue) return;
@@ -29,7 +29,11 @@ export default class CheckboxRadioButton extends LightningElement {
     }
 
     get isRadio() {
-        return this.styleOption && this.styleOption.toLowerCase() === 'radio';
+        return this.selectionMode && this.selectionMode.toLowerCase() === 'radio';
+    }
+
+    get inputType() {
+        return this.isRadio ? 'radio' : 'checkbox';
     }
 
     get wrapperClass() {
@@ -49,7 +53,7 @@ export default class CheckboxRadioButton extends LightningElement {
                 id: record.Id,
                 label: record[this.displayField],
                 checked: isSelected,
-                disabled: (!!this.selectedRecordId && !isSelected)
+                disabled: !this.isRadio && !!this.selectedRecordId && !isSelected
             };
         });
     }
@@ -68,30 +72,27 @@ export default class CheckboxRadioButton extends LightningElement {
     updateOutputValues(recordId) {
         const selectedRecord = this.inputRecords.find(rec => rec.Id === recordId);
         if (selectedRecord) {
-            if (this.field1API) this.outputValue1 = selectedRecord[this.field1API];
-            if (this.field2API) this.outputValue2 = selectedRecord[this.field2API];
+            if (this.outputField1ApiName) this.outputFieldValue1 = selectedRecord[this.outputField1ApiName];
+            if (this.outputField2ApiName) this.outputFieldValue2 = selectedRecord[this.outputField2ApiName];
         }
     }
 
     resetSelection() {
         this.selectedRecordId = null;
-        this.outputValue1 = null;
-        this.outputValue2 = null;
+        this.outputFieldValue1 = null;
+        this.outputFieldValue2 = null;
     }
 
     notifyFlow() {
         this.dispatchEvent(new FlowAttributeChangeEvent('selectedRecordId', this.selectedRecordId));
-        this.dispatchEvent(new FlowAttributeChangeEvent('outputValue1', this.outputValue1));
-        this.dispatchEvent(new FlowAttributeChangeEvent('outputValue2', this.outputValue2));
+        this.dispatchEvent(new FlowAttributeChangeEvent('outputFieldValue1', this.outputFieldValue1));
+        this.dispatchEvent(new FlowAttributeChangeEvent('outputFieldValue2', this.outputFieldValue2));
     }
 
     @api
     validate() {
-        if (!this.label) {
-            return { isValid: false, errorMessage: 'Please provide a label for this component.' };
-        }
         if (this.isRequired && !this.selectedRecordId) {
-            return { isValid: false, errorMessage: 'Please select an option to continue.' };
+            return { isValid: false, errorMessage: 'Please make a selection to continue.' };
         }
         return { isValid: true };
     }

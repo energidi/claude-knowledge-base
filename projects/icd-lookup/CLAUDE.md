@@ -49,6 +49,10 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 
 **Flow screen validation:** The component implements `@api validate()`. When `mandatory` is true and `selectedCode` is empty, `validate()` returns `{ isValid: false, errorMessage: '...' }` to block navigation.
 
+**Dropdown behavior:** The dropdown closes on Escape key, outside click, or Tab/focusout (keyboard navigation away). Escape clears results but retains the current `searchTerm` in the input.
+
+**CMT config load failure:** If `getIcdLookupConfig` fails, `errorMessage` is set to `'Field configuration could not be loaded.'` and the component falls back to the `@api` property defaults set in Flow Properties. **Flow builders must set the `mandatory` property in Flow Properties as a fallback** - if CMT load fails and mandatory was only set via CMT, the field will not be required.
+
 ### Apex: `ICDLookupController`
 
 `force-app/main/default/classes/ICDLookupController.cls`
@@ -81,8 +85,8 @@ Drives per-flow configuration for every `icdLookup` instance. One record per Scr
 | Field Label | `Field_Label__c` | Text(255) | - |
 | Field Placeholder | `Field_Placeholder__c` | Text(255) | - |
 | No Matching Codes Found Message | `No_Matching_Codes_Found_Message__c` | Text(255) | - |
-| Mandatory? | `Mandatory__c` | Checkbox | false |
-| Active? | `Active__c` | Checkbox | true |
+| Required | `Mandatory__c` | Checkbox | false |
+| Active | `Active__c` | Checkbox | true |
 | Tooltip | `Tooltip__c` | Text(255) | - |
 | Description | `Description__c` | LongTextArea(32768) | - |
 
@@ -99,6 +103,34 @@ The component is deployed into these Screen Flows (metadata not in this repo - m
 | `Authorization_Order_Revision_Screen_Flow` | Internal |
 
 ICD10-1 is mandatory for Insurance Billing. ICD10-2 through ICD10-5 are optional. Enforce this via Flow validation rules on the Flow screens, not inside the component.
+
+### Component: `recordChoiceSelector` (LWC)
+
+`force-app/main/default/lwc/recordChoiceSelector/`
+
+A Flow Screen Component that renders a single-selection checkbox or radio-button group from a Salesforce record collection. Replaces the former `checkboxRadioButton` component (renamed in Round 4 review). If any Screen Flow in the org was using `checkboxRadioButton`, it must be updated in Flow Builder before deploying this version.
+
+**Flow input properties:**
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `inputRecords` | `{T[]}` | - | Collection of SObject records to display as options. Pass from Get Records. |
+| `displayField` | String | `'Name'` | API name of the field on input records to use as the option label. |
+| `selectionMode` | String | `'Checkbox'` | `'Radio'` for radio buttons (native single-select); `'Checkbox'` for mutual-exclusion checkboxes. |
+| `label` | String | - | Label above the group. |
+| `helpText` | String | - | Tooltip text shown via `lightning-helptext`. |
+| `isRequired` | Boolean | `false` | Blocks Flow progression if no option is selected. |
+| `defaultValue` | String | - | Record ID to pre-select on load. |
+| `outputField1ApiName` | String | - | API name of a field on the selected record to expose as `outputFieldValue1`. |
+| `outputField2ApiName` | String | - | API name of a second field to expose as `outputFieldValue2`. |
+
+**Flow output properties:** `selectedRecordId`, `outputFieldValue1`, `outputFieldValue2`
+
+**Flow screen validation:** `@api validate()` blocks navigation when `isRequired=true` and no record is selected. Returns `{ isValid: false, errorMessage: 'Please make a selection to continue.' }`.
+
+**Former property names (pre-Round 4):** `styleOption` → `selectionMode`, `field1API` → `outputField1ApiName`, `field2API` → `outputField2ApiName`, `outputValue1` → `outputFieldValue1`, `outputValue2` → `outputFieldValue2`.
+
+---
 
 ## Salesforce Config
 

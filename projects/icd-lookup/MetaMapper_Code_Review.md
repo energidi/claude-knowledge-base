@@ -1,6 +1,6 @@
 # ISP-6429 Code Review Log
 
-Last Updated: June 28, 2026 (Round 2)
+Last Updated: June 28, 2026 (Round 4)
 
 ---
 
@@ -108,5 +108,87 @@ Last Updated: June 28, 2026 (Round 2)
 | # | Finding | Reason |
 |---|---|---|
 | 3 (R1) | No Apex test class | Resolved in Round 2 finding #9 - test class created |
+
+---
+
+## Round 3 - June 28, 2026
+
+**Reviewer:** sf-orchestrator (Claude Code)
+**Verdict:** GO (9 findings, all applied)
+**Files changed:** `ICDLookupController.cls`, `icdLookup.js`, `icdLookup.html`, `icdLookup.js-meta.xml`, `Active__c.field-meta.xml`, `Mandatory__c.field-meta.xml`; deleted `NIH.remoteSite-meta.xml`; also fixed `NihClinicalTables.namedCredential-meta.xml` (invalid `<name>` element removed - deploy blocker)
+
+### Findings Summary
+
+| Severity | Total | Applied | Skipped |
+|---|---|---|---|
+| Critical | 0 | - | - |
+| High | 0 | - | - |
+| Medium | 4 | 4 | 0 |
+| Low | 5 | 5 | 0 |
+| **Total** | **9** | **9** | **0** |
+
+### Applied Fixes
+
+| # | Status | Severity | Area | Fix |
+|---|---|---|---|---|
+| 1 | PARTIAL-FIX | Low | remoteSiteSettings | Deleted redundant `NIH.remoteSite-meta.xml` - stale artifact from before Named Credential was added in Round 2 |
+| 2 | NEW | Medium | Apex | `catch (Exception e)` now throws generic `'Search failed. Please try again.'` instead of exposing `e.getMessage()` |
+| 3 | NEW | Medium | LWC JS | `this.icdResults = []` added at start of new search in `handleSearchChange` to clear stale results immediately |
+| 4 | NEW | Medium | LWC HTML | `required={mandatory}` added to `lightning-input` to set `aria-required="true"` for screen readers |
+| 5 | NEW | Medium | LWC HTML | No-results `<li>` changed from `role="option" aria-disabled="true"` to `role="presentation"` with inner `role="status"` div |
+| 6 | NEW | Low | LWC JS | `isLoading = true` moved inside `setTimeout` callback so spinner only appears when a callout is actually in flight |
+| 7 | NEW | Low | CMT metadata | `Active__c` label changed from `"Active?"` to `"Active"` |
+| 8 | NEW | Low | CMT metadata | `Mandatory__c` label changed from `"Required?"` to `"Required"` |
+| 9 | NEW | Low | LWC meta XML | `selectedCode` output property given `description` attribute in `icdLookup.js-meta.xml` |
+
+### Out-of-band fix (not in findings table)
+`NihClinicalTables.namedCredential-meta.xml` had an invalid `<name>` element causing deploy failure. Removed during session. API name is derived from the filename - no `<name>` tag belongs in the file body.
+
+### Known Skipped Findings (Round 3 carry-forward)
+
+None.
+
+---
+
+## Round 4 - June 28, 2026
+
+**Reviewer:** sf-orchestrator (Claude Code)
+**Verdict:** NO-GO → fixed (all 10 findings applied)
+**Files changed:** `recordChoiceSelector/*` (4 new files - replaces deleted `checkboxRadioButton/`), `icdLookup.html`, `icdLookup.js`; deleted `checkboxRadioButton/` folder
+
+### Findings Summary
+
+| Severity | Total | Applied | Skipped |
+|---|---|---|---|
+| Critical | 1 | 1 | 0 |
+| High | 2 | 2 | 0 |
+| Medium | 3 | 3 | 0 |
+| Low | 4 | 4 | 0 |
+| **Total** | **10** | **10** | **0** |
+
+### Applied Fixes
+
+| # | Status | Severity | Area | Fix |
+|---|---|---|---|---|
+| 1 | NEW | Critical | checkboxRadioButton / Accessibility | Added `inputType` getter returning `'radio'` or `'checkbox'`; bound `type={inputType}` on input element. Radio mode no longer uses `disabled` strategy on unselected options - native radio mutual exclusion handles it. WCAG 2.1 SC 4.1.2 and 1.3.1 resolved. |
+| 2 | NEW | High | checkboxRadioButton / Empty State | Added `<template lwc:if={showEmptyMessage}>` with "No options available." message to HTML template. Previously the getter was computed but never rendered. |
+| 3 | NEW | High | checkboxRadioButton / Copy + Security | Removed label-presence check from `validate()`. End-user message changed to `'Please make a selection to continue.'`. Admin configuration errors no longer surface to Flow end users. |
+| 4 | NEW | Medium | checkboxRadioButton / Deprecated API | Updated `apiVersion` from 66.0 to 67.0. Replaced all deprecated directives: `if:true` → `lwc:if`, `if:false` → `lwc:else`. |
+| 5 | NEW | Medium | icdLookup / Interaction | Added `onfocusout={handleFocusOut}` on combobox div; `handleFocusOut` method closes dropdown when focus leaves the component. Satisfies WAI-ARIA 1.2 combobox Tab behavior. |
+| 6 | NEW | Medium | icdLookup / Error State | CMT config load failure now sets `errorMessage = 'Field configuration could not be loaded.'` and logs improved console.error. Prevents silent fallback where `mandatory` could default to `false` unexpectedly. |
+| 7 | NEW | Low | checkboxRadioButton / V-04 | Component renamed from `checkboxRadioButton` to `recordChoiceSelector`. Old folder deleted. `masterLabel` updated to "Record Choice Selector". |
+| 8 | NEW | Low | checkboxRadioButton / V-02 + V-01 | Renamed: `styleOption` → `selectionMode`, `field1API` → `outputField1ApiName`, `field2API` → `outputField2ApiName`, `outputValue1` → `outputFieldValue1`, `outputValue2` → `outputFieldValue2`. Updated JS, HTML, and meta XML. |
+| 9 | NEW | Low | checkboxRadioButton / V-08 | Component description in meta XML replaced with 40-word description covering purpose, events dispatched, and features. |
+| 10 | NEW | Low | checkboxRadioButton / V-08 | Added `description` attribute to all 11 `<property>` elements in `recordChoiceSelector.js-meta.xml`. |
+
+### CSS cascade (finding 1)
+`recordChoiceSelector.css` updated: all `.slds-radio input[type="checkbox"]` selectors replaced with `.slds-radio input[type="radio"]` to match the corrected input type. Checkbox selectors unchanged.
+
+### Deployment note (finding 7)
+`recordChoiceSelector` deploys as `c:recordChoiceSelector`. Any Screen Flows in the org referencing `checkboxRadioButton` must be updated in Flow Builder before deploying. Remapped properties: `styleOption` → `selectionMode`, `field1API`/`field2API` → `outputField1ApiName`/`outputField2ApiName`, `outputValue1`/`outputValue2` → `outputFieldValue1`/`outputFieldValue2`.
+
+### Known Skipped Findings (Round 4 carry-forward)
+
+None.
 
 ---
