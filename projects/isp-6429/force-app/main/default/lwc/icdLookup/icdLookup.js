@@ -5,6 +5,7 @@ import { FlowAttributeChangeEvent } from 'lightning/flowSupport';
 
 export default class IcdLookup extends LightningElement {
     @api selectedCode = '';
+    @api defaultValue = '';
     @api automationApiName = '';
     @api fieldLabel = 'ICD-10 Diagnosis';
     @api fieldPlaceholder = 'Search by code or description...';
@@ -28,6 +29,13 @@ export default class IcdLookup extends LightningElement {
             }
         };
         document.addEventListener('click', this._handleOutsideClick);
+
+        if (this.defaultValue) {
+            this.selectedCode = this.defaultValue;
+            this.searchTerm = this.defaultValue;
+            this.isSelected = true;
+            this.dispatchEvent(new FlowAttributeChangeEvent('selectedCode', this.selectedCode));
+        }
 
         if (this.automationApiName) {
             getIcdLookupConfig({ automationApiName: this.automationApiName })
