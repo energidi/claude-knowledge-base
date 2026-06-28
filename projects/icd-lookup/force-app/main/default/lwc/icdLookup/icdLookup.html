@@ -1,0 +1,52 @@
+<template>
+    <div class="slds-form-element">
+        <label class="slds-form-element__label" for="icd-input">Search ICD-10 Diagnosis</label>
+        <div class="slds-form-element__control">
+            <div class="slds-combobox_container">
+                <div class={dropdownClass} role="combobox" aria-haspopup="listbox">
+                    <div class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right" role="none">
+                        
+                        <lightning-input 
+                            id="icd-input"
+                            type="search" 
+                            variant="label-hidden" 
+                            placeholder="Type diagnosis (e.g. 'Hypertension')"
+                            value={searchKey}
+                            onchange={handleSearchChange}>
+                        </lightning-input>
+
+                        <template if:true={isLoading}>
+                            <div class="slds-input__icon-group slds-input__icon-group_right">
+                                <lightning-spinner alt="Loading" size="small" variant="brand"></lightning-spinner>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="slds-dropdown slds-dropdown_fluid" role="listbox">
+                        <ul class="slds-listbox slds-listbox_vertical" role="presentation">
+                            <template for:each={searchResults} for:item="res">
+                                <li key={res.code} role="presentation" class="slds-listbox__item" onclick={handleSelect} data-code={res.code} data-desc={res.description}>
+                                    <div class="slds-media slds-listbox__option slds-listbox__option_plain slds-media_center" role="option">
+                                        <span class="slds-media__body">
+                                            <span class="slds-truncate">
+                                                <strong>{res.code}</strong> — {res.description}
+                                            </span>
+                                        </span>
+                                    </div>
+                                </li>
+                            </template>
+                            
+                            <template if:true={showNoResults}>
+                                <li role="presentation" class="slds-listbox__item">
+                                    <div class="slds-align_absolute-center slds-p-around_small">
+                                        No matching codes found.
+                                    </div>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
