@@ -1,45 +1,69 @@
 <template>
-    <div class="slds-form-element">
-        <label class="slds-form-element__label" for="icd-input">Search ICD-10 Diagnosis</label>
+    <div class={formElementClass}>
+        <div class="slds-form-element__label-container">
+            <label id="icd-label" class="slds-form-element__label">
+                <template lwc:if={mandatory}>
+                    <abbr class="slds-required" title="required">*</abbr>
+                </template>
+                {label}
+            </label>
+            <template lwc:if={tooltip}>
+                <lightning-helptext content={tooltip}></lightning-helptext>
+            </template>
+        </div>
         <div class="slds-form-element__control">
-            <div class="slds-combobox_container">
-                <div class={dropdownClass} role="combobox" aria-haspopup="listbox">
+            <div class={comboboxContainerClass}>
+                <div class={dropdownClass}
+                     role="combobox"
+                     aria-haspopup="listbox"
+                     aria-expanded={isOpen}
+                     aria-labelledby="icd-label"
+                     aria-owns="icd-listbox"
+                     aria-controls="icd-listbox">
                     <div class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right" role="none">
-                        
-                        <lightning-input 
+                        <lightning-input
                             id="icd-input"
-                            type="search" 
-                            variant="label-hidden" 
-                            placeholder="Type diagnosis (e.g. 'Hypertension')"
-                            value={searchKey}
+                            type="search"
+                            variant="label-hidden"
+                            label={label}
+                            placeholder={fieldPlaceholder}
+                            value={searchTerm}
                             onchange={handleSearchChange}>
                         </lightning-input>
-
-                        <template if:true={isLoading}>
+                        <template lwc:if={isLoading}>
                             <div class="slds-input__icon-group slds-input__icon-group_right">
                                 <lightning-spinner alt="Loading" size="small" variant="brand"></lightning-spinner>
                             </div>
                         </template>
                     </div>
-
-                    <div class="slds-dropdown slds-dropdown_fluid" role="listbox">
-                        <ul class="slds-listbox slds-listbox_vertical" role="presentation">
-                            <template for:each={searchResults} for:item="res">
-                                <li key={res.code} role="presentation" class="slds-listbox__item" onclick={handleSelect} data-code={res.code} data-desc={res.description}>
-                                    <div class="slds-media slds-listbox__option slds-listbox__option_plain slds-media_center" role="option">
+                    <div class="slds-dropdown slds-dropdown_fluid">
+                        <ul id="icd-listbox"
+                            role="listbox"
+                            class="slds-listbox slds-listbox_vertical">
+                            <template for:each={icdResults} for:item="res">
+                                <li key={res.code}
+                                    role="option"
+                                    aria-selected="false"
+                                    class="slds-listbox__item"
+                                    onclick={handleSelect}
+                                    data-code={res.code}
+                                    data-desc={res.description}>
+                                    <span class="slds-media slds-listbox__option slds-listbox__option_plain slds-media_center">
                                         <span class="slds-media__body">
                                             <span class="slds-truncate">
-                                                <strong>{res.code}</strong> — {res.description}
+                                                <strong>{res.code}</strong>: {res.description}
                                             </span>
                                         </span>
-                                    </div>
+                                    </span>
                                 </li>
                             </template>
-                            
-                            <template if:true={showNoResults}>
-                                <li role="presentation" class="slds-listbox__item">
+                            <template lwc:if={showNoResults}>
+                                <li role="option"
+                                    aria-disabled="true"
+                                    aria-selected="false"
+                                    class="slds-listbox__item">
                                     <div class="slds-align_absolute-center slds-p-around_small">
-                                        No matching codes found.
+                                        {noResultsMessage}
                                     </div>
                                 </li>
                             </template>
@@ -48,5 +72,9 @@
                 </div>
             </div>
         </div>
+        <template lwc:if={displayError}>
+            <div class="slds-form-element__help" role="alert">{displayError}</div>
+        </template>
+        <div aria-live="polite" aria-atomic="true" class="slds-assistive-text">{screenReaderStatus}</div>
     </div>
 </template>

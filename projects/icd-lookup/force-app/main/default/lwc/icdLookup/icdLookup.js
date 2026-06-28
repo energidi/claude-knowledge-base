@@ -1,51 +1,143 @@
-import { LightningElement, track, api } from 'lwc';
-import searchICD10 from '@salesforce/apex/ICDLookupController.searchICD10';
+import { LightningElement, api } from 'lwc';
+import searchIcd10 from '@salesforce/apex/ICDLookupController.searchIcd10';
+import getIcdLookupConfig from '@salesforce/apex/ICDLookupController.getIcdLookupConfig';
 import { FlowAttributeChangeEvent } from 'lightning/flowSupport';
 
 export default class IcdLookup extends LightningElement {
-    @track searchKey = '';
-    @track searchResults = [];
-    @track isLoading = false; // Controls the spinner
-    @api selectedCode = '';
-    
-    delayTimeout;
+    @api label;
+    @api automationApiName;
+    @api mandatory = false;
+    @api defaultValue;
+    @api tooltip;
+    @api noResultsMessage = 'No matching codes found.';
+    @api fieldPlaceholder = "Search by code or description (e.g. 'Hypertension')";
+    @api selectedCode;
+
+    searchTerm = '';
+    icdResults = [];
+    isLoading = false;
+    errorMessage = '';
+    isSelected = false;
+    validationError = '';
+    searchDebounceTimer;
+    _handleOutsideClick;
+
+    connectedCallback() {
+        this._handleOutsideClick = (event) => {
+            if (!this.template.contains(event.target)) {
+                this.icdResults = [];
+            }
+        };
+        document.addEventListener('click', this._handleOutsideClick);
+
+        if (this.defaultValue) {
+            this.selectedCode = this.defaultValue;
+            this.searchTerm = this.defaultValue;
+            this.isSelected = true;
+            this.dispatchEvent(new FlowAttributeChangeEvent('selectedCode', this.selectedCode));
+        }
+
+        if (this.automationApiName) {
+            getIcdLookupConfig({ automationApiName: this.automationApiName })
+                .then(config => {
+                    if (config) {
+                        if (config.Field_Placeholder__c) this.fieldPlaceholder = config.Field_Placeholder__c;
+                        if (config.No_Matching_Codes_Found_Message__c) this.noResultsMessage = config.No_Matching_Codes_Found_Message__c;
+                        if (config.Tooltip__c) this.tooltip = config.Tooltip__c;
+                        this.mandatory = config.Mandatory__c;
+                    }
+                })
+                .catch(error => {
+                    console.error('Config load error:', error);
+                });
+        }
+    }
+
+    disconnectedCallback() {
+        clearTimeout(this.searchDebounceTimer);
+        document.removeEventListener('click', this._handleOutsideClick);
+    }
+
+    @api validate() {
+        if (this.mandatory && !this.selectedCode) {
+            this.validationError = 'This field is required.';
+            return { isValid: false, errorMessage: this.validationError };
+        }
+        this.validationError = '';
+        return { isValid: true };
+    }
 
     get dropdownClass() {
-        // Show dropdown if there are results OR if we are explicitly showing the "No Results" message
-        return (this.searchResults.length > 0 || this.showNoResults) 
-            ? 'slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click slds-is-open' 
+        return (this.icdResults.length > 0 || this.showNoResults)
+            ? 'slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click slds-is-open'
             : 'slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click';
     }
 
+    get comboboxContainerClass() {
+        return this.isSelected ? 'slds-combobox_container selection-confirmed' : 'slds-combobox_container';
+    }
+
+    get formElementClass() {
+        return (this.validationError || this.errorMessage)
+            ? 'slds-form-element slds-has-error'
+            : 'slds-form-element';
+    }
+
     get showNoResults() {
-        return this.searchKey.length >= 3 && !this.isLoading && this.searchResults.length === 0;
+        return this.searchTerm.length >= 3 && !this.isLoading && this.icdResults.length === 0 && !this.errorMessage;
+    }
+
+    get isOpen() {
+        return this.icdResults.length > 0 || this.showNoResults;
+    }
+
+    get displayError() {
+        return this.validationError || this.errorMessage;
+    }
+
+    get screenReaderStatus() {
+        if (this.isLoading) return 'Loading results...';
+        if (this.errorMessage) return this.errorMessage;
+        if (this.showNoResults) return this.noResultsMessage;
+        if (this.icdResults.length > 0) {
+            return `${this.icdResults.length} result${this.icdResults.length === 1 ? '' : 's'} found`;
+        }
+        return '';
     }
 
     handleSearchChange(event) {
-        this.searchKey = event.target.value;
-        window.clearTimeout(this.delayTimeout);
+        this.searchTerm = event.target.value;
+        if (this.searchTerm !== this.selectedCode) {
+            this.selectedCode = '';
+            this.dispatchEvent(new FlowAttributeChangeEvent('selectedCode', ''));
+        }
+        this.errorMessage = '';
+        this.isSelected = false;
+        this.validationError = '';
+        clearTimeout(this.searchDebounceTimer);
 
-        if (this.searchKey.length >= 3) {
-            this.isLoading = true; // Start the spinner
-            this.delayTimeout = setTimeout(() => {
-                this.fetchData();
-            }, 400); // Slightly longer debounce for better API efficiency
+        if (this.searchTerm.length >= 3) {
+            this.isLoading = true;
+            this.searchDebounceTimer = setTimeout(() => {
+                this.fetchIcdResults();
+            }, 400);
         } else {
-            this.searchResults = [];
+            this.icdResults = [];
             this.isLoading = false;
         }
     }
 
-    fetchData() {
-        searchICD10({ searchTerm: this.searchKey })
+    fetchIcdResults() {
+        searchIcd10({ searchTerm: this.searchTerm })
             .then(result => {
-                this.searchResults = result;
+                this.icdResults = result;
             })
             .catch(error => {
-                console.error('Lookup Error:', error);
+                this.errorMessage = error.body?.message || 'Lookup failed. Please try again.';
+                this.icdResults = [];
             })
             .finally(() => {
-                this.isLoading = false; // Always stop the spinner
+                this.isLoading = false;
             });
     }
 
@@ -53,8 +145,10 @@ export default class IcdLookup extends LightningElement {
         const code = event.currentTarget.dataset.code;
         const desc = event.currentTarget.dataset.desc;
         this.selectedCode = `${code}: ${desc}`;
-        this.searchKey = this.selectedCode;
-        this.searchResults = [];
+        this.searchTerm = this.selectedCode;
+        this.icdResults = [];
+        this.isSelected = true;
+        this.validationError = '';
         this.dispatchEvent(new FlowAttributeChangeEvent('selectedCode', this.selectedCode));
     }
 }
