@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ISP-6429 - Salesforce DX project implementing a real-time ICD-10 code autocomplete lookup component. The component replaces free-form text entry in Salesforce Flows with a typeahead backed by the NIH Clinical Tables API. No local ICD-10 database exists - all lookups are live API callouts.
 
+**GitHub:** https://github.com/energidi/claude-knowledge-base/tree/main/projects/icd-lookup
+
+To push changes to GitHub: clone `https://github.com/energidi/claude-knowledge-base.git`, copy changed files into `projects/icd-lookup/`, then commit and push. The project does not have its own git repo - it lives as a subdirectory of that monorepo.
+
 ## Commands
 
 | Task | Command |
