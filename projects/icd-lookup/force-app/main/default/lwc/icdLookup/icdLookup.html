@@ -16,10 +16,10 @@
                 <div class={dropdownClass}
                      onkeydown={handleDropdownKeydown}
                      onfocusout={handleFocusOut}>
-                    <div class="slds-combobox__form-element" role="none">
+                    <div class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right" role="none">
                         <input
                             id="icd-input"
-                            type="search"
+                            type="text"
                             role="combobox"
                             aria-haspopup="listbox"
                             aria-expanded={isOpen}
@@ -33,6 +33,15 @@
                             placeholder={fieldPlaceholder}
                             value={searchTerm}
                             oninput={handleSearchChange}>
+                        <template lwc:if={searchTerm}>
+                            <button
+                                class="slds-button slds-button_icon slds-input__icon slds-input__icon_right"
+                                title="Clear"
+                                type="button"
+                                onclick={handleClear}>
+                                <lightning-icon icon-name="utility:clear" size="x-small" alternative-text="Clear"></lightning-icon>
+                            </button>
+                        </template>
                     </div>
                     <div class="slds-dropdown slds-dropdown_fluid">
                         <ul id="icd-listbox"

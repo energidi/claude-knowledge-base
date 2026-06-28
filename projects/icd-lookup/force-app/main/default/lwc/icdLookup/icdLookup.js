@@ -229,6 +229,18 @@ export default class IcdLookup extends LightningElement {
         }
     }
 
+    handleClear() {
+        this.searchTerm = '';
+        this.selectedCode = '';
+        this.icdResults = [];
+        this._resultsReady = false;
+        this.isSelected = false;
+        this.errorMessage = '';
+        this._dropdownDismissed = false;
+        this.dispatchEvent(new FlowAttributeChangeEvent('selectedCode', ''));
+        this.template.querySelector('input').focus();
+    }
+
     handleOptionMousedown(event) {
         event.preventDefault();
     }
