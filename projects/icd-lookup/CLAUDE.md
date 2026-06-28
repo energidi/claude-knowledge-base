@@ -86,10 +86,7 @@ Drives per-flow configuration for every `icdLookup` instance. One record per Scr
 | Tooltip | `Tooltip__c` | Text(255) | - |
 | Description | `Description__c` | LongTextArea(32768) | - |
 
-Records (in `force-app/main/default/customMetadata/`):
-- `ICD_Lookup__mdt.Community_Rare_eTRF_Page_2_Screen_Flow.md-meta.xml`
-- `ICD_Lookup__mdt.Community_Reproductive_eTRF_Page_4.md-meta.xml` (DeveloperName shortened; full API name in `Automation_API_Name__c`)
-- `ICD_Lookup__mdt.Authorization_Order_Revision_Screen_Flow.md-meta.xml`
+CMT records live in `force-app/main/default/customMetadata/`. Create one record per Screen Flow that uses the component, setting `Automation_API_Name__c` to the Flow's API name.
 
 ### Affected Flows
 

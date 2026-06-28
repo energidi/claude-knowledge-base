@@ -8,7 +8,7 @@ Last Updated: June 28, 2026 (Round 2)
 
 **Reviewer:** sf-orchestrator (Claude Code)
 **Verdict:** NO-GO → fixed (33 findings applied; test class deferred)
-**Files changed:** `ICDLookupController.cls`, `icdLookup.html`, `icdLookup.js`, `icdLookup.js-meta.xml`, `icdLookup.css` (new), plus 11 new CMT metadata files
+**Files changed:** `ICDLookupController.cls`, `icdLookup.html`, `icdLookup.js`, `icdLookup.js-meta.xml`, `icdLookup.css` (new), plus 11 new CMT object/field metadata files
 
 ### Findings Summary
 
@@ -24,7 +24,7 @@ Last Updated: June 28, 2026 (Round 2)
 
 | # | Severity | Area | Fix |
 |---|---|---|---|
-| 1 | Critical | CMT | Created `ICD_Lookup__mdt` object, 7 fields, 3 CMT records |
+| 1 | Critical | CMT | Created `ICD_Lookup__mdt` object and 7 fields |
 | 2 | Critical | LWC JS | Added `@api mandatory`, `@api validate()`, required asterisk, `validationError` state |
 | 3 | Critical | Apex/Test | **DEFERRED** - test class to be written separately |
 | 4 | Critical | LWC HTML | `fieldLabel` driven by `@api` + CMT override; `{fieldLabel}` bound in template |
@@ -88,7 +88,7 @@ Last Updated: June 28, 2026 (Round 2)
 | # | Severity | Area | Fix |
 |---|---|---|---|
 | 1 | Critical | LWC HTML + JS | Added `aria-activedescendant`, `onkeydown={handleDropdownKeydown}` on combobox div; `handleDropdownKeydown` handles ArrowDown/ArrowUp/Enter/Esc; `processedResults` getter with `optionId` and `isActive` per item; `_focusedIndex` and `activeDescendant` getter added |
-| 2 | High | Source Control | `sf project retrieve start --metadata CustomMetadata` run - CMT records pending retrieval from org |
+| 2 | High | Source Control | Retrieved `ICD_Lookup.A1.md-meta.xml` from org. The 3 flows listed in prior docs (`Community_Rare_eTRF`, `Community_Reproductive_eTRF`, `Authorization_Order_Revision`) have no CMT records - they were never created. CLAUDE.md updated to remove the stale record list. |
 | 3 | Medium | LWC JS + meta XML + Apex + CMT | `@api label = 'ICD-10 Diagnosis'` default added; `Field_Label__c.field-meta.xml` created; `Field_Label__c` added to SOQL; CMT override `if (config.Field_Label__c) this.label = config.Field_Label__c;` added |
 | 4 | Medium | LWC CSS | `.selection-confirmed` styles added: success-state border + box-shadow using SLDS token |
 | 5 | Medium | LWC JS | `_searchCompleted` flag added; set `true` in `fetchIcdResults().finally()`; reset on outside-click and `handleSearchChange`; `showNoResults` getter updated to check `_searchCompleted` |
@@ -108,6 +108,5 @@ Last Updated: June 28, 2026 (Round 2)
 | # | Finding | Reason |
 |---|---|---|
 | 3 (R1) | No Apex test class | Resolved in Round 2 finding #9 - test class created |
-| 2 (R2) | CMT records not in source | Retrieve command run - confirm files appeared in `force-app/main/default/customMetadata/` after org response |
 
 ---
