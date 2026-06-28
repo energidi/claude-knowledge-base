@@ -84,7 +84,7 @@ export default class IcdLookup extends LightningElement {
     }
 
     get showNoResults() {
-        return this.searchTerm.length >= 3 && !this.isLoading && this.icdResults.length === 0 && !this.errorMessage;
+        return this.searchTerm.length >= 3 && !this.isLoading && this.icdResults.length === 0 && !this.errorMessage && !this.isSelected;
     }
 
     get isOpen() {
