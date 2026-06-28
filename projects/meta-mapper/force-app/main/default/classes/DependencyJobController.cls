@@ -111,12 +111,12 @@ public with sharing class DependencyJobController {
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
 
         // ---- Sandbox detection: apply conservative first-install defaults when no admin
-        //      has explicitly saved settings (Custom_Settings_Saved__c = false). ----
+        //      has explicitly saved settings (Admin_Customized__c = false). ----
         // Developer Sandbox has a 200MB hard Data Storage limit. Concurrent active scans
         // can simultaneously peak storage; one at a time keeps the peak bounded.
         // These overrides apply only in memory for this job submission - CMDT is not mutated.
         Boolean sandboxOverrideActive = false;
-        if (settings.Custom_Settings_Saved__c != true) {
+        if (settings.Admin_Customized__c != true) {
             try {
                 if (isSandboxCached == null) {
                     Organization org = [SELECT IsSandbox FROM Organization LIMIT 1];
@@ -541,15 +541,7 @@ public with sharing class DependencyJobController {
      */
     @AuraEnabled
     public static Id getActiveJobId() {
-        List<Metadata_Scan_Job__c> jobs = [
-            SELECT Id
-            FROM Metadata_Scan_Job__c
-            WHERE Status__c IN ('Initializing', 'Processing')
-            WITH USER_MODE
-            ORDER BY CreatedDate ASC
-            LIMIT 1
-        ];
-        return jobs.isEmpty() ? null : jobs[0].Id;
+        return new MetadataScanJobSelector().getActiveJobId();
     }
 
     /**

@@ -48,7 +48,7 @@
         <value xsi:type="xsd:double">200</value>
     </values>
     <values>
-        <field>Custom_Settings_Saved__c</field>
+        <field>Admin_Customized__c</field>
         <value xsi:type="xsd:boolean">false</value>
     </values>
 </CustomMetadata>

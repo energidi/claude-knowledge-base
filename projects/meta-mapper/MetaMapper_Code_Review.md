@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** June 28, 2026 (Round 73 - sf-orchestrator full pass: 4 findings applied - 0 Critical, 0 High, 3 Medium, 1 Low)
+**Last Updated:** June 28, 2026 (Round 74 - sf-orchestrator full pass: 6 findings applied - 0 Critical, 0 High, 3 Medium, 3 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3913,6 +3913,17 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
 
 ---
+
+## Round 74 Fixes Applied
+
+Full sf-orchestrator review (all lenses). 6 findings applied (0 Critical, 0 High, 3 Medium, 3 Low). Overall verdict: GO.
+
+- Finding 1 (Architecture - `DependencyQueueable.cls`, Medium): Initializing→Processing status query at execute() entry used raw inline SOQL instead of the selector. Violated the SOQL-centralization rule (Pillar 5). Fixed: replaced the 3-line inline `[SELECT Status__c FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1]` block with `jobSelector.getStatusOnly(jobId)`.
+- Finding 2 (UX - `metaMapperProgress.js`, Medium): No PE inactivity watchdog existed. If PE events stopped silently mid-scan (delivery failure, org limit not yet at 80%) the component stayed on PE-mode indefinitely with no fallback. Fixed: added `_peWatchdogTimer`, `_resetPeWatchdog()`, and `_peWatchdogFired()`. Watchdog arms on mount (when not already polling), resets on every PE arrival, and fires `getJobStatus()` after 45 s of silence. If the probe returns `peSuppressionActive: true` it starts polling; otherwise resets for another 45 s. Clears when polling starts, on terminal state, or on unmount.
+- Finding 3 (Architecture - `DependencyJobController.cls` + `MetadataScanJobSelector.cls`, Medium): `getActiveJobId()` contained an inline SOQL block that bypassed the selector layer. Fixed: extracted the query to a new `getActiveJobId()` method on `MetadataScanJobSelector` (`WITH USER_MODE`, `ORDER BY CreatedDate ASC`, `LIMIT 1`); controller now delegates with a one-liner `return new MetadataScanJobSelector().getActiveJobId()`.
+- Finding 4 (Architecture - `ScanResultFileQueueable.cls`, Low): The `appendWarningToJob(String warning)` single-param overload (lines 543-562) had zero callers. All 8 call sites in the class use the two-param overload. Dead code adds confusion and inflates the class. Fixed: deleted the unreachable single-param overload.
+- Finding 5 (UX - `metaMapperProgress.js/.html`, Low): Cancel button was hidden (`lwc:if` gated by `!showTimeoutBanner`) during the 60-minute poll timeout. Spec requires the button to remain visible but disabled in this state. Fixed: removed `&& !this.showTimeoutBanner` from `showCancelButton`; added `cancelButtonDisabled` getter (`return this.cancelDisabled || this.showTimeoutBanner`); updated HTML binding to `disabled={cancelButtonDisabled}`.
+- Finding 6 (Naming - `MetaMapper_Settings__mdt`, Low): `Custom_Settings_Saved__c` field name exposed an internal engine state ("saved") rather than the user-facing concept. "Saved" implies a save action was triggered; "Admin Customized" conveys that the admin has taken ownership of these settings. Fixed: renamed to `Admin_Customized__c` in the field-meta.xml (old file deleted, new `Admin_Customized__c.field-meta.xml` written), CMDT Default record XML, `DependencyJobController.cls` references, and CLAUDE.md spec.
 
 ## Round 73 Fixes Applied
 

@@ -347,4 +347,25 @@ public without sharing class MetadataScanJobSelector {
         ];
         return rows.isEmpty() ? null : rows[0];
     }
+
+    /**
+     * Returns the ID of the first active scan job (Initializing or Processing) visible
+     * to the running user. Used by DependencyJobController.getActiveJobId() to navigate
+     * the concurrency rejection flow to the in-progress job.
+     * WITH USER_MODE respects the Private OWD on Metadata_Scan_Job__c so only the
+     * calling user's own jobs are returned.
+     *
+     * @return  Id of the first active job, or null if none exists
+     */
+    public Id getActiveJobId() {
+        List<Metadata_Scan_Job__c> jobs = [
+            SELECT Id
+            FROM Metadata_Scan_Job__c
+            WHERE Status__c IN ('Initializing', 'Processing')
+            WITH USER_MODE
+            ORDER BY CreatedDate ASC
+            LIMIT 1
+        ];
+        return jobs.isEmpty() ? null : jobs[0].Id;
+    }
 }

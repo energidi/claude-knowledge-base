@@ -67,6 +67,7 @@ export default class MetaMapperProgress extends LightningElement {
     _pollTimer = null;
     _elapsedTimer = null;
     _cancelTimeoutTimer = null;
+    _peWatchdogTimer = null;
     _cancelPhase = 'idle';
     _elapsedTick = 0;
     _resumeTimeoutTimer = null;
@@ -80,6 +81,8 @@ export default class MetaMapperProgress extends LightningElement {
         // before mount the setter could not start polling — check here.
         if (this._peSuppressionActiveProp) {
             this._startPolling();
+        } else {
+            this._resetPeWatchdog();
         }
     }
 
@@ -90,11 +93,13 @@ export default class MetaMapperProgress extends LightningElement {
         clearInterval(this._elapsedTimer);
         clearTimeout(this._cancelTimeoutTimer);
         clearTimeout(this._resumeTimeoutTimer);
+        clearTimeout(this._peWatchdogTimer);
     }
 
     @api
     handleStatusEvent(eventData) {
         if (!this._isMounted) return;
+        this._resetPeWatchdog();
         if (eventData && eventData.peSuppressionActive) {
             this._startPolling();
         }
@@ -131,8 +136,9 @@ export default class MetaMapperProgress extends LightningElement {
 
     get showStatusLabel() { return !this.isPaused && !this.showTimeoutBanner; }
     get showCancelButton() {
-        return !this.isTerminal && !this.isPaused && this._cancelPhase !== 'cancelled' && !this.showTimeoutBanner;
+        return !this.isTerminal && !this.isPaused && this._cancelPhase !== 'cancelled';
     }
+    get cancelButtonDisabled() { return this.cancelDisabled || this.showTimeoutBanner; }
 
     get showProgressBar() {
         if (!this.job) return false;
@@ -229,6 +235,7 @@ export default class MetaMapperProgress extends LightningElement {
     // --- Polling ---
 
     _startPolling() {
+        clearTimeout(this._peWatchdogTimer);
         this._stopPolling();
         // Use 5s after a successful resumeJob() call regardless of current Paused status,
         // so the Processing transition is caught quickly before the Queueable runs.
@@ -244,6 +251,35 @@ export default class MetaMapperProgress extends LightningElement {
     _stopPolling() {
         clearTimeout(this._pollTimer);
         this._pollTimer = null;
+    }
+
+    // Resets the 45-second PE inactivity watchdog. Called after every PE event arrives
+    // and on connectedCallback (when not already polling). If 45 seconds pass without a
+    // PE event the watchdog fires a one-shot getJobStatus() to detect suppression.
+    // No-op when polling is already active, PE is already suppressed, or job is terminal.
+    _resetPeWatchdog() {
+        clearTimeout(this._peWatchdogTimer);
+        if (this.isTerminal || this._peSuppressionActiveProp || this._pollTimer || !this._isMounted) return;
+        // eslint-disable-next-line @lwc/lwc/no-async-operation
+        this._peWatchdogTimer = setTimeout(() => this._peWatchdogFired(), 45000);
+    }
+
+    async _peWatchdogFired() {
+        if (!this._isMounted || this.isTerminal || this._peSuppressionActiveProp || this._pollTimer) return;
+        try {
+            const result = await getJobStatus({ jobId: this.jobId });
+            if (!this._isMounted) return;
+            this.dispatchEvent(new CustomEvent('jobstatuspolled', {
+                detail: result, bubbles: true, composed: true
+            }));
+            if (result && result.peSuppressionActive) {
+                this._startPolling();
+            } else if (this.isProcessing) {
+                this._resetPeWatchdog();
+            }
+        } catch {
+            if (this._isMounted && this.isProcessing) this._resetPeWatchdog();
+        }
     }
 
     async _poll() {

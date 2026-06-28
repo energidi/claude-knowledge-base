@@ -540,27 +540,6 @@ public without sharing class ScanResultFileQueueable implements Queueable {
         }
     }
 
-    /**
-     * Appends a warning to the completed job's Scan_Diagnostic_Log__c via a fresh query.
-     * Used from enforceRingBuffer() where the in-memory job is not in scope.
-     */
-    private void appendWarningToJob(String warning) {
-        try {
-            Metadata_Scan_Job__c job =
-                new MetadataScanJobSelector().getByIdForLogAppend(jobId);
-            if (job != null) {
-                String existing = job.Scan_Diagnostic_Log__c;
-                job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
-                    existing, warning);
-                update job;
-            }
-        } catch (Exception e) {
-            System.debug(LoggingLevel.WARN,
-                'ScanResultFileQueueable.appendWarningToJob: job update failed - '
-                + e.getMessage());
-        }
-    }
-
     // -------------------------------------------------------------------------
     // Private - failure transition
     // -------------------------------------------------------------------------
