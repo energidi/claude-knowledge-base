@@ -98,7 +98,7 @@ private class ICDLookupControllerTest {
         Test.startTest();
         ICD_Lookup__mdt config = ICDLookupController.getIcdLookupConfig('');
         Test.stopTest();
-        System.assertNull(config, 'Expected null for blank automationApiName');
+        Assert.isNull(config, 'Expected null for blank automationApiName');
     }
 
     @isTest
@@ -106,6 +106,6 @@ private class ICDLookupControllerTest {
         Test.startTest();
         ICD_Lookup__mdt config = ICDLookupController.getIcdLookupConfig('NonExistent_Flow_That_Should_Not_Exist');
         Test.stopTest();
-        System.assertNull(config, 'Expected null for unmatched API name');
+        Assert.isNull(config, 'Expected null for unmatched API name');
     }
 }

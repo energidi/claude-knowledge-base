@@ -3,7 +3,7 @@
     <apiVersion>67.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>Record Choice Selector</masterLabel>
-    <description>Renders a single-selection checkbox or radio-button group from a Salesforce record collection for use in Screen Flows. Dispatches FlowAttributeChangeEvent for selectedRecordId, outputFieldValue1, and outputFieldValue2 on selection change. Supports required validation and default value pre-selection.</description>
+    <description>Single-selection checkbox or radio group for Screen Flows. Renders a record collection as options, dispatches FlowAttributeChangeEvent on selection, and supports required validation and default value pre-selection.</description>
     <targets>
         <target>lightning__FlowScreen</target>
     </targets>
