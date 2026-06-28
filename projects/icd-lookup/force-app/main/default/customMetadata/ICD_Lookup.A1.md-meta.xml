@@ -7,7 +7,7 @@
         <value xsi:type="xsd:boolean">true</value>
     </values>
     <values>
-        <field>Automation_API_Name__c</field>
+        <field>Flow_API_Name__c</field>
         <value xsi:type="xsd:string">Gidi_ICD_10_Code_Selector_Demo_Screen_Flow</value>
     </values>
     <values>

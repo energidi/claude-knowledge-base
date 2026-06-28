@@ -4,11 +4,12 @@ public with sharing class ICDLookupController {
     public static List<ICDResult> searchIcd10(String searchTerm) {
         List<ICDResult> results = new List<ICDResult>();
 
-        if (String.isBlank(searchTerm) || searchTerm.trim().length() < 3) return results;
-        if (searchTerm.length() > 100) throw new AuraHandledException('Search term too long.');
+        String term = searchTerm.trim();
+        if (String.isBlank(term) || term.length() < 3) return results;
+        if (term.length() > 100) throw new AuraHandledException('Search term too long.');
 
         String endpoint = 'callout:NihClinicalTables/api/icd10cm/v3/search?terms='
-                          + EncodingUtil.urlEncode(searchTerm.trim(), 'UTF-8')
+                          + EncodingUtil.urlEncode(term, 'UTF-8')
                           + '&sf=code,name&maxList=10';
 
         Http http = new Http();
@@ -36,6 +37,7 @@ public with sharing class ICDLookupController {
                     String code = String.valueOf(codesList[i]);
                     String name = '';
 
+                    if (i >= tableData.size()) break;
                     if (tableData[i] instanceof List<Object>) {
                         List<Object> row = (List<Object>) tableData[i];
                         if (row.size() >= 2) {
@@ -52,14 +54,12 @@ public with sharing class ICDLookupController {
                     results.add(new ICDResult(code, name));
                 }
             } else {
-                throw new AuraHandledException(
-                    'ICD-10 service returned status ' + response.getStatusCode() + '. Please try again.'
-                );
+                throw new AuraHandledException('ICD-10 lookup failed. Please try again.');
             }
         } catch (AuraHandledException e) {
             throw e;
         } catch (Exception e) {
-            throw new AuraHandledException('Search Error: ' + e.getMessage());
+            throw new AuraHandledException('Search failed. Please try again.');
         }
 
         return results;
@@ -69,9 +69,10 @@ public with sharing class ICDLookupController {
     public static ICD_Lookup__mdt getIcdLookupConfig(String automationApiName) {
         if (String.isBlank(automationApiName)) return null;
         List<ICD_Lookup__mdt> configs = [
-            SELECT Field_Label__c, Field_Placeholder__c, No_Matching_Codes_Found_Message__c, Mandatory__c, Tooltip__c
+            SELECT DeveloperName, MasterLabel, Field_Label__c, Field_Placeholder__c,
+                   No_Matching_Codes_Found_Message__c, Mandatory__c, Tooltip__c
             FROM ICD_Lookup__mdt
-            WHERE Automation_API_Name__c = :automationApiName AND Active__c = true
+            WHERE Flow_API_Name__c = :automationApiName AND Active__c = true
             LIMIT 1
         ];
         return configs.isEmpty() ? null : configs[0];

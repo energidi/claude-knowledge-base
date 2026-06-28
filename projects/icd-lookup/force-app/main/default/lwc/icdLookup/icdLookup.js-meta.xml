@@ -3,6 +3,7 @@
     <apiVersion>67.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>ICD Lookup</masterLabel>
+    <description>Single-selection ICD-10 code typeahead for Screen Flows. Searches the NIH Clinical Tables API live; emits selectedCode in "CODE: Description" format. Configure per-flow behavior via ICD_Lookup__mdt Custom Metadata.</description>
     <targets>
         <target>lightning__FlowScreen</target>
     </targets>
@@ -12,10 +13,10 @@
             <property name="mandatory" type="Boolean" role="inputOnly" label="2. Required" default="false" description="When true, blocks Flow progression if no code is selected. Overridden by ICD_Lookup__mdt.Mandatory__c when Automation API Name is set."/>
             <property name="defaultValue" type="String" role="inputOnly" label="3. Default Value" description="Pre-populates the field with an existing ICD-10 code (e.g., from a record). Format must match the output format: CODE: Description."/>
             <property name="tooltip" type="String" role="inputOnly" label="4. Tooltip" description="Tooltip text displayed next to the field label. Overridden by ICD_Lookup__mdt.Tooltip__c when Automation API Name is set."/>
-            <property name="automationApiName" type="String" role="inputOnly" label="5. Automation API Name" description="API name of the Screen Flow using this component. Used to load configuration from the ICD_Lookup__mdt Custom Metadata Type."/>
+            <property name="flowApiName" type="String" role="inputOnly" label="5. Flow API Name" description="API name of the Screen Flow using this component. Used to load configuration from the ICD_Lookup__mdt Custom Metadata Type."/>
             <property name="noResultsMessage" type="String" role="inputOnly" label="6. No Results Message" default="No matching codes found." description="Message shown when the search returns no results. Overridden by ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c when Automation API Name is set."/>
             <property name="fieldPlaceholder" type="String" role="inputOnly" label="7. Placeholder Text" default="Search by code or description (e.g. 'Hypertension')" description="Placeholder text inside the search input. Overridden by ICD_Lookup__mdt.Field_Placeholder__c when Automation API Name is set."/>
-            <property name="selectedCode" type="String" label="Selected ICD Code" role="outputOnly"/>
+            <property name="selectedCode" type="String" label="Selected ICD Code" role="outputOnly" description="The selected ICD-10 code in CODE: Description format (e.g., I10: Essential (primary) hypertension). Populated when the user selects a result from the dropdown. Assign to a Flow variable to use downstream."/>
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>

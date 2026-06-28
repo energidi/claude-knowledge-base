@@ -50,7 +50,7 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `automationApiName` | String | `''` | API name of the host Flow. Used to load the matching `ICD_Lookup__mdt` record. |
+| `flowApiName` | String | `''` | API name of the host Flow. Used to load the matching `ICD_Lookup__mdt` record. |
 | `label` | String | `'ICD-10 Diagnosis'` | Label above the input. Overridden by `ICD_Lookup__mdt.Field_Label__c`. |
 | `fieldPlaceholder` | String | `'Search by code or description...'` | Input placeholder. Overridden by `ICD_Lookup__mdt.Field_Placeholder__c`. |
 | `noResultsMessage` | String | `'No matching codes found.'` | Message shown on zero results. Overridden by `ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c`. |
@@ -58,7 +58,7 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 | `defaultValue` | String | `''` | Pre-populates the field with an existing code (e.g. from a record). Must be in `CODE: Description` format. |
 | `tooltip` | String | `''` | Tooltip text shown via `lightning-helptext` next to the label. Overridden by `ICD_Lookup__mdt.Tooltip__c`. |
 
-**Flow screen validation:** The component implements `@api validate()`. When `mandatory` is true and `selectedCode` is empty, `validate()` returns `{ isValid: false, errorMessage: '...' }` to block navigation.
+**Flow screen validation:** The component implements `@api validate()`. When `mandatory` is true and `selectedCode` is empty, `validate()` returns `{ isValid: false, errorMessage: '<label> is required.' }` to block navigation. The error message uses the field-specific label so it is identifiable when multiple instances appear on the same screen.
 
 **Dropdown behavior:** The dropdown closes on Escape key, outside click, or Tab/focusout (keyboard navigation away). Escape clears results but retains the current `searchTerm` in the input.
 
@@ -79,8 +79,8 @@ callout:NihClinicalTables/api/icd10cm/v3/search?terms=<encoded>&sf=code,name&max
 - Returns up to 10 `ICDResult` objects with `code` and `description` fields.
 - Throws `AuraHandledException` on non-200 status or callout failure.
 
-**`getIcdLookupConfig(String automationApiName)`** - `@AuraEnabled(cacheable=true)` (SOQL only - no callout)
-Queries `ICD_Lookup__mdt` by `Automation_API_Name__c` where `Active__c = true`. Returns the matching record or `null`.
+**`getIcdLookupConfig(String flowApiName)`** - `@AuraEnabled(cacheable=true)` (SOQL only - no callout)
+Queries `ICD_Lookup__mdt` by `Flow_API_Name__c` where `Active__c = true`. Returns the matching record or `null`.
 
 **Named Credential required:** Deploy `NihClinicalTables` Named Credential (`force-app/main/default/namedCredentials/NihClinicalTables.namedCredential-meta.xml`) via `sf project deploy start` before callouts will succeed. The credential points to `https://clinicaltables.nlm.nih.gov` with no authentication (public API).
 
@@ -88,11 +88,11 @@ Queries `ICD_Lookup__mdt` by `Automation_API_Name__c` where `Active__c = true`. 
 
 `force-app/main/default/objects/ICD_Lookup__mdt/`
 
-Drives per-flow configuration for every `icdLookup` instance. One record per Screen Flow, identified by `Automation_API_Name__c`.
+Drives per-flow configuration for every `icdLookup` instance. One record per Screen Flow, identified by `Flow_API_Name__c`.
 
 | Field | API Name | Type | Default |
 |---|---|---|---|
-| Automation API Name | `Automation_API_Name__c` | Text(255) | - |
+| Flow API Name | `Flow_API_Name__c` | Text(255) | - |
 | Field Label | `Field_Label__c` | Text(255) | - |
 | Field Placeholder | `Field_Placeholder__c` | Text(255) | - |
 | No Matching Codes Found Message | `No_Matching_Codes_Found_Message__c` | Text(255) | - |
@@ -101,7 +101,7 @@ Drives per-flow configuration for every `icdLookup` instance. One record per Scr
 | Tooltip | `Tooltip__c` | Text(255) | - |
 | Description | `Description__c` | LongTextArea(32768) | - |
 
-CMT records live in `force-app/main/default/customMetadata/`. Create one record per Screen Flow that uses the component, setting `Automation_API_Name__c` to the Flow's API name.
+CMT records live in `force-app/main/default/customMetadata/`. Create one record per Screen Flow that uses the component, setting `Flow_API_Name__c` to the Flow's API name.
 
 ### Affected Flows
 

@@ -5,7 +5,7 @@ import { FlowAttributeChangeEvent } from 'lightning/flowSupport';
 
 export default class IcdLookup extends LightningElement {
     @api label = 'ICD-10 Diagnosis';
-    @api automationApiName;
+    @api flowApiName;
     @api mandatory = false;
     @api defaultValue;
     @api tooltip;
@@ -20,36 +20,55 @@ export default class IcdLookup extends LightningElement {
     isSelected = false;
     validationError = '';
     searchDebounceTimer;
-    _handleOutsideClick;
+    _outsideClickListener;
     _focusedIndex = -1;
-    _searchCompleted = false;
+    _resultsReady = false;
+    _mandatory = null;
+    _requestSeq = 0;
+    _dropdownDismissed = false;
+    _uid = `icd-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // CMT-driven mandatory overrides @api mandatory when loaded; @api mandatory is the fallback on CMT failure.
+    get isMandatory() {
+        return this._mandatory !== null ? this._mandatory : this.mandatory;
+    }
+
+    get _labelId() {
+        return `icd-label-${this._uid}`;
+    }
+
+    get ariaRequired() {
+        return this.isMandatory ? 'true' : 'false';
+    }
 
     connectedCallback() {
-        this._handleOutsideClick = (event) => {
-            if (!this.template.contains(event.target)) {
+        this._outsideClickListener = (event) => {
+            const path = event.composedPath();
+            if (!path.some(el => el === this.template.host)) {
                 this.icdResults = [];
-                this._searchCompleted = false;
+                this._resultsReady = false;
                 this._focusedIndex = -1;
             }
         };
-        document.addEventListener('click', this._handleOutsideClick);
+        document.addEventListener('click', this._outsideClickListener);
 
         if (this.defaultValue) {
             this.selectedCode = this.defaultValue;
             this.searchTerm = this.defaultValue;
             this.isSelected = true;
-            this.dispatchEvent(new FlowAttributeChangeEvent('selectedCode', this.selectedCode));
         }
 
-        if (this.automationApiName) {
-            getIcdLookupConfig({ automationApiName: this.automationApiName })
+        if (this.flowApiName) {
+            getIcdLookupConfig({ automationApiName: this.flowApiName })
                 .then(config => {
                     if (config) {
                         if (config.Field_Label__c) this.label = config.Field_Label__c;
                         if (config.Field_Placeholder__c) this.fieldPlaceholder = config.Field_Placeholder__c;
                         if (config.No_Matching_Codes_Found_Message__c) this.noResultsMessage = config.No_Matching_Codes_Found_Message__c;
                         if (config.Tooltip__c) this.tooltip = config.Tooltip__c;
-                        this.mandatory = config.Mandatory__c;
+                        if (config.Mandatory__c !== null && config.Mandatory__c !== undefined) {
+                            this._mandatory = config.Mandatory__c;
+                        }
                     }
                 })
                 .catch(error => {
@@ -61,12 +80,12 @@ export default class IcdLookup extends LightningElement {
 
     disconnectedCallback() {
         clearTimeout(this.searchDebounceTimer);
-        document.removeEventListener('click', this._handleOutsideClick);
+        document.removeEventListener('click', this._outsideClickListener);
     }
 
     @api validate() {
-        if (this.mandatory && !this.selectedCode) {
-            this.validationError = 'This field is required.';
+        if (this.isMandatory && !this.selectedCode) {
+            this.validationError = `${this.label} is required.`;
             return { isValid: false, errorMessage: this.validationError };
         }
         this.validationError = '';
@@ -78,7 +97,9 @@ export default class IcdLookup extends LightningElement {
             code: res.code,
             description: res.description,
             optionId: `icd-option-${index}`,
-            isActive: index === this._focusedIndex
+            isActive: index === this._focusedIndex,
+            isSelected: `${res.code}: ${res.description}` === this.selectedCode,
+            itemClass: `slds-listbox__item${index === this._focusedIndex ? ' slds-has-focus' : ''}`
         }));
     }
 
@@ -92,10 +113,6 @@ export default class IcdLookup extends LightningElement {
             : 'slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click';
     }
 
-    get comboboxContainerClass() {
-        return this.isSelected ? 'slds-combobox_container selection-confirmed' : 'slds-combobox_container';
-    }
-
     get formElementClass() {
         return (this.validationError || this.errorMessage)
             ? 'slds-form-element slds-has-error'
@@ -103,7 +120,7 @@ export default class IcdLookup extends LightningElement {
     }
 
     get showNoResults() {
-        return this._searchCompleted && this.searchTerm.length >= 3 && !this.isLoading && this.icdResults.length === 0 && !this.errorMessage && !this.isSelected;
+        return this._resultsReady && this.searchTerm.length >= 3 && !this.isLoading && this.icdResults.length === 0 && !this.errorMessage && !this.isSelected;
     }
 
     get isOpen() {
@@ -115,6 +132,7 @@ export default class IcdLookup extends LightningElement {
     }
 
     get screenReaderStatus() {
+        if (this._dropdownDismissed) return 'Search results dismissed.';
         if (this.isLoading) return 'Loading results...';
         if (this.errorMessage) return this.errorMessage;
         if (this.showNoResults) return this.noResultsMessage;
@@ -125,6 +143,7 @@ export default class IcdLookup extends LightningElement {
     }
 
     handleSearchChange(event) {
+        this._dropdownDismissed = false;
         this.searchTerm = event.target.value;
         if (this.searchTerm !== this.selectedCode) {
             this.selectedCode = '';
@@ -134,7 +153,7 @@ export default class IcdLookup extends LightningElement {
         this.isSelected = false;
         this.validationError = '';
         this._focusedIndex = -1;
-        this._searchCompleted = false;
+        this._resultsReady = false;
         clearTimeout(this.searchDebounceTimer);
 
         if (this.searchTerm.length >= 3) {
@@ -150,24 +169,29 @@ export default class IcdLookup extends LightningElement {
     }
 
     fetchIcdResults() {
+        this._requestSeq = (this._requestSeq ?? 0) + 1;
+        const seq = this._requestSeq;
         searchIcd10({ searchTerm: this.searchTerm })
             .then(result => {
+                if (seq !== this._requestSeq) return;
                 this.icdResults = result;
             })
-            .catch(error => {
-                this.errorMessage = error.body?.message || 'Lookup failed. Please try again.';
+            .catch(() => {
+                if (seq !== this._requestSeq) return;
+                this.errorMessage = 'Lookup failed. Please try again.';
                 this.icdResults = [];
             })
             .finally(() => {
+                if (seq !== this._requestSeq) return;
                 this.isLoading = false;
-                this._searchCompleted = true;
+                this._resultsReady = true;
             });
     }
 
     handleFocusOut(event) {
         if (!this.template.contains(event.relatedTarget)) {
             this.icdResults = [];
-            this._searchCompleted = false;
+            this._resultsReady = false;
             this._focusedIndex = -1;
         }
     }
@@ -182,7 +206,12 @@ export default class IcdLookup extends LightningElement {
                 break;
             case 'ArrowUp':
                 event.preventDefault();
-                this._focusedIndex = Math.max(this._focusedIndex - 1, 0);
+                if (this._focusedIndex <= 0) {
+                    this._focusedIndex = -1;
+                    this.template.querySelector('input').focus();
+                } else {
+                    this._focusedIndex = this._focusedIndex - 1;
+                }
                 break;
             case 'Enter':
                 event.preventDefault();
@@ -195,23 +224,29 @@ export default class IcdLookup extends LightningElement {
                 event.preventDefault();
                 this.icdResults = [];
                 this._focusedIndex = -1;
-                this._searchCompleted = false;
+                this._resultsReady = false;
+                this._dropdownDismissed = true;
                 break;
         }
     }
 
-    handleSelect(event) {
-        const code = event.currentTarget.dataset.code;
-        const desc = event.currentTarget.dataset.desc;
-        this._commitSelection(code, desc);
+    handleOptionMousedown(event) {
+        event.preventDefault();
     }
 
-    _commitSelection(code, desc) {
-        this.selectedCode = `${code}: ${desc}`;
+    handleSelect(event) {
+        const code = event.currentTarget.dataset.code;
+        const description = event.currentTarget.dataset.description;
+        this._commitSelection(code, description);
+    }
+
+    _commitSelection(code, description) {
+        this.errorMessage = '';
+        this.selectedCode = `${code}: ${description}`;
         this.searchTerm = this.selectedCode;
         this.icdResults = [];
         this._focusedIndex = -1;
-        this._searchCompleted = false;
+        this._resultsReady = false;
         this.isSelected = true;
         this.validationError = '';
         this.dispatchEvent(new FlowAttributeChangeEvent('selectedCode', this.selectedCode));

@@ -12,3 +12,6 @@ package.xml
 **/__tests__/**
 
 node_modules/
+
+# Demo/dev-only CMT record - do not deploy to production
+force-app/main/default/customMetadata/ICD_Lookup.A1.md-meta.xml

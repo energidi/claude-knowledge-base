@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Description__c</fullName>
-    <description>Internal documentation field enabling administrators to trace exactly which form, screen slot, or business requirement this specific record is intended to support. ref: ISP-6038</description>
+    <description>Internal documentation field enabling administrators to trace exactly which form, screen slot, or business requirement this specific record is intended to support. ref: ISP-6429</description>
     <externalId>false</externalId>
     <label>Description</label>
     <length>32768</length>

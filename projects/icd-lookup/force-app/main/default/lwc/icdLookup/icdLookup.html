@@ -1,8 +1,8 @@
 <template>
     <div class={formElementClass}>
         <div class="slds-form-element__label-container">
-            <label id="icd-label" class="slds-form-element__label">
-                <template lwc:if={mandatory}>
+            <label id={_labelId} class="slds-form-element__label">
+                <template lwc:if={isMandatory}>
                     <abbr class="slds-required" title="required">*</abbr>
                 </template>
                 {label}
@@ -12,28 +12,27 @@
             </template>
         </div>
         <div class="slds-form-element__control">
-            <div class={comboboxContainerClass}>
+            <div class="slds-combobox_container">
                 <div class={dropdownClass}
-                     role="combobox"
-                     aria-haspopup="listbox"
-                     aria-expanded={isOpen}
-                     aria-labelledby="icd-label"
-                     aria-owns="icd-listbox"
-                     aria-controls="icd-listbox"
-                     aria-activedescendant={activeDescendant}
                      onkeydown={handleDropdownKeydown}
                      onfocusout={handleFocusOut}>
-                    <div class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right" role="none">
-                        <lightning-input
+                    <div class="slds-combobox__form-element" role="none">
+                        <input
                             id="icd-input"
                             type="search"
-                            variant="label-hidden"
-                            label={label}
+                            role="combobox"
+                            aria-haspopup="listbox"
+                            aria-expanded={isOpen}
+                            aria-labelledby={_labelId}
+                            aria-owns="icd-listbox"
+                            aria-controls="icd-listbox"
+                            aria-activedescendant={activeDescendant}
+                            aria-autocomplete="list"
+                            aria-required={ariaRequired}
+                            class="slds-input slds-combobox__input"
                             placeholder={fieldPlaceholder}
                             value={searchTerm}
-                            required={mandatory}
-                            onchange={handleSearchChange}>
-                        </lightning-input>
+                            oninput={handleSearchChange}>
                     </div>
                     <div class="slds-dropdown slds-dropdown_fluid">
                         <ul id="icd-listbox"
@@ -42,7 +41,7 @@
                             <template lwc:if={isLoading}>
                                 <li role="presentation" class="slds-listbox__item">
                                     <div class="slds-align_absolute-center slds-p-around_medium">
-                                        <lightning-spinner alt="Loading" size="small" variant="brand"></lightning-spinner>
+                                        <lightning-spinner alt="" size="small" variant="brand"></lightning-spinner>
                                     </div>
                                 </li>
                             </template>
@@ -50,11 +49,12 @@
                                 <li key={res.code}
                                     id={res.optionId}
                                     role="option"
-                                    aria-selected={res.isActive}
-                                    class="slds-listbox__item"
+                                    aria-selected={res.isSelected}
+                                    class={res.itemClass}
+                                    onmousedown={handleOptionMousedown}
                                     onclick={handleSelect}
                                     data-code={res.code}
-                                    data-desc={res.description}>
+                                    data-description={res.description}>
                                     <span class="slds-media slds-listbox__option slds-listbox__option_plain slds-media_center">
                                         <span class="slds-media__body">
                                             <span class="slds-truncate">
@@ -66,7 +66,7 @@
                             </template>
                             <template lwc:if={showNoResults}>
                                 <li role="presentation" class="slds-listbox__item">
-                                    <div role="status" class="slds-align_absolute-center slds-p-around_small slds-text-color_error">
+                                    <div role="status" class="slds-align_absolute-center slds-p-around_small slds-text-color_weak">
                                         {noResultsMessage}
                                     </div>
                                 </li>
