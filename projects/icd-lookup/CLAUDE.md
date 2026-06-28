@@ -115,32 +115,6 @@ The component is deployed into these Screen Flows (metadata not in this repo - m
 
 ICD10-1 is mandatory for Insurance Billing. ICD10-2 through ICD10-5 are optional. Enforce this via Flow validation rules on the Flow screens, not inside the component.
 
-### Component: `recordChoiceSelector` (LWC)
-
-`force-app/main/default/lwc/recordChoiceSelector/`
-
-A Flow Screen Component that renders a single-selection checkbox or radio-button group from a Salesforce record collection. Replaces the former `checkboxRadioButton` component (renamed in Round 4 review). If any Screen Flow in the org was using `checkboxRadioButton`, it must be updated in Flow Builder before deploying this version.
-
-**Flow input properties:**
-
-| Property | Type | Default | Description |
-|---|---|---|---|
-| `inputRecords` | `{T[]}` | - | Collection of SObject records to display as options. Pass from Get Records. |
-| `displayField` | String | `'Name'` | API name of the field on input records to use as the option label. |
-| `selectionMode` | String | `'Checkbox'` | `'Radio'` for radio buttons (native single-select); `'Checkbox'` for mutual-exclusion checkboxes. |
-| `label` | String | - | Label above the group. |
-| `helpText` | String | - | Tooltip text shown via `lightning-helptext`. |
-| `isRequired` | Boolean | `false` | Blocks Flow progression if no option is selected. |
-| `defaultValue` | String | - | Record ID to pre-select on load. |
-| `outputField1ApiName` | String | - | API name of a field on the selected record to expose as `outputFieldValue1`. |
-| `outputField2ApiName` | String | - | API name of a second field to expose as `outputFieldValue2`. |
-
-**Flow output properties:** `selectedRecordId`, `outputFieldValue1`, `outputFieldValue2`
-
-**Flow screen validation:** `@api validate()` blocks navigation when `isRequired=true` and no record is selected. Returns `{ isValid: false, errorMessage: 'Please make a selection to continue.' }`.
-
-**Former property names (pre-Round 4):** `styleOption` → `selectionMode`, `field1API` → `outputField1ApiName`, `field2API` → `outputField2ApiName`, `outputValue1` → `outputFieldValue1`, `outputValue2` → `outputFieldValue2`.
-
 ---
 
 ## Salesforce Config
