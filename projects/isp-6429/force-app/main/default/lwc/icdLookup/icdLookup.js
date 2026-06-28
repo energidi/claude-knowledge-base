@@ -4,14 +4,13 @@ import getIcdLookupConfig from '@salesforce/apex/ICDLookupController.getIcdLooku
 import { FlowAttributeChangeEvent } from 'lightning/flowSupport';
 
 export default class IcdLookup extends LightningElement {
-    @api selectedCode = '';
-    @api defaultValue = '';
-    @api automationApiName = '';
-    @api fieldLabel = 'ICD-10 Diagnosis';
-    @api fieldPlaceholder = 'Search by code or description...';
-    @api noResultsMessage = 'No matching codes found.';
+    @api fieldLabel;
+    @api automationApiName;
     @api mandatory = false;
-    @api fieldId = '';
+    @api defaultValue;
+    @api noResultsMessage = 'No matching codes found.';
+    @api fieldPlaceholder = 'Search by code or description...';
+    @api selectedCode;
 
     searchTerm = '';
     icdResults = [];
