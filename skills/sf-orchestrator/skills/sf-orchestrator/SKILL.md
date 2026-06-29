@@ -21,7 +21,7 @@ Before doing anything else, create a TodoWrite checklist with exactly these task
 
 ```
 Phase 0: Prior round deduplication
-Phase 1: Parallel review (all 5 lenses)
+Phase 1: Parallel review (all 4 lenses)
 Phase 2: Present combined findings table + wait for user approval
 Phase 3: Apply approved fixes
 Phase 4: Update MD files (MetaMapper_Code_Review.md + MetaMapper_Technical_Design.md + CLAUDE.md)
@@ -52,17 +52,16 @@ Write `PHASE 0 COMPLETE` before proceeding.
 
 ---
 
-## Phase 1: Parallel Review (Run all 5 lenses simultaneously)
+## Phase 1: Parallel Review (Run all 4 lenses simultaneously)
 
-Dispatch all five review lenses **in parallel** in a single message using the Skill tool:
+Dispatch all four review lenses **in parallel** in a single message using the Skill tool:
 
 1. `sf-review:sf-review-architecture` - 6 pillars: data model, security, async/limits, integration, queries, failure handling
 2. `sf-review:sf-review-ux` - 7 UX categories: states, accessibility, responsive, interaction, feedback, sync, copy
 3. `sf-review:sf-review-naming` - 8 violation categories: V-01 through V-08
-4. `sf-review:sf-review-design` - full orchestrator producing master findings table and GO/NO-GO verdict
-5. `sf-review:sf-review-security` - 10 security domains: authentication, authorization, Apex code, frontend, API/integrations, data privacy, org config, automation/email, monitoring/DevSecOps, emerging threats
+4. `sf-review:sf-review-security` - 10 security domains: authentication, authorization, Apex code, frontend, API/integrations, data privacy, org config, automation/email, monitoring/DevSecOps, emerging threats
 
-Wait for all five to complete before proceeding to Phase 2.
+Wait for all four to complete before proceeding to Phase 2.
 
 **Input detection:** Read CLAUDE.md, any open IDE file, or scan the codebase via Glob + Grep. All four lenses run against the same input source.
 
@@ -210,7 +209,7 @@ Write `PHASE 5 COMPLETE` after a successful push.
 - Write `PHASE <N> COMPLETE` at the end of every phase before moving to the next.
 - Do NOT write `TASK COMPLETE` until all six phases are marked complete.
 - Always run Phase 0 first. Never skip prior round deduplication.
-- Run all five review lenses in parallel. Never skip one.
+- Run all four review lenses in parallel. Never skip one.
 - Never apply fixes before showing the findings table and asking the user.
 - Apply every severity level that the user approved - never silently drop a finding.
 - Verify every fix against the actual source file - not from memory.
