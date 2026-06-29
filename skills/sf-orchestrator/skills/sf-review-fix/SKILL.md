@@ -1,6 +1,6 @@
 ---
 name: sf-review-fix
-description: Full Salesforce review-and-fix orchestrator. Runs all 4 sf-review skills in parallel, then applies EVERY finding (Critical through Low), verifies each fix against source files, updates review doc and versioning, and blocks GitHub push until user explicitly approves. Use when user says "review and fix", "fix all", "apply all fixes", or runs /sf-review-fix.
+description: Full Salesforce review-and-fix orchestrator. Runs all 5 sf-review skills in parallel, then applies EVERY finding (Critical through Low), verifies each fix against source files, updates review doc and versioning, and blocks GitHub push until user explicitly approves. Use when user says "review and fix", "fix all", "apply all fixes", or runs /sf-review-fix.
 allowed-tools: Read, Glob, Grep, Edit, Write
 metadata:
   author: Gidi Abramovich
@@ -17,14 +17,15 @@ This skill has two phases. Never mix them. Never skip either.
 
 ## Phase 1: Parallel Review
 
-Dispatch all four review lenses **simultaneously** as parallel agents:
+Dispatch all five review lenses **simultaneously** as parallel agents:
 
 1. `sf-review:sf-review-architecture` - 6 pillars: data model, security, async/limits, integration, queries, failure handling
 2. `sf-review:sf-review-ux` - 7 UX categories: states, accessibility, responsive, interaction, feedback, sync, copy
 3. `sf-review:sf-review-naming` - 8 violation categories: V-01 through V-08
 4. `sf-review:sf-review-design` - full orchestrator producing master findings table and GO/NO-GO verdict
+5. `sf-review:sf-review-security` - 10 security domains: authentication, authorization, Apex code, frontend, API/integrations, data privacy, org config, automation/email, monitoring/DevSecOps, emerging threats
 
-Wait for all four agents to complete before proceeding.
+Wait for all five agents to complete before proceeding.
 
 Produce a consolidated findings table:
 
@@ -79,7 +80,7 @@ Wait for explicit approval. Never push automatically.
 
 ## Rules
 
-- Run all four review lenses. Never skip one.
+- Run all five review lenses. Never skip one.
 - Apply every severity level. Never stop at Critical/High.
 - Verify every fix against the actual source file - not from memory.
 - Never assert a root cause or claim a fix is applied without citing the file and line.
