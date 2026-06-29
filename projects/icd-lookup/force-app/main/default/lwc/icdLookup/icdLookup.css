@@ -3,6 +3,10 @@
     align-items: center;
 }
 
+.no-results-message {
+    color: #c23934;
+}
+
 .slds-listbox__option {
     min-height: 2.75rem;
     padding: 0.5rem 1rem;
