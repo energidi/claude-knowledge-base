@@ -24,7 +24,7 @@ Determine what to audit from context:
 - **Design document open in IDE**: audit all component names found in that file.
 - **CLAUDE.md present in project**: audit all names referenced there.
 - **User pastes a list of names**: audit that list directly.
-- **Codebase**: use Glob + Grep to discover all metadata names from `*.cls`, `*.object-meta.xml`, `*.field-meta.xml`, `*.event-meta.xml`, `*-meta.xml`, `*.js`, `*.html`.
+- **Codebase**: use Glob + Grep to discover all metadata names from `*.cls`, `*.trigger`, `*.object-meta.xml`, `*.field-meta.xml`, `*.event-meta.xml`, `*.flow-meta.xml`, `*.validationRule-meta.xml`, `*-meta.xml`, `*.js`, `*.html`.
 
 If input is ambiguous, read the project CLAUDE.md and any open IDE file first, then proceed.
 
@@ -65,6 +65,45 @@ Consult `references/naming-standards.md` for the full ruleset.
 - Object name describes the event, not the internal system (Dependency_Scan_Status__e not Dependency_Status__e)
 - Fields follow same rules as custom object fields
 
+**Boolean Fields**
+- Must use Is, Has, or Can prefix (IsActive__c, HasChildren__c, CanEdit__c)
+- Bare adjectives are violations: Active__c, Children__c, Editable__c
+
+**Flows**
+- Name describes the business process, not the Flow type or trigger mechanism (CustomerOnboarding not ScreenFlow1, UpdateRecords, or AutoFlow)
+- No generic suffixes: Flow1, AutoFlow, UpdateRecords
+- Variable names: camelCase, descriptive - no var1, record, temp
+- Element labels: action-oriented and user-readable
+
+**Apex Triggers**
+- One trigger per object: ObjectNameTrigger (singular object name, e.g. AccountTrigger)
+- No business logic in the trigger body - logic belongs in a handler class
+- Trigger name must not describe the action: AccountTrigger not AccountUpdater or ProcessAccount
+
+**Validation Rules**
+- Name describes the business rule being enforced, not the check mechanism
+- No generic names: Check_1, Rule_Validation, Validate_Field
+- Example: Prevent_Closed_Won_Without_Amount not Amount_Check
+
+**Apex Members (Methods, Variables, Constants)**
+- Methods: camelCase, verb-first (getAccounts, calculateTotal, validateAddress)
+- Boolean variables/methods: question-style prefix (isActive, hasPermission, canEdit)
+- Constants (final static): UPPER_SNAKE_CASE (MAX_RESULTS, DEFAULT_TIMEOUT)
+- Test classes: ClassNameTest suffix (ICDLookupControllerTest not ICDLookupTest or TestICDLookup)
+
+**LWC Events**
+- Event name describes what happened, not the implementation trigger (userSaved not saveButtonClicked)
+- Custom events: lowercase kebab-case (user-saved, record-selected)
+
+**Permission Sets**
+- Persona-based: Persona_Sales_Manager, Persona_Community_User
+- Feature-based: Feature_Bypass_Validations, Feature_ICD_Lookup_Access
+- No generic names: Custom_Perms_1, New_Permission_Set, Extra_Access
+
+**Custom Labels**
+- Key reflects the label's purpose using underscore-separated context: Common_Save_Button, Error_Required_Field_Missing
+- No generic keys: WarningMessage1, LabelText, String1
+
 ---
 
 ## Description Standards (Non-Negotiable)
@@ -82,6 +121,11 @@ Required content per type:
 | Platform Event | When it is published. What subscribers should do with it. |
 | CMDT | What the setting controls. The effect of changing it. Recommended range or default. |
 | Permission Set | Who should be assigned it. What access it grants. When it is required (e.g. post-install). |
+| Flow | Entry criteria. Objects it reads or updates. Exit criteria. Whether it bypasses any validation or trigger logic. |
+| Validation Rule | Business rationale for the rule. Conditions that trigger the error. Error message shown. |
+| Apex Method (public/global) | What it does. Meaning of each parameter. Return value. Side effects or DML/callout behavior. |
+| Apex Trigger | Handler class it delegates to. Objects it processes. Active contexts (before insert, after update, etc.). |
+| Custom Label | Where it appears in the UI or logic. Language or audience context if not English-only. |
 
 Banned descriptions (automatic violation):
 - "Stores data"
