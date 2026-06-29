@@ -2,8 +2,6 @@ import { LightningElement, api } from 'lwc';
 import searchIcd10 from '@salesforce/apex/ICDLookupController.searchIcd10';
 import getIcdLookupConfig from '@salesforce/apex/ICDLookupController.getIcdLookupConfig';
 import { FlowAttributeChangeEvent } from 'lightning/flowSupport';
-import labelPlaceholderDefault from '@salesforce/label/c.ICD_Lookup_Placeholder_Default';
-import labelNoResultsDefault from '@salesforce/label/c.ICD_Lookup_No_Results_Default';
 import labelSearchFailed from '@salesforce/label/c.ICD_Lookup_Error_Search_Failed';
 import labelConfigLoadFailed from '@salesforce/label/c.ICD_Lookup_Error_Config_Load_Failed';
 import labelValidationRequired from '@salesforce/label/c.ICD_Lookup_Validation_Required';
@@ -23,8 +21,8 @@ export default class IcdLookup extends LightningElement {
     @api mandatory = false;
     @api defaultValue;
     @api helpText;
-    @api noResultsMessage = labelNoResultsDefault;
-    @api fieldPlaceholder = labelPlaceholderDefault;
+    @api noResultsMessage = 'No matching codes found.';
+    @api fieldPlaceholder = "Search by code or description (e.g. 'Hypertension')";
     @api selectedCode;
 
     labels = {

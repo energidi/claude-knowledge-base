@@ -33,14 +33,6 @@
         <value>Type at least 3 characters to search.</value>
     </labels>
     <labels>
-        <fullName>ICD_Lookup_No_Results_Default</fullName>
-        <categories>ISP-6429, ICD Lookup</categories>
-        <language>en_US</language>
-        <protected>false</protected>
-        <shortDescription>ICD Lookup - Default no-results message</shortDescription>
-        <value>No matching codes found.</value>
-    </labels>
-    <labels>
         <fullName>ICD_Lookup_Retry</fullName>
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
@@ -95,14 +87,6 @@
         <protected>false</protected>
         <shortDescription>ICD Lookup - Visible slow-search indicator text shown after 5 seconds</shortDescription>
         <value>Still searching...</value>
-    </labels>
-    <labels>
-        <fullName>ICD_Lookup_Placeholder_Default</fullName>
-        <categories>ISP-6429, ICD Lookup</categories>
-        <language>en_US</language>
-        <protected>false</protected>
-        <shortDescription>ICD Lookup - Default input placeholder text</shortDescription>
-        <value>Search by code or description (e.g. &apos;Hypertension&apos;)</value>
     </labels>
     <labels>
         <fullName>ICD_Lookup_Validation_Required</fullName>

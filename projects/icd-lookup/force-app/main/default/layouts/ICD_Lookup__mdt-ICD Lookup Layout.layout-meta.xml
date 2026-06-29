@@ -43,7 +43,7 @@
             </layoutItems>
             <layoutItems>
                 <behavior>Edit</behavior>
-                <field>Tooltip__c</field>
+                <field>Help_Text__c</field>
             </layoutItems>
             <layoutItems>
                 <behavior>Edit</behavior>
