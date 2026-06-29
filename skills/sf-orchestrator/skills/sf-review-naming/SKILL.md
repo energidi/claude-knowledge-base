@@ -162,7 +162,7 @@ VIOLATIONS: <N total>  |  Names: <N>  |  Descriptions: <N>
 FINDINGS:
 ```
 
-Then a table with columns: `#` | `Component` | `Current Name` | `Violation` | `Proposed Name` | `Reason`
+Then a table with columns: `#` | `Component` | `Current Name` | `Violation` | `Evidence (file:line)` | `Proposed Name` | `Reason`
 
 Then a separate table for description violations: `#` | `Component` | `Current Description` | `Required Content Missing`
 
@@ -198,6 +198,7 @@ All components carry meaningful descriptions.
 ## Rules
 
 - Challenge every name. Do not assume a name is correct because it has been used before.
+- Every finding must cite the exact file path and line number in the Evidence column. Never flag a name you cannot point to in the code or metadata.
 - Reject the design as INCOMPLETE if any naming or description violation exists.
 - Do not suggest "consider renaming" - always produce the exact proposed replacement.
 - If a rename cascades (e.g. renaming an object means renaming its fields), note all cascades.

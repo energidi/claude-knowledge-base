@@ -223,7 +223,7 @@ VERDICT: GO / NO-GO
 FINDINGS: <N total>  |  Critical: <N>  |  High: <N>  |  Medium: <N>  |  Low: <N>
 ```
 
-Then a findings table: `#` | `Domain` | `Severity` | `Issue` | `Exact Fix`
+Then a findings table: `#` | `Domain` | `Severity` | `Issue` | `Evidence (file:line or config path)` | `Exact Fix`
 
 Then:
 
@@ -251,6 +251,7 @@ All 10 security domains pass. Design meets the required security baseline.
 - Always produce the exact fix — never "consider fixing" language.
 - A single Critical finding = NO-GO verdict. The org or package cannot ship.
 - Do not flag things that are correct — only flag real violations with evidence from the code or config.
+- Every finding must cite the exact file path and line number (or config path) in the Evidence column. Never include a finding you cannot point to in the code or config. Never assert "known limitation" without a doc reference.
 - For Salesforce projects: every domain check applies. For non-Salesforce: omit Salesforce-specific sub-checks but apply all general checks.
 - Do not repeat findings already addressed in the design (check Known Limitations section if present).
 - Consult `references/security-domains.md` for the complete 45-domain checklist when a domain warrants a deeper dive.

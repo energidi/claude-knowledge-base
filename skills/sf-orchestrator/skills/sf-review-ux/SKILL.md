@@ -279,7 +279,7 @@ VERDICT: GO / NO-GO
 FINDINGS: <N total>  |  Critical: <N>  |  High: <N>  |  Medium: <N>  |  Low: <N>
 ```
 
-Then a findings table: `#` | `Category` | `Severity` | `Issue` | `Exact Fix`
+Then a findings table: `#` | `Category` | `Severity` | `Issue` | `Evidence (file:line or spec section)` | `Exact Fix`
 
 Then:
 
@@ -309,3 +309,4 @@ All 16 UX categories pass. Specification is complete.
 - Do not flag nitpicks - only flag real gaps in the specification.
 - For Salesforce projects: check SLDS compliance (lightning-* components, SLDS tokens, empApi patterns).
 - "Not specified" is always a finding - a missing state is a defect, not an assumption.
+- Every finding must cite the exact file path and line number (or spec section) in the Evidence column. Never include a finding you cannot point to in the code or spec.
