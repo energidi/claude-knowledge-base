@@ -177,7 +177,7 @@ export default class IcdLookup extends LightningElement {
             })
             .catch(() => {
                 if (seq !== this._requestSeq) return;
-                this.errorMessage = 'Lookup failed. Please try again.';
+                this.errorMessage = 'Could not retrieve results. Please try again.';
                 this.icdResults = [];
             })
             .finally(() => {
