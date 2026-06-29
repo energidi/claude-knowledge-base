@@ -9,7 +9,7 @@
     </targets>
     <targetConfigs>
         <targetConfig targets="lightning__FlowScreen">
-            <property name="label" type="String" role="inputOnly" label="1. Label" description="Label text displayed above the ICD-10 search input."/>
+            <property name="label" type="String" role="inputOnly" label="1. Label" default="" description="Label text displayed above the ICD-10 search input."/>
             <property name="mandatory" type="Boolean" role="inputOnly" label="2. Required" default="false" description="When true, blocks Flow progression if no code is selected. Overridden by ICD_Lookup__mdt.Required__c when Flow API Name is set."/>
             <property name="defaultValue" type="String" role="inputOnly" label="3. Default Value" description="Pre-populates the field with an existing ICD-10 code (e.g., from a record). Format must match the output format: CODE: Description."/>
             <property name="tooltip" type="String" role="inputOnly" label="4. Tooltip" description="Tooltip text displayed next to the field label. Overridden by ICD_Lookup__mdt.Tooltip__c when Automation API Name is set."/>
