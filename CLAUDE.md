@@ -78,6 +78,38 @@ Before running `sf project deploy start`, verify all of:
 - **CMDT field renames or deletions**: if a Custom Metadata field was renamed or removed, deploy the updated object metadata first or the field reference will fail.
 - **Active Flow versions**: if the deploy includes a Flow, check that no active version in the org references a component being removed or renamed. Deactivate the old version first if needed.
 - **Named Credential `<name>` element**: the `<name>` element must exactly match the credential's API name. A mismatch causes a parsing failure that is not always obvious from the error message.
+- **Undeployed metadata**: confirm all changed files are included in the deploy set. Source tracking gaps can leave metadata stuck in an undeployed state.
+
+If a deploy fails: read the exact CLI error output, identify which check above it maps to, and fix before retrying. Never retry blind.
+
+---
+
+# Environment
+
+This is a Windows 11 environment. PowerShell is the primary shell.
+
+- Hook commands in `settings.json` must use PowerShell syntax or be invoked via `powershell -Command` / `powershell -File`. Do not propose hooks that assume `bash`, `python3`, or Unix paths without first verifying those runtimes are available.
+- Before proposing any hook, script, or automated command: verify it works on Windows/PowerShell, not Linux defaults.
+
+---
+
+# Git & Sync
+
+Before pushing to GitHub or editing any CLAUDE.md:
+- Read the target GitHub repo URL and local clone path from the **project's** CLAUDE.md. Never use a URL from memory.
+- Confirm out loud which exact file you are editing (global `~/.claude/CLAUDE.md` vs project `CLAUDE.md`) before making any change.
+- Never treat a push as still pending without first running `git log` on the local clone to verify the commit is not already there.
+- `git pull --rebase` before every push to avoid divergence.
+
+---
+
+# Salesforce Deployment
+
+Before running `sf project deploy start`, verify all of:
+- **js-meta.xml defaults**: any `@api` property with a default value must also have a matching `<defaultValue>` in the component's `js-meta.xml` - Flow Builder reads the meta file, not the JS.
+- **CMDT field renames or deletions**: if a Custom Metadata field was renamed or removed, deploy the updated object metadata first or the field reference will fail.
+- **Active Flow versions**: if the deploy includes a Flow, check that no active version in the org references a component being removed or renamed. Deactivate the old version first if needed.
+- **Named Credential `<name>` element**: the `<name>` element must exactly match the credential's API name. A mismatch causes a parsing failure that is not always obvious from the error message.
 - **Undeployed metadata**: confirm all changed files are included in the deploy set. Source tracking gaps can leave orange-dot metadata stuck in an undeployed state.
 
 If a deploy fails: read the exact CLI error output, identify which check above it maps to, and fix before retrying. Never retry blind.
