@@ -6,7 +6,7 @@
         <language>en_US</language>
         <protected>false</protected>
         <shortDescription>ICD Lookup - Config load failure warning</shortDescription>
-        <value>Field configuration could not be loaded.</value>
+        <value>Field configuration could not be loaded. Refresh the page to retry.</value>
     </labels>
     <labels>
         <fullName>ICD_Lookup_Error_Search_Failed</fullName>

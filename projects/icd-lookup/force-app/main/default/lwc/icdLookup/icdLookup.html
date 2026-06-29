@@ -60,6 +60,11 @@
                                     </div>
                                 </li>
                             </template>
+                            <template lwc:if={searchSlowWarning}>
+                                <li role="presentation" class="slds-listbox__item">
+                                    <div class="slds-align_absolute-center slds-p-around_x-small slds-text-color_weak">Still searching...</div>
+                                </li>
+                            </template>
                             <template for:each={processedResults} for:item="res">
                                 <li key={res.code}
                                     id={res.optionId}
@@ -91,8 +96,17 @@
                 </div>
             </div>
         </div>
-        <template lwc:if={displayError}>
-            <div class="slds-form-element__help" role="alert">{displayError}</div>
+        <template lwc:if={showMinCharHint}>
+            <p class="slds-form-element__help">Type at least 3 characters to search.</p>
+        </template>
+        <template lwc:if={validationError}>
+            <div class="slds-form-element__help" role="alert">{validationError}</div>
+        </template>
+        <template lwc:if={searchError}>
+            <div class="slds-form-element__help slds-grid slds-grid_align-spread" role="alert">
+                <span>{searchError}</span>
+                <button class="slds-button slds-button_neutral slds-m-left_x-small" type="button" onclick={handleRetry}>Retry</button>
+            </div>
         </template>
         <div aria-live="polite" aria-atomic="true" class="slds-assistive-text">{screenReaderStatus}</div>
     </div>

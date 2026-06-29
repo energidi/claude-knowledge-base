@@ -26,12 +26,13 @@ export default class IcdLookup extends LightningElement {
     isSelected = false;
     validationError = '';
     searchDebounceTimer;
-    _outsideClickListener;
     _focusedIndex = -1;
     _resultsReady = false;
     _mandatory = null;
     _requestSeq = 0;
     _dropdownDismissed = false;
+    _searchIsSlow = false;
+    _slowSearchTimer;
     _uid = `icd-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     // CMT-driven mandatory overrides @api mandatory when loaded; @api mandatory is the fallback on CMT failure.
@@ -48,16 +49,6 @@ export default class IcdLookup extends LightningElement {
     }
 
     connectedCallback() {
-        this._outsideClickListener = (event) => {
-            const path = event.composedPath();
-            if (!path.some(el => el === this.template.host)) {
-                this.icdResults = [];
-                this._resultsReady = false;
-                this._focusedIndex = -1;
-            }
-        };
-        document.addEventListener('click', this._outsideClickListener);
-
         if (this.defaultValue) {
             this.selectedCode = this.defaultValue;
             this.searchTerm = this.defaultValue;
@@ -84,7 +75,7 @@ export default class IcdLookup extends LightningElement {
 
     disconnectedCallback() {
         clearTimeout(this.searchDebounceTimer);
-        document.removeEventListener('click', this._outsideClickListener);
+        clearTimeout(this._slowSearchTimer);
     }
 
     @api validate() {
@@ -135,6 +126,14 @@ export default class IcdLookup extends LightningElement {
         return this.validationError || this.searchError;
     }
 
+    get showMinCharHint() {
+        return this.searchTerm.length > 0 && this.searchTerm.length < 3;
+    }
+
+    get searchSlowWarning() {
+        return this._searchIsSlow && this.isLoading;
+    }
+
     get screenReaderStatus() {
         if (this._dropdownDismissed) return 'Search results dismissed.';
         if (this.isLoading) return 'Loading results...';
@@ -175,6 +174,11 @@ export default class IcdLookup extends LightningElement {
     fetchIcdResults() {
         this._requestSeq = (this._requestSeq ?? 0) + 1;
         const seq = this._requestSeq;
+        this._slowSearchTimer = setTimeout(() => {
+            if (seq === this._requestSeq && this.isLoading) {
+                this._searchIsSlow = true;
+            }
+        }, 5000);
         searchIcd10({ searchTerm: this.searchTerm })
             .then(result => {
                 if (seq !== this._requestSeq) return;
@@ -187,9 +191,19 @@ export default class IcdLookup extends LightningElement {
             })
             .finally(() => {
                 if (seq !== this._requestSeq) return;
+                clearTimeout(this._slowSearchTimer);
+                this._searchIsSlow = false;
                 this.isLoading = false;
                 this._resultsReady = true;
             });
+    }
+
+    handleRetry() {
+        if (this.searchTerm.length >= 3) {
+            this.searchError = '';
+            this.isLoading = true;
+            this.fetchIcdResults();
+        }
     }
 
     handleFocusOut(event) {

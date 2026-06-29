@@ -19,6 +19,22 @@ private class ICDLookupControllerTest {
         }
     }
 
+    private class MockHttpRetrySuccess implements HttpCalloutMock {
+        private Integer callCount = 0;
+        public HttpResponse respond(HttpRequest req) {
+            callCount++;
+            HttpResponse res = new HttpResponse();
+            if (callCount == 1) {
+                res.setStatusCode(503);
+                res.setStatus('Service Unavailable');
+            } else {
+                res.setStatusCode(200);
+                res.setBody('[2, ["A001", "I10"], null, [["A001", "Cholera due to Vibrio cholerae 01, biovar cholerae"], ["I10", "Essential (primary) hypertension"]]]');
+            }
+            return res;
+        }
+    }
+
     private class MockHttpError implements HttpCalloutMock {
         public HttpResponse respond(HttpRequest req) {
             HttpResponse res = new HttpResponse();
@@ -80,6 +96,15 @@ private class ICDLookupControllerTest {
     }
 
     @isTest
+    static void testSearchRetries5xx() {
+        Test.setMock(HttpCalloutMock.class, new MockHttpRetrySuccess());
+        Test.startTest();
+        List<ICDLookupController.ICDResult> results = ICDLookupController.searchIcd10('hypertension');
+        Test.stopTest();
+        System.assertEquals(2, results.size(), 'Expected results after 5xx retry');
+    }
+
+    @isTest
     static void testNon200ResponseThrows() {
         Test.setMock(HttpCalloutMock.class, new MockHttpError());
         Boolean exceptionThrown = false;
@@ -102,18 +127,18 @@ private class ICDLookupControllerTest {
     }
 
     @isTest
-    static void testGetConfigReturnsNullForNoMatch() {
-        Test.startTest();
-        ICD_Lookup__mdt config = ICDLookupController.getIcdLookupConfig('NonExistent_Flow_That_Should_Not_Exist');
-        Test.stopTest();
-        Assert.isNull(config, 'Expected null for unmatched API name');
-    }
-
-    @isTest
     static void testGetConfigReturnsNullForUnrecognizedApiName() {
         Test.startTest();
         ICD_Lookup__mdt config = ICDLookupController.getIcdLookupConfig('__No_Such_Flow_XYZ_Test__');
         Test.stopTest();
         Assert.isNull(config, 'Expected null for unrecognized Flow API name');
+    }
+
+    @isTest
+    static void testSearchNullReturnsEmpty() {
+        Test.startTest();
+        List<ICDLookupController.ICDResult> results = ICDLookupController.searchIcd10(null);
+        Test.stopTest();
+        System.assert(results.isEmpty(), 'Expected empty results for null search term');
     }
 }

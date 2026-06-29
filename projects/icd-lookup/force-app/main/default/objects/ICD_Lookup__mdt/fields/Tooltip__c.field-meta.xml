@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Tooltip__c</fullName>
-    <description>Tooltip text displayed next to the field label via lightning-helptext, providing additional context to the Flow user. Leave blank for no tooltip. When Automation API Name is set, this value overrides the Tooltip input property on the LWC. ref: ISP-6429</description>
+    <description>Tooltip text displayed next to the field label via lightning-helptext, providing additional context to the Flow user. Leave blank for no tooltip. When Flow API Name is set, this value overrides the Tooltip input property on the LWC. ref: ISP-6429</description>
     <externalId>false</externalId>
     <label>Tooltip</label>
     <length>255</length>

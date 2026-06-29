@@ -34,7 +34,12 @@ public with sharing class ICDLookupController {
         request.setTimeout(10000);
 
         try {
-            HttpResponse response = http.send(request);
+            HttpResponse response;
+            try {
+                response = http.send(request);
+            } catch (System.CalloutException ce) {
+                response = http.send(request);
+            }
             if (response.getStatusCode() >= 500) {
                 response = http.send(request);
             }
@@ -102,6 +107,7 @@ public with sharing class ICDLookupController {
         return configs.isEmpty() ? null : configs[0];
     }
 
+    /** Lightweight DTO returned by searchIcd10. Contains the ICD-10 code and its human-readable description. */
     public class ICDResult {
         @AuraEnabled public String code;
         @AuraEnabled public String description;

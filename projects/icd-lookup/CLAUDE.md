@@ -60,7 +60,9 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 
 **Flow screen validation:** The component implements `@api validate()`. When `mandatory` is true and `selectedCode` is empty, `validate()` returns `{ isValid: false, errorMessage: '<label> is required.' }` to block navigation. The error message uses the field-specific label so it is identifiable when multiple instances appear on the same screen.
 
-**Dropdown behavior:** The dropdown closes on Escape key, outside click, or Tab/focusout (keyboard navigation away). Escape clears results but retains the current `searchTerm` in the input.
+**Dropdown behavior:** The dropdown closes on Escape key or Tab/focusout. Clicking outside the component causes the input to lose focus (focusout fires), which also closes the dropdown. The component does not use `document.addEventListener` - all close logic is handled via `onfocusout` on the dropdown container. Escape clears results but retains the current `searchTerm` in the input.
+
+**Search UX:** A hint "Type at least 3 characters to search." is shown when the input contains 1-2 characters. After a failed search, a Retry button appears alongside the error message. If a search takes longer than 5 seconds, a "Still searching..." indicator appears below the spinner.
 
 **CMT config load failure:** If `getIcdLookupConfig` fails, a warning banner (`slds-notify_alert slds-theme_warning`) is displayed above the field and the component falls back to the `@api` property defaults set in Flow Properties. **Flow builders must set the `mandatory` property in Flow Properties as a fallback** - if CMT load fails and mandatory was only set via CMT, the field will not be required.
 
@@ -75,10 +77,10 @@ callout:NihClinicalTables/api/icd10cm/v3/search?terms=<encoded>&sf=code,name&max
 ```
 - Searches by both code and name (`sf=code,name`).
 - Guards: null/blank/< 3 chars returns empty list; > 100 chars throws. Timeout: 10 seconds.
-- One automatic retry on HTTP 5xx before throwing.
+- One automatic retry on HTTP 5xx or transient timeout (`System.CalloutException`) before throwing.
 - Response structure parsed: `[TotalCount, Codes[], null, [[Code, Name], ...]]`
 - Returns up to 10 `ICDResult` objects with `code` and `description` fields.
-- Throws `AuraHandledException` on non-200 status (after retry) or callout failure.
+- Throws `AuraHandledException` on non-200 status (after retry) or callout failure after retry.
 
 **`getIcdLookupConfig(String flowApiName)`** - `@AuraEnabled(cacheable=true)` (SOQL only - no callout)
 Queries `ICD_Lookup__mdt` by `Flow_API_Name__c` where `Active__c = true`. Returns the matching record or `null`.
