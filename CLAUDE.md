@@ -61,6 +61,16 @@ Before stating any root cause, asserting a file's contents, or claiming a fact a
 
 ---
 
+# Salesforce Projects
+
+For any new SFDX project without a git repo, run the following before touching code:
+```
+git init && git add -A && git commit -m "Initial commit"
+```
+This ensures VS Code source control tracks changes and the Stop hook can auto-commit at end of session.
+
+---
+
 # Commands
 
 - `reph: <text>` - Rephrase into casual, natural language. Output only the rephrased text. No labels, no comments. Preserve line breaks. Preserve technical strings exactly (e.g. Salesforce `__` API names).
