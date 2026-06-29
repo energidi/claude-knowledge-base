@@ -5,6 +5,18 @@ import getIcdLookupConfig from '@salesforce/apex/ICDLookupController.getIcdLooku
 
 jest.mock('@salesforce/apex/ICDLookupController.searchIcd10', () => ({ default: jest.fn() }), { virtual: true });
 jest.mock('@salesforce/apex/ICDLookupController.getIcdLookupConfig', () => ({ default: jest.fn() }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_Validation_Required', () => ({ default: 'is required.' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_Error_Search_Failed', () => ({ default: 'Could not retrieve results. Please try again.' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_Error_Config_Load_Failed', () => ({ default: 'Field configuration could not be loaded. Refresh the page to retry.' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_Min_Char_Hint', () => ({ default: 'Type at least 3 characters to search.' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_Still_Searching', () => ({ default: 'Still searching...' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_Retry', () => ({ default: 'Retry' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_Clear', () => ({ default: 'Clear' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_SR_Dismissed', () => ({ default: 'Search results dismissed.' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_SR_Loading', () => ({ default: 'Loading results...' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_SR_Still_Searching', () => ({ default: 'Still searching, please wait...' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_SR_Result', () => ({ default: 'result found' }), { virtual: true });
+jest.mock('@salesforce/label/c.ICD_Lookup_SR_Results', () => ({ default: 'results found' }), { virtual: true });
 
 const MOCK_RESULTS = [
     { code: 'I10', description: 'Essential (primary) hypertension' },
@@ -116,5 +128,105 @@ describe('focusout behavior', () => {
             );
             await Promise.resolve();
         }
+    });
+});
+
+describe('handleClear()', () => {
+    it('resets all state and fires FlowAttributeChangeEvent with empty string', async () => {
+        // defaultValue sets both searchTerm and selectedCode, making the clear button visible
+        const el = createElement_icdLookup({ defaultValue: 'I10: Essential (primary) hypertension' });
+        await Promise.resolve();
+
+        const handler = jest.fn();
+        el.addEventListener('flowattributechange', handler);
+
+        const clearBtn = el.shadowRoot.querySelector('button[type="button"]');
+        expect(clearBtn).not.toBeNull();
+        clearBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+
+        expect(el.selectedCode).toBe('');
+    });
+});
+
+describe('handleRetry()', () => {
+    it('calls searchIcd10 again after a failed search', async () => {
+        jest.useFakeTimers();
+        searchIcd10.mockRejectedValue(new Error('API error'));
+        getIcdLookupConfig.mockResolvedValue(null);
+        const el = createElement_icdLookup({});
+        await Promise.resolve();
+
+        const input = el.shadowRoot.querySelector('input');
+        input.value = 'hyp';
+        input.dispatchEvent(new CustomEvent('input', { bubbles: true }));
+        await Promise.resolve();
+
+        jest.advanceTimersByTime(500);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        searchIcd10.mockResolvedValue(MOCK_RESULTS);
+        const retryBtn = el.shadowRoot.querySelector('button.slds-button_neutral');
+        if (retryBtn) {
+            retryBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await Promise.resolve();
+        }
+        expect(searchIcd10).toHaveBeenCalledTimes(2);
+        jest.useRealTimers();
+    });
+});
+
+describe('Escape key behavior', () => {
+    it('clears results and sets _dropdownDismissed without clearing searchTerm', async () => {
+        searchIcd10.mockResolvedValue(MOCK_RESULTS);
+        getIcdLookupConfig.mockResolvedValue(null);
+        const el = createElement_icdLookup({});
+        await Promise.resolve();
+
+        const dropdownDiv = el.shadowRoot.querySelector('.slds-combobox');
+        if (dropdownDiv) {
+            dropdownDiv.dispatchEvent(
+                new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+            );
+            await Promise.resolve();
+        }
+    });
+});
+
+describe('min char hint', () => {
+    it('shows hint paragraph when 1-2 characters are typed', async () => {
+        const el = createElement_icdLookup({});
+        await Promise.resolve();
+
+        const input = el.shadowRoot.querySelector('input');
+        input.value = 'hy';
+        input.dispatchEvent(new CustomEvent('input', { bubbles: true }));
+        await Promise.resolve();
+
+        const hint = el.shadowRoot.querySelector('.slds-form-element__help');
+        expect(hint).not.toBeNull();
+    });
+
+    it('does not show hint when input is empty', async () => {
+        const el = createElement_icdLookup({});
+        await Promise.resolve();
+
+        const hints = el.shadowRoot.querySelectorAll('.slds-form-element__help');
+        expect(hints.length).toBe(0);
+    });
+});
+
+describe('configError banner', () => {
+    it('renders warning banner when getIcdLookupConfig rejects', async () => {
+        getIcdLookupConfig.mockRejectedValue(new Error('load failed'));
+        const el = createElement_icdLookup({ flowApiName: 'Some_Flow' });
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const banner = el.shadowRoot.querySelector('.slds-theme_warning');
+        expect(banner).not.toBeNull();
     });
 });

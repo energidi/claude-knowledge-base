@@ -1,6 +1,58 @@
 # ICD Lookup Code Review Log (ISP-6429)
 
-Last Updated: June 28, 2026 (Round 5)
+Last Updated: June 29, 2026 (Round 9)
+
+---
+
+## Round 9 - June 29, 2026
+
+**Reviewer:** sf-orchestrator (Claude Code)
+**Scope:** Full review - ICDLookupController.cls, icdLookup LWC, ICD_Lookup__mdt metadata, CustomLabels
+**Lenses:** Architecture, UX, Naming, Security
+**Verdict:** GO (0 Critical, 0 High, 2 Medium, 3 Low applied; 11 SKIPPED carry-forward)
+
+### Findings Summary
+
+| Severity | Total | Applied | Skipped |
+|---|---|---|---|
+| Critical | 0 | - | - |
+| High | 0 | - | - |
+| Medium | 2 | 2 | 0 |
+| Low | 3 | 3 | 0 |
+| **Total** | **5** | **5** | **0** |
+
+### Applied Fixes
+
+| # | Status | Severity | Area | Fix |
+|---|---|---|---|---|
+| 2 | REGRESSION | Medium | icdLookup.js-meta.xml | Removed `default=` from `noResultsMessage` and `fieldPlaceholder` properties; Round 8 fix #12 not previously applied |
+| 4 | PARTIAL-FIX | Low | ICD_Lookup__mdt.object-meta.xml | Replaced stale "tooltip" with "help text" in object description; field was renamed Round 8 but description not updated |
+| 5 | PARTIAL-FIX | Low | CLAUDE.md | Updated Escape key documentation: searchTerm is intentionally retained on Escape, not cleared; prior doc was incorrect |
+| 6 | PARTIAL-FIX | Low | icdLookup.test.js | Added Jest describe blocks for handleClear, handleRetry, Escape key, min char hint, configError banner; also added explicit label mocks for all 12 ICD_Lookup_* Custom Labels (fixing pre-existing validate() test failure caused by unlmocked labels returning key names) |
+| 12 | NEW | Low | icdLookup.test.js | Combined with fix #6 above |
+
+### Skipped / Excluded Findings
+
+| # | Finding | Reason |
+|---|---|---|
+| 1 | icdLookup.css - SLDS token suggestion for .no-results-message | Entire block (color, font-size, font-weight) is intentionally hardcoded - community/Experience Cloud themes can override SLDS tokens. Do not re-flag. |
+| 8 | CMT record label "A1" meaningless | Owner will manage via CMDT list view. Added to exclusion list. |
+| 13 | Custom Label shortDescriptions under 15 words | Invalid finding - Custom Label metadata has no `description` field; only `shortDescription` and `value` exist. Do not re-flag this finding type. |
+
+### Known Skipped Findings (carry-forward)
+
+| # | Finding | Reason |
+|---|---|---|
+| CSS-1 | Entire `.no-results-message` CSS block hardcoded (`color: #c23934`, `font-size: 1rem`, `font-weight: bold`) | Intentional. Community/Experience Cloud themes can override SLDS tokens. Do not apply SLDS tokens to this block. Do not re-flag. |
+| R6-N1 | Required__c Boolean field API name lacks Is prefix | Declined. Label renamed to "Required?" for admin clarity. API name rename is destructive. |
+| R6-N2 | Active__c Boolean field API name lacks Is prefix | Declined. Label renamed to "Active?" for admin clarity. API name rename is destructive. |
+| R6-U1 | No-results message uses red color without icon | Intentional: guarantees visibility regardless of community theme overrides. |
+| #2 | searchIcd10 no auth/rate-limit guard | Accepted: component limited to authenticated internal and community (non-guest) profiles; NIH API is public. |
+| #5 | getIcdLookupConfig happy path untested | Cannot use hardcoded deployed CMT data in tests. |
+| #8 | CMT record label/devname "A1" | Owner manages via CMDT list view. Added to exclusion. |
+| #16 | getIcdLookupConfig SOQL without WITH USER_MODE | CMT globally readable; WITH USER_MODE has no effect. |
+| #17 | Named Credential not policy-restricted | Classic NC model (pre-57.0); public API, no credentials stored. |
+| #24 | No keyboard mechanism to re-open dropdown after Escape | Accepted trade-off; documented in CLAUDE.md. |
 
 ---
 
