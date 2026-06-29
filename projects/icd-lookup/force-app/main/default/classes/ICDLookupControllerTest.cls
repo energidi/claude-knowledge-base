@@ -1,3 +1,11 @@
+/**
+ * @description Unit tests for ICDLookupController. Covers ICD-10 search (success, no results,
+ * short/blank/null/long term, 5xx retry, non-200 error) and CMT config retrieval (blank name,
+ * unrecognized name). Uses HttpCalloutMock. Note: the CalloutException retry path in searchIcd10
+ * is not directly testable via HttpCalloutMock (the framework cannot throw CalloutException from
+ * respond()); after the doCallout() restructure, the 5xx retry test covers the same outer retry
+ * code path and guards against a third callout being made.
+ */
 @isTest
 private class ICDLookupControllerTest {
 
@@ -23,6 +31,9 @@ private class ICDLookupControllerTest {
         private Integer callCount = 0;
         public HttpResponse respond(HttpRequest req) {
             callCount++;
+            if (callCount >= 3) {
+                System.assert(false, 'Unexpected third callout - retry logic exceeded 2 attempts.');
+            }
             HttpResponse res = new HttpResponse();
             if (callCount == 1) {
                 res.setStatusCode(503);
@@ -101,7 +112,8 @@ private class ICDLookupControllerTest {
         Test.startTest();
         List<ICDLookupController.ICDResult> results = ICDLookupController.searchIcd10('hypertension');
         Test.stopTest();
-        System.assertEquals(2, results.size(), 'Expected results after 5xx retry');
+        System.assertEquals(2, results.size(), 'Expected 2 results after 5xx retry');
+        System.assertEquals('A001', results[0].code, 'Expected first result code after retry');
     }
 
     @isTest

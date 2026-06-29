@@ -7,16 +7,32 @@ import labelNoResultsDefault from '@salesforce/label/c.ICD_Lookup_No_Results_Def
 import labelSearchFailed from '@salesforce/label/c.ICD_Lookup_Error_Search_Failed';
 import labelConfigLoadFailed from '@salesforce/label/c.ICD_Lookup_Error_Config_Load_Failed';
 import labelValidationRequired from '@salesforce/label/c.ICD_Lookup_Validation_Required';
+import labelMinCharHint from '@salesforce/label/c.ICD_Lookup_Min_Char_Hint';
+import labelStillSearching from '@salesforce/label/c.ICD_Lookup_Still_Searching';
+import labelRetry from '@salesforce/label/c.ICD_Lookup_Retry';
+import labelClear from '@salesforce/label/c.ICD_Lookup_Clear';
+import labelSRDismissed from '@salesforce/label/c.ICD_Lookup_SR_Dismissed';
+import labelSRLoading from '@salesforce/label/c.ICD_Lookup_SR_Loading';
+import labelSRStillSearching from '@salesforce/label/c.ICD_Lookup_SR_Still_Searching';
+import labelSRResult from '@salesforce/label/c.ICD_Lookup_SR_Result';
+import labelSRResults from '@salesforce/label/c.ICD_Lookup_SR_Results';
 
 export default class IcdLookup extends LightningElement {
     @api label = '';
     @api flowApiName;
     @api mandatory = false;
     @api defaultValue;
-    @api tooltip;
+    @api helpText;
     @api noResultsMessage = labelNoResultsDefault;
     @api fieldPlaceholder = labelPlaceholderDefault;
     @api selectedCode;
+
+    labels = {
+        stillSearching: labelStillSearching,
+        minCharHint: labelMinCharHint,
+        retry: labelRetry,
+        clear: labelClear
+    };
 
     searchTerm = '';
     icdResults = [];
@@ -61,7 +77,7 @@ export default class IcdLookup extends LightningElement {
                     if (config) {
                         if (config.Field_Placeholder__c) this.fieldPlaceholder = config.Field_Placeholder__c;
                         if (config.No_Matching_Codes_Found_Message__c) this.noResultsMessage = config.No_Matching_Codes_Found_Message__c;
-                        if (config.Tooltip__c) this.tooltip = config.Tooltip__c;
+                        if (config.Help_Text__c) this.helpText = config.Help_Text__c;
                         if (config.Required__c !== null && config.Required__c !== undefined) {
                             this._mandatory = config.Required__c;
                         }
@@ -135,12 +151,14 @@ export default class IcdLookup extends LightningElement {
     }
 
     get screenReaderStatus() {
-        if (this._dropdownDismissed) return 'Search results dismissed.';
-        if (this.isLoading) return 'Loading results...';
+        if (this._dropdownDismissed) return labelSRDismissed;
+        if (this.searchSlowWarning) return labelSRStillSearching;
+        if (this.isLoading) return labelSRLoading;
         if (this.searchError) return this.searchError;
         if (this.showNoResults) return this.noResultsMessage;
         if (this.icdResults.length > 0) {
-            return `${this.icdResults.length} result${this.icdResults.length === 1 ? '' : 's'} found`;
+            const count = this.icdResults.length;
+            return `${count} ${count === 1 ? labelSRResult : labelSRResults}`;
         }
         return '';
     }
@@ -211,6 +229,7 @@ export default class IcdLookup extends LightningElement {
             this.icdResults = [];
             this._resultsReady = false;
             this._focusedIndex = -1;
+            if (!this.isSelected) { this.searchTerm = ''; }
         }
     }
 
@@ -255,6 +274,7 @@ export default class IcdLookup extends LightningElement {
         this._resultsReady = false;
         this.isSelected = false;
         this.searchError = '';
+        this.validationError = '';
         this._dropdownDismissed = false;
         this.dispatchEvent(new FlowAttributeChangeEvent('selectedCode', ''));
         this.template.querySelector('input').focus();
@@ -270,7 +290,9 @@ export default class IcdLookup extends LightningElement {
         this._commitSelection(code, description);
     }
 
+    // code and description come from the NIH API via Apex DTO; rendered via LWC template binding (auto-escaped, no XSS risk).
     _commitSelection(code, description) {
+        this._dropdownDismissed = false;
         this.searchError = '';
         this.selectedCode = `${code}: ${description}`;
         this.searchTerm = this.selectedCode;

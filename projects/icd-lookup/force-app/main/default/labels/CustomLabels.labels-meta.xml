@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
     <labels>
+        <fullName>ICD_Lookup_Clear</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ICD Lookup - Clear button label</shortDescription>
+        <value>Clear</value>
+    </labels>
+    <labels>
         <fullName>ICD_Lookup_Error_Config_Load_Failed</fullName>
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
@@ -17,12 +25,76 @@
         <value>Could not retrieve results. Please try again.</value>
     </labels>
     <labels>
+        <fullName>ICD_Lookup_Min_Char_Hint</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ICD Lookup - Minimum character hint shown when 1-2 chars typed</shortDescription>
+        <value>Type at least 3 characters to search.</value>
+    </labels>
+    <labels>
         <fullName>ICD_Lookup_No_Results_Default</fullName>
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
         <shortDescription>ICD Lookup - Default no-results message</shortDescription>
         <value>No matching codes found.</value>
+    </labels>
+    <labels>
+        <fullName>ICD_Lookup_Retry</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ICD Lookup - Retry button label shown after a search failure</shortDescription>
+        <value>Retry</value>
+    </labels>
+    <labels>
+        <fullName>ICD_Lookup_SR_Dismissed</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ICD Lookup - Screen reader announcement when dropdown is dismissed via Escape</shortDescription>
+        <value>Search results dismissed.</value>
+    </labels>
+    <labels>
+        <fullName>ICD_Lookup_SR_Loading</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ICD Lookup - Screen reader announcement while search is loading</shortDescription>
+        <value>Loading results...</value>
+    </labels>
+    <labels>
+        <fullName>ICD_Lookup_SR_Result</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ICD Lookup - Screen reader singular result count suffix (e.g. "1 result found")</shortDescription>
+        <value>result found</value>
+    </labels>
+    <labels>
+        <fullName>ICD_Lookup_SR_Results</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ICD Lookup - Screen reader plural result count suffix (e.g. "5 results found")</shortDescription>
+        <value>results found</value>
+    </labels>
+    <labels>
+        <fullName>ICD_Lookup_SR_Still_Searching</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ICD Lookup - Screen reader announcement when search exceeds 5 seconds</shortDescription>
+        <value>Still searching, please wait...</value>
+    </labels>
+    <labels>
+        <fullName>ICD_Lookup_Still_Searching</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>ICD Lookup - Visible slow-search indicator text shown after 5 seconds</shortDescription>
+        <value>Still searching...</value>
     </labels>
     <labels>
         <fullName>ICD_Lookup_Placeholder_Default</fullName>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Help_Text__c</fullName>
+    <description>Help text displayed next to the field label via lightning-helptext, providing additional context to the Flow user. Leave blank for no help text. When Flow API Name is set, this value overrides the Help Text input property on the LWC. ref: ISP-6429</description>
+    <externalId>false</externalId>
+    <label>Help Text</label>
+    <length>255</length>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

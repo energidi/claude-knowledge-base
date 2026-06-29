@@ -6,7 +6,7 @@
 .no-results-message {
     color: #c23934;
     font-size: 1rem;
-    font-weight: 700;
+    font-weight: bold;
 }
 
 .slds-listbox__option {

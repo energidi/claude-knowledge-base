@@ -27,7 +27,7 @@
         <value xsi:type="xsd:string">No matching codes found.</value>
     </values>
     <values>
-        <field>Tooltip__c</field>
-        <value xsi:type="xsd:string">tooltip</value>
+        <field>Help_Text__c</field>
+        <value xsi:type="xsd:string">Enter an ICD-10 code or diagnosis description to search.</value>
     </values>
 </CustomMetadata>

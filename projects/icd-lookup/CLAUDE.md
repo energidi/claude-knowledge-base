@@ -56,11 +56,11 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 | `noResultsMessage` | String | `'No matching codes found.'` | Message shown on zero results. Overridden by `ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c`. |
 | `mandatory` | Boolean | `false` | Blocks Flow progression if no code is selected. Overridden by `ICD_Lookup__mdt.Required__c`. |
 | `defaultValue` | String | `''` | Pre-populates the field with an existing code (e.g. from a record). Must be in `CODE: Description` format. |
-| `tooltip` | String | `''` | Tooltip text shown via `lightning-helptext` next to the label. Overridden by `ICD_Lookup__mdt.Tooltip__c`. |
+| `helpText` | String | `''` | Help text shown via `lightning-helptext` next to the label. Overridden by `ICD_Lookup__mdt.Help_Text__c`. |
 
 **Flow screen validation:** The component implements `@api validate()`. When `mandatory` is true and `selectedCode` is empty, `validate()` returns `{ isValid: false, errorMessage: '<label> is required.' }` to block navigation. The error message uses the field-specific label so it is identifiable when multiple instances appear on the same screen.
 
-**Dropdown behavior:** The dropdown closes on Escape key or Tab/focusout. Clicking outside the component causes the input to lose focus (focusout fires), which also closes the dropdown. The component does not use `document.addEventListener` - all close logic is handled via `onfocusout` on the dropdown container. Escape clears results but retains the current `searchTerm` in the input.
+**Dropdown behavior:** The dropdown closes on Escape key or Tab/focusout. Clicking outside the component causes the input to lose focus (focusout fires), which also closes the dropdown and clears the input text if no code was selected - preventing a visual disconnect between visible text and empty `selectedCode`. The component does not use `document.addEventListener` - all close logic is handled via `onfocusout` on the dropdown container. Escape clears results and `searchTerm`. Accepted trade-off: after Escape, there is no keyboard-only way to re-open prior results without typing again; typing re-triggers search, which is sufficient for this use case.
 
 **Search UX:** A hint "Type at least 3 characters to search." is shown when the input contains 1-2 characters. After a failed search, a Retry button appears alongside the error message. If a search takes longer than 5 seconds, a "Still searching..." indicator appears below the spinner.
 
@@ -77,10 +77,11 @@ callout:NihClinicalTables/api/icd10cm/v3/search?terms=<encoded>&sf=code,name&max
 ```
 - Searches by both code and name (`sf=code,name`).
 - Guards: null/blank/< 3 chars returns empty list; > 100 chars throws. Timeout: 10 seconds.
-- One automatic retry on HTTP 5xx or transient timeout (`System.CalloutException`) before throwing.
+- One automatic retry via `doCallout()` private helper on HTTP 5xx or `System.CalloutException` (returns null) before throwing. Exactly 2 callout attempts max.
 - Response structure parsed: `[TotalCount, Codes[], null, [[Code, Name], ...]]`
 - Returns up to 10 `ICDResult` objects with `code` and `description` fields.
 - Throws `AuraHandledException` on non-200 status (after retry) or callout failure after retry.
+- Access controlled via profile assignment - accessible to internal users and authenticated community users only.
 
 **`getIcdLookupConfig(String flowApiName)`** - `@AuraEnabled(cacheable=true)` (SOQL only - no callout)
 Queries `ICD_Lookup__mdt` by `Flow_API_Name__c` where `Active__c = true`. Returns the matching record or `null`.
@@ -100,7 +101,7 @@ Drives per-flow configuration for every `icdLookup` instance. One record per Scr
 | No Matching Codes Found Message | `No_Matching_Codes_Found_Message__c` | Text(255) | - |
 | Required? | `Required__c` | Checkbox | false |
 | Active? | `Active__c` | Checkbox | true |
-| Tooltip | `Tooltip__c` | Text(255) | - |
+| Help Text | `Help_Text__c` | Text(255) | - |
 | Description | `Description__c` | LongTextArea(32768) | - |
 
 CMT records live in `force-app/main/default/customMetadata/`. Create one record per Screen Flow that uses the component, setting `Flow_API_Name__c` to the Flow's API name.

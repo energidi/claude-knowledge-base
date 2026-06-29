@@ -34,17 +34,12 @@ public with sharing class ICDLookupController {
         request.setTimeout(10000);
 
         try {
-            HttpResponse response;
-            try {
-                response = http.send(request);
-            } catch (System.CalloutException ce) {
-                response = http.send(request);
-            }
-            if (response.getStatusCode() >= 500) {
-                response = http.send(request);
+            HttpResponse response = doCallout(http, request);
+            if (response == null || response.getStatusCode() >= 500) {
+                response = doCallout(http, request);
             }
 
-            if (response.getStatusCode() == 200) {
+            if (response != null && response.getStatusCode() == 200) {
                 List<Object> root = (List<Object>) JSON.deserializeUntyped(response.getBody());
 
                 if (root == null || root.size() < 4
@@ -99,12 +94,20 @@ public with sharing class ICDLookupController {
         if (String.isBlank(flowApiName)) return null;
         List<ICD_Lookup__mdt> configs = [
             SELECT DeveloperName, MasterLabel, Field_Placeholder__c,
-                   No_Matching_Codes_Found_Message__c, Required__c, Tooltip__c
+                   No_Matching_Codes_Found_Message__c, Required__c, Help_Text__c
             FROM ICD_Lookup__mdt
             WHERE Flow_API_Name__c = :flowApiName AND Active__c = true
             LIMIT 1
         ];
         return configs.isEmpty() ? null : configs[0];
+    }
+
+    private static HttpResponse doCallout(Http http, HttpRequest request) {
+        try {
+            return http.send(request);
+        } catch (System.CalloutException ce) {
+            return null;
+        }
     }
 
     /** Lightweight DTO returned by searchIcd10. Contains the ICD-10 code and its human-readable description. */

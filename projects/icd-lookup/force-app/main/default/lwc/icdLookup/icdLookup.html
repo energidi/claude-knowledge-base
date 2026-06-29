@@ -13,8 +13,8 @@
                 </template>
                 {label}
             </label>
-            <template lwc:if={tooltip}>
-                <lightning-helptext content={tooltip}></lightning-helptext>
+            <template lwc:if={helpText}>
+                <lightning-helptext content={helpText}></lightning-helptext>
             </template>
         </div>
         <div class="slds-form-element__control">
@@ -42,10 +42,10 @@
                         <template lwc:if={searchTerm}>
                             <button
                                 class="slds-button slds-button_icon slds-input__icon slds-input__icon_right"
-                                title="Clear"
+                                title={labels.clear}
                                 type="button"
                                 onclick={handleClear}>
-                                <lightning-icon icon-name="utility:clear" size="x-small" alternative-text="Clear"></lightning-icon>
+                                <lightning-icon icon-name="utility:clear" size="x-small" alternative-text={labels.clear}></lightning-icon>
                             </button>
                         </template>
                     </div>
@@ -56,13 +56,13 @@
                             <template lwc:if={isLoading}>
                                 <li role="presentation" class="slds-listbox__item">
                                     <div class="slds-align_absolute-center slds-p-around_medium">
-                                        <lightning-spinner alt="" size="small" variant="brand"></lightning-spinner>
+                                        <lightning-spinner alt="Loading" size="small" variant="brand"></lightning-spinner>
                                     </div>
                                 </li>
                             </template>
                             <template lwc:if={searchSlowWarning}>
                                 <li role="presentation" class="slds-listbox__item">
-                                    <div class="slds-align_absolute-center slds-p-around_x-small slds-text-color_weak">Still searching...</div>
+                                    <div class="slds-align_absolute-center slds-p-around_x-small slds-text-color_weak">{labels.stillSearching}</div>
                                 </li>
                             </template>
                             <template for:each={processedResults} for:item="res">
@@ -97,7 +97,7 @@
             </div>
         </div>
         <template lwc:if={showMinCharHint}>
-            <p class="slds-form-element__help">Type at least 3 characters to search.</p>
+            <p class="slds-form-element__help">{labels.minCharHint}</p>
         </template>
         <template lwc:if={validationError}>
             <div class="slds-form-element__help" role="alert">{validationError}</div>
@@ -105,7 +105,7 @@
         <template lwc:if={searchError}>
             <div class="slds-form-element__help slds-grid slds-grid_align-spread" role="alert">
                 <span>{searchError}</span>
-                <button class="slds-button slds-button_neutral slds-m-left_x-small" type="button" onclick={handleRetry}>Retry</button>
+                <button class="slds-button slds-button_neutral slds-m-left_x-small" type="button" onclick={handleRetry}>{labels.retry}</button>
             </div>
         </template>
         <div aria-live="polite" aria-atomic="true" class="slds-assistive-text">{screenReaderStatus}</div>
