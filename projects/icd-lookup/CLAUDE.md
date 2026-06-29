@@ -51,10 +51,10 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `flowApiName` | String | `''` | API name of the host Flow. Used to load the matching `ICD_Lookup__mdt` record. |
-| `label` | String | `''` | Label above the input. Overridden by `ICD_Lookup__mdt.Field_Label__c`. |
+| `label` | String | `''` | Label above the input. |
 | `fieldPlaceholder` | String | `'Search by code or description...'` | Input placeholder. Overridden by `ICD_Lookup__mdt.Field_Placeholder__c`. |
 | `noResultsMessage` | String | `'No matching codes found.'` | Message shown on zero results. Overridden by `ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c`. |
-| `mandatory` | Boolean | `false` | Blocks Flow progression if no code is selected. Overridden by `ICD_Lookup__mdt.Mandatory__c`. |
+| `mandatory` | Boolean | `false` | Blocks Flow progression if no code is selected. Overridden by `ICD_Lookup__mdt.Required__c`. |
 | `defaultValue` | String | `''` | Pre-populates the field with an existing code (e.g. from a record). Must be in `CODE: Description` format. |
 | `tooltip` | String | `''` | Tooltip text shown via `lightning-helptext` next to the label. Overridden by `ICD_Lookup__mdt.Tooltip__c`. |
 
@@ -62,7 +62,7 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 
 **Dropdown behavior:** The dropdown closes on Escape key, outside click, or Tab/focusout (keyboard navigation away). Escape clears results but retains the current `searchTerm` in the input.
 
-**CMT config load failure:** If `getIcdLookupConfig` fails, `errorMessage` is set to `'Field configuration could not be loaded.'` and the component falls back to the `@api` property defaults set in Flow Properties. **Flow builders must set the `mandatory` property in Flow Properties as a fallback** - if CMT load fails and mandatory was only set via CMT, the field will not be required.
+**CMT config load failure:** If `getIcdLookupConfig` fails, a warning banner (`slds-notify_alert slds-theme_warning`) is displayed above the field and the component falls back to the `@api` property defaults set in Flow Properties. **Flow builders must set the `mandatory` property in Flow Properties as a fallback** - if CMT load fails and mandatory was only set via CMT, the field will not be required.
 
 ### Apex: `ICDLookupController`
 
@@ -74,10 +74,11 @@ Makes a GET callout to the NIH Clinical Tables API via Named Credential `NihClin
 callout:NihClinicalTables/api/icd10cm/v3/search?terms=<encoded>&sf=code,name&maxList=10
 ```
 - Searches by both code and name (`sf=code,name`).
-- Guards: blank/< 3 chars returns empty list; > 100 chars throws. Timeout: 10 seconds.
+- Guards: null/blank/< 3 chars returns empty list; > 100 chars throws. Timeout: 10 seconds.
+- One automatic retry on HTTP 5xx before throwing.
 - Response structure parsed: `[TotalCount, Codes[], null, [[Code, Name], ...]]`
 - Returns up to 10 `ICDResult` objects with `code` and `description` fields.
-- Throws `AuraHandledException` on non-200 status or callout failure.
+- Throws `AuraHandledException` on non-200 status (after retry) or callout failure.
 
 **`getIcdLookupConfig(String flowApiName)`** - `@AuraEnabled(cacheable=true)` (SOQL only - no callout)
 Queries `ICD_Lookup__mdt` by `Flow_API_Name__c` where `Active__c = true`. Returns the matching record or `null`.
@@ -93,11 +94,10 @@ Drives per-flow configuration for every `icdLookup` instance. One record per Scr
 | Field | API Name | Type | Default |
 |---|---|---|---|
 | Flow API Name | `Flow_API_Name__c` | Text(255) | - |
-| Field Label | `Field_Label__c` | Text(255) | - |
 | Field Placeholder | `Field_Placeholder__c` | Text(255) | - |
 | No Matching Codes Found Message | `No_Matching_Codes_Found_Message__c` | Text(255) | - |
-| Required | `Mandatory__c` | Checkbox | false |
-| Active | `Active__c` | Checkbox | true |
+| Required? | `Required__c` | Checkbox | false |
+| Active? | `Active__c` | Checkbox | true |
 | Tooltip | `Tooltip__c` | Text(255) | - |
 | Description | `Description__c` | LongTextArea(32768) | - |
 

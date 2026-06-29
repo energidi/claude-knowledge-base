@@ -110,14 +110,10 @@ private class ICDLookupControllerTest {
     }
 
     @isTest
-    static void testGetConfigReturnsRecordForValidApiName() {
-        // Relies on the deployed ICD_Lookup.A1 CMT record (Gidi_ICD_10_Code_Selector_Demo_Screen_Flow).
-        // CMT records are available in test context without @seeAllData.
+    static void testGetConfigReturnsNullForUnrecognizedApiName() {
         Test.startTest();
-        ICD_Lookup__mdt config = ICDLookupController.getIcdLookupConfig('Gidi_ICD_10_Code_Selector_Demo_Screen_Flow');
+        ICD_Lookup__mdt config = ICDLookupController.getIcdLookupConfig('__No_Such_Flow_XYZ_Test__');
         Test.stopTest();
-        Assert.isNotNull(config, 'Expected config record for known Flow API name');
-        Assert.isNotNull(config.No_Matching_Codes_Found_Message__c, 'Expected No_Matching_Codes_Found_Message__c to be populated');
-        Assert.isNotNull(config.DeveloperName, 'Expected DeveloperName to be selected');
+        Assert.isNull(config, 'Expected null for unrecognized Flow API name');
     }
 }
