@@ -1,10 +1,10 @@
 ---
 name: sf-review-ux
-description: UX and UI design review. Checks empty/error states, accessibility, responsive strategy, interaction consistency, component synchronization, user feedback, and copy quality. Produces findings with severity and exact changes. Use when user says "review ux", "ux review", "ui review", "review ui", or runs /sf-review-ux.
+description: UX and UI design review. Checks empty/error states, accessibility, responsive strategy, interaction consistency, component synchronization, user feedback, copy quality, forms, data presentation, navigation, task flows, user control, permissions, Salesforce-specific patterns, and internationalization. Produces findings with severity and exact changes. Use when user says "review ux", "ux review", "ui review", "review ui", or runs /sf-review-ux.
 allowed-tools: Read, Glob, Grep
 metadata:
   author: Gidi Abramovich
-  version: 1.0.0
+  version: 2.0.0
 ---
 
 # UX & UI Design Review
@@ -142,6 +142,132 @@ Check:
 
 ---
 
+---
+
+## Category 8: Forms & Data Entry
+
+Check:
+- Is real-time (inline) vs on-submit validation explicitly defined for every field?
+- Are inline error messages positioned immediately below the offending field with exact wording?
+- Are required vs optional fields clearly indicated (not just by color)?
+- Is tab order logical and documented - does it follow the visual reading order?
+- Are input masks, formatting hints, and character limits defined for all text inputs?
+- Is autosave or draft handling defined for long or multi-step forms?
+- Are multi-step wizards given explicit progress indicators (step N of M) with back/save-and-exit affordances?
+- Does Enter key behavior on each input type have a defined outcome (submit, next field, add row)?
+- Are smart defaults, auto-population, and pre-fill sources documented?
+- On mobile: does each input trigger the correct keyboard type (numeric, email, tel)?
+
+---
+
+## Category 9: Data Presentation
+
+Check:
+- Are table column priorities defined? Which columns are visible by default vs hidden on smaller viewports?
+- Is pagination vs infinite scroll chosen explicitly, not left as an implementation detail?
+- Are sticky headers defined for all scrollable tables?
+- Is text overflow (truncation vs wrapping) defined for every column with variable-length content?
+- Are expandable rows defined with exact trigger interaction (click row, click chevron)?
+- Is data density (compact vs comfortable) configurable or defined for each context?
+- Are empty table states defined (no rows at all vs filtered-to-zero)?
+- Are sort indicators defined (which columns are sortable, default sort, multi-sort)?
+- For large datasets: is virtualized rendering or lazy loading specified?
+- Are data visualization elements (charts, graphs) given accessible text equivalents?
+
+---
+
+## Category 10: Navigation & Information Architecture
+
+Check:
+- Is the navigation hierarchy flat enough to reach any screen in 3 clicks or fewer?
+- Are breadcrumbs defined for every page deeper than the top level?
+- Does the browser back button return the user to the correct prior state (not a blank or reset state)?
+- Are deep links supported? Can a URL reproduce the exact UI state (active tab, applied filters, open record)?
+- Is the current location always indicated (active nav item, page title, breadcrumb)?
+- Is search discoverable without requiring knowledge of where it lives?
+- Are related features grouped together logically (not by technical ownership)?
+- Is the primary action on each page visually dominant and unambiguous?
+
+---
+
+## Category 11: Task Flows & User Journeys
+
+Check:
+- Is the critical path for every primary task documented end-to-end?
+- Is every step in a multi-step flow necessary? Are there any steps that could be eliminated or combined?
+- Are decision points (branch conditions) in flows explicitly defined with every possible outcome?
+- Can users save progress and return to an in-progress task?
+- Are success states (post-completion) defined with a clear next action?
+- Are abandonment paths defined (what happens if the user navigates away mid-task)?
+- Is the number of clicks to complete the most common task minimized and documented?
+
+---
+
+## Category 12: User Control & Freedom
+
+Check:
+- Is undo defined for every destructive or irreversible action?
+- Can users cancel any in-progress async operation?
+- Are "reset to default" affordances defined wherever a user can configure or customize?
+- Are there any dead-end states where the user has no clear forward or back path?
+- Is the escape path from every modal, wizard, and drawer defined (Esc, cancel button, click-outside)?
+- Are soft-delete / trash / restore patterns defined where permanent deletion is not immediate?
+
+---
+
+## Category 13: Discoverability of Actions
+
+Check:
+- Are icon-only buttons given visible labels on hover (tooltip) and accessible labels (aria-label)?
+- Are primary vs secondary vs destructive actions visually differentiated (hierarchy is clear)?
+- Are actions hidden behind right-click or long-press documented with a visible affordance hint?
+- Are bulk actions discoverable without selecting a row first (or is the selection trigger obvious)?
+- Are overflow menus ("...") inventoried with every item listed in the spec?
+- Are keyboard shortcuts documented and discoverable (help panel, tooltip, or legend)?
+
+---
+
+## Category 14: Permission & Capability UX
+
+Check:
+- Are disabled actions always explained (tooltip stating why, not silently greyed out)?
+- Is feature gating (license, permission set, profile) handled with a specific message and a path to resolve?
+- Are read-only vs editable states visually distinct - not just the absence of a save button?
+- When a user lacks permission to see a record: is the experience defined (blank, placeholder, locked state)?
+- Are partial-permission states defined (user can view but not edit)?
+- Do admin-only settings explain what will happen for non-admin users when the admin changes them?
+
+---
+
+## Category 15: Salesforce-Specific UX Patterns
+
+Check:
+- Do related lists follow standard Salesforce density and interaction patterns (inline edit, row actions)?
+- Are record page layouts respecting the Lightning App Builder composition rules (no custom JS in page layouts)?
+- Is utility bar usage defined - what persists in the utility bar vs what opens in a new tab?
+- For console apps: are workspace tab labels, pinned tabs, and split-view behavior defined?
+- Are inline edit triggers consistent (pencil icon vs double-click)?
+- Are quick actions vs standard buttons used appropriately (quick actions for record context, buttons for page-level)?
+- Are lightning-* base components used instead of custom HTML for standard interactions?
+- Do all custom components respect the active Lightning Theme (no hardcoded colors outside SLDS tokens)?
+- Are flow screen components compliant with Flow navigation (Next/Previous/Finish not replicated in the component)?
+- Is the Experience Cloud / Community context accounted for if the component is deployed externally (guest user, different SLDS)?
+
+---
+
+## Category 16: Internationalization
+
+Check:
+- Are all date, time, and number formats using locale-aware formatting (not hardcoded "MM/DD/YYYY")?
+- Is right-to-left (RTL) layout considered? Are flex/grid layouts direction-agnostic?
+- Are all strings externalized (custom labels, not hardcoded) to support translation?
+- Is text expansion accommodated? German and French translations average 30-40% longer than English.
+- Are currency symbols and timezone displays locale-aware?
+- Are icons and imagery culturally neutral (no gestures, flags, or symbols with regional meaning)?
+- Are truncation rules defined for expanded translated text (no text overflowing fixed-width containers)?
+
+---
+
 ## Output Format
 
 ```
@@ -171,7 +297,7 @@ Source: <file or project>
 VERDICT: GO
 FINDINGS: 0
 
-All 7 UX categories pass. Specification is complete.
+All 16 UX categories pass. Specification is complete.
 ```
 
 ---
