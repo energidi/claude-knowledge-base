@@ -1,13 +1,13 @@
-﻿# ICD Lookup Code Review Log (ISP-6429)
+# ICD Lookup Code Review Log (ISP-6429)
 
-Last Updated: June 29, 2026 (Round 6)
+Last Updated: June 28, 2026 (Round 5)
 
 ---
 
 ## Round 1 - June 28, 2026
 
 **Reviewer:** sf-orchestrator (Claude Code)
-**Verdict:** NO-GO â†’ fixed (33 findings applied; test class deferred)
+**Verdict:** NO-GO → fixed (33 findings applied; test class deferred)
 **Files changed:** `ICDLookupController.cls`, `icdLookup.html`, `icdLookup.js`, `icdLookup.js-meta.xml`, `icdLookup.css` (new), plus 11 new CMT object/field metadata files
 
 ### Findings Summary
@@ -31,7 +31,7 @@ Last Updated: June 29, 2026 (Round 6)
 | 5 | Critical | LWC HTML | `fieldPlaceholder` driven by `@api` + CMT override; bound to `lightning-input` |
 | 6 | Critical | LWC HTML | `noResultsMessage` driven by `@api` + CMT override; bound in template |
 | 7 | Critical | Apex + LWC | Apex throws on non-200; LWC renders `errorMessage` via `slds-form-element__help` |
-| 8 | High | meta XML | `apiVersion` 60.0 â†’ 67.0 |
+| 8 | High | meta XML | `apiVersion` 60.0 → 67.0 |
 | 9 | High | LWC + Apex | `@api automationApiName` added; `getIcdLookupConfig` Apex method added; CMT loaded in `connectedCallback` |
 | 10 | High | Apex | Blank/short/long `searchTerm` guards added |
 | 11 | High | LWC JS | `selectedCode` cleared and `FlowAttributeChangeEvent('')` fired when user re-types |
@@ -43,20 +43,20 @@ Last Updated: June 29, 2026 (Round 6)
 | 17 | Medium | Apex | `request.setTimeout(10000)` added |
 | 18 | Medium | Apex | `catch (AuraHandledException e) { throw e; }` before generic catch |
 | 19 | Medium | LWC JS | All `@track` removed; reactive by default |
-| 20 | Medium | LWC JS | `window.clearTimeout` / `window.setTimeout` â†’ `clearTimeout` / `setTimeout` |
+| 20 | Medium | LWC JS | `window.clearTimeout` / `window.setTimeout` → `clearTimeout` / `setTimeout` |
 | 21 | Medium | LWC JS | `disconnectedCallback` added; clears timer and outside-click listener |
-| 22 | Medium | LWC HTML | `if:true` â†’ `lwc:if` |
+| 22 | Medium | LWC HTML | `if:true` → `lwc:if` |
 | 23 | Medium | LWC HTML | `<div aria-live="polite" aria-atomic="true">` for screen reader status |
 | 24 | Medium | LWC JS | Outside-click handler registered in `connectedCallback`, removed in `disconnectedCallback` |
 | 25 | Medium | LWC HTML | Resolved by #5 (default placeholder reflects code+name search) |
 | 26 | Low | LWC JS/CSS | `isSelected` tracking; `selection-confirmed` CSS class; `icdLookup.css` created |
 | 27 | Low | LWC JS/HTML | `@api fieldId`; `data-field-id={fieldId}` on root; exposed in meta XML |
-| 28 | Low | LWC HTML | Em dash `â€”` replaced with `: ` |
-| 29 | Low | Apex | `ICDResult(String c, String d)` â†’ `ICDResult(String code, String description)` |
-| 30 | Low | LWC JS | `fetchData` â†’ `fetchIcdResults`; `searchKey` â†’ `searchTerm`; `searchResults` â†’ `icdResults` |
-| 31 | Low | LWC JS | `delayTimeout` â†’ `searchDebounceTimer` |
-| 32 | Low | Apex + LWC | `searchICD10` â†’ `searchIcd10` (Apex method + LWC import) |
-| 33 | Low | meta XML | Label `"Output: Selected ICD Code"` â†’ `"Selected ICD Code"` |
+| 28 | Low | LWC HTML | Em dash `—` replaced with `: ` |
+| 29 | Low | Apex | `ICDResult(String c, String d)` → `ICDResult(String code, String description)` |
+| 30 | Low | LWC JS | `fetchData` → `fetchIcdResults`; `searchKey` → `searchTerm`; `searchResults` → `icdResults` |
+| 31 | Low | LWC JS | `delayTimeout` → `searchDebounceTimer` |
+| 32 | Low | Apex + LWC | `searchICD10` → `searchIcd10` (Apex method + LWC import) |
+| 33 | Low | meta XML | Label `"Output: Selected ICD Code"` → `"Selected ICD Code"` |
 | 34 | Low | meta XML | `default=""` added to `selectedCode` property |
 
 ### Known Skipped Findings
@@ -70,7 +70,7 @@ Last Updated: June 29, 2026 (Round 6)
 ## Round 2 - June 28, 2026
 
 **Reviewer:** sf-orchestrator (Claude Code)
-**Verdict:** NO-GO â†’ fixed (14 of 15 findings applied; finding #2 pending org retrieve confirmation)
+**Verdict:** NO-GO → fixed (14 of 15 findings applied; finding #2 pending org retrieve confirmation)
 **Files changed:** `icdLookup.js`, `icdLookup.html`, `icdLookup.css`, `icdLookup.js-meta.xml`, `ICDLookupController.cls`, `ICDLookupController.cls-meta.xml`, `Tooltip__c.field-meta.xml`, `Flow_API_Name__c.field-meta.xml` (was `Automation_API_Name__c`), `Mandatory__c.field-meta.xml`, `ICD_Lookup__mdt.object-meta.xml` (updated); `Field_Label__c.field-meta.xml`, `NihClinicalTables.namedCredential-meta.xml`, `ICDLookupControllerTest.cls`, `ICDLookupControllerTest.cls-meta.xml` (created)
 
 ### Findings Summary
@@ -153,7 +153,7 @@ None.
 ## Round 4 - June 28, 2026
 
 **Reviewer:** sf-orchestrator (Claude Code)
-**Verdict:** NO-GO â†’ fixed (all 10 findings applied)
+**Verdict:** NO-GO → fixed (all 10 findings applied)
 **Files changed:** `recordChoiceSelector/*` (4 new files - replaces deleted `checkboxRadioButton/`), `icdLookup.html`, `icdLookup.js`; deleted `checkboxRadioButton/` folder
 
 ### Findings Summary
@@ -190,7 +190,7 @@ None.
 ## Round 5 - June 28, 2026
 
 **Reviewer:** sf-orchestrator (Claude Code)
-**Verdict:** NO-GO â†’ fixed (29 applicable findings applied; 9 N/A - `recordChoiceSelector` component does not exist in project)
+**Verdict:** NO-GO → fixed (29 applicable findings applied; 9 N/A - `recordChoiceSelector` component does not exist in project)
 **Files changed:** `icdLookup.js`, `icdLookup.html`, `icdLookup.css`, `icdLookup.js-meta.xml`, `ICDLookupController.cls`, `ICDLookupControllerTest.cls`, `Flow_API_Name__c.field-meta.xml` (renamed from `Automation_API_Name__c.field-meta.xml`), `Field_Placeholder__c.field-meta.xml`, `Active__c.field-meta.xml`, `No_Matching_Codes_Found_Message__c.field-meta.xml`, `Description__c.field-meta.xml`, `ICD_Lookup.A1.md-meta.xml`, `.forceignore`, `CLAUDE.md`, `ICD_Lookup_Code_Review.md` (this file, created)
 
 ### Findings Summary
@@ -215,14 +215,14 @@ Skipped: finding #19 (no production CMT records for 3 live flows) - carried from
 | 3 | NEW | Critical | icdLookup - FlowAttributeChangeEvent timing | Removed `dispatchEvent` from `connectedCallback` defaultValue init; Flow reads `@api selectedCode` directly at navigation time |
 | 4 | NEW | Critical | LWC - Zero jest tests | Created `__tests__/icdLookup.test.js` with 6 test cases covering validate(), defaultValue, selection, re-type clear, focusout |
 | 5 | NEW | Critical | Apex - HTTP status leak | `throw new AuraHandledException('ICD-10 lookup failed. Please try again.')` - status code removed |
-| 8 | PARTIAL-FIX | High | icdLookup - ArrowUp keyboard trap | `_focusedIndex <= 0` â†’ set to -1 and `.focus()` the input to return focus to search field |
+| 8 | PARTIAL-FIX | High | icdLookup - ArrowUp keyboard trap | `_focusedIndex <= 0` → set to -1 and `.focus()` the input to return focus to search field |
 | 9 | PARTIAL-FIX | High | icdLookup - errorMessage not cleared on selection | `this.errorMessage = ''` added at top of `_commitSelection()` |
 | 10 | PARTIAL-FIX | High | icdLookup - outside-click shadow DOM | `event.composedPath().some(el => el === this.template.host)` replaces `template.contains(event.target)` |
 | 11 | PARTIAL-FIX | High | icdLookup - dual validation layers | Removed `required={mandatory}` from input; replaced with `aria-required={ariaRequired}` getter on native input |
 | 12 | NEW | High | icdLookup - aria-selected conflates focus/selection | `isSelected` added to `processedResults`; `aria-selected={res.isSelected}`; `slds-has-focus` CSS class drives keyboard focus highlight |
 | 13/14 | NEW | High | icdLookup - @api mandatory mutation + unconditional CMT override | `_mandatory = null` private field; `get isMandatory()`; CMT sets `this._mandatory` (not `@api`); null-checked before set |
 | 15/25 | NEW | High/Medium | icdLookup - static id="icd-label" collision | `_uid` class field; `get _labelId()`; `id={_labelId}` on label; `aria-labelledby={_labelId}` on combobox |
-| 16 | NEW | High | icdLookup - no-results uses error color | `slds-text-color_error` â†’ `slds-text-color_weak` on no-results message |
+| 16 | NEW | High | icdLookup - no-results uses error color | `slds-text-color_error` → `slds-text-color_weak` on no-results message |
 | 17 | NEW | High | icdLookup - no Escape announcement | `_dropdownDismissed` flag; `screenReaderStatus` returns `'Search results dismissed.'` on Escape |
 | 20 | NEW | High | Apex test - valid CMT record | `testGetConfigReturnsRecordForValidApiName` added; also asserts `DeveloperName` is selected |
 | 21 | NEW | High | icdLookup - stale response race | `_requestSeq` counter; stale `.then`/`.catch`/`.finally` callbacks return early |
@@ -232,72 +232,28 @@ Skipped: finding #19 (no production CMT records for 3 live flows) - carried from
 | 27 | NEW | Medium | icdLookup - validation error field context | `\`${this.label} is required.\`` instead of generic string |
 | 28 | NEW | Medium | icdLookup - touch targets | `.slds-listbox__option { min-height: 2.75rem; padding: 0.5rem 1rem; }` in CSS |
 | 29 | NEW | Medium | icdLookup - bundle description missing | `<description>` element added to `icdLookup.js-meta.xml` |
-| 32 | NEW | Medium | CMT fields - wrong ticket reference | `ISP-6038` â†’ `ISP-6429` in 4 field files |
+| 32 | NEW | Medium | CMT fields - wrong ticket reference | `ISP-6038` → `ISP-6429` in 4 field files |
 | 33 | NEW | Medium | Flow_API_Name__c - required=false | `<required>true</required>` set |
 | 34 | NEW | Medium | Demo CMT record in deployable source | `ICD_Lookup.A1.md-meta.xml` added to `.forceignore` |
 | 35 | NEW | Low | Green selection border removed | `.selection-confirmed` CSS block deleted; `comboboxContainerClass` getter removed |
 | 36 | NEW | Low | data-desc abbreviation | `data-description` in HTML; `dataset.description` in JS; `_commitSelection(code, description)` parameter |
 | 37 | NEW | Low | _searchCompleted ambiguous | Renamed to `_resultsReady` throughout |
 | 38 | NEW | Low | Spinner double-announcement | `alt=""` on `<lightning-spinner>` |
-| 39 | NEW | Low | Automation API Name jargon | Field renamed `Automation_API_Name__c` â†’ `Flow_API_Name__c`; label "Flow API Name"; SOQL updated |
+| 39 | NEW | Low | Automation API Name jargon | Field renamed `Automation_API_Name__c` → `Flow_API_Name__c`; label "Flow API Name"; SOQL updated |
 | 40 | NEW | Low | SOQL missing DeveloperName/MasterLabel | Added to SELECT in `getIcdLookupConfig` |
 
 ### User-directed renames (not in findings table)
 
 | Change | Files |
 |---|---|
-| `@api automationApiName` â†’ `@api flowApiName` in LWC | `icdLookup.js`, `icdLookup.js-meta.xml`, `CLAUDE.md` |
-| `Automation_API_Name__c` â†’ `Flow_API_Name__c` field API name | Field file renamed; Apex SOQL updated; CMT record updated; CLAUDE.md updated |
+| `@api automationApiName` → `@api flowApiName` in LWC | `icdLookup.js`, `icdLookup.js-meta.xml`, `CLAUDE.md` |
+| `Automation_API_Name__c` → `Flow_API_Name__c` field API name | Field file renamed; Apex SOQL updated; CMT record updated; CLAUDE.md updated |
 | All `recordChoiceSelector` references removed from CLAUDE.md | `CLAUDE.md` |
-| Review tracking file renamed from `MetaMapper_Code_Review.md` â†’ `ICD_Lookup_Code_Review.md` | This file |
+| Review tracking file renamed from `MetaMapper_Code_Review.md` → `ICD_Lookup_Code_Review.md` | This file |
 
 ### Known Skipped Findings (Round 5 carry-forward)
 
 | # | Finding | Reason |
 |---|---|---|
 | 19 | No production CMT records for 3 live flows | Deliberately out of scope - must be created manually in org or as separate task |
-
-
----
-
-## Round 6 - June 29, 2026
-
-**Reviewer:** sf-orchestrator (Claude Code)
-**Scope:** Full review - ICDLookupController.cls, icdLookup LWC, ICD_Lookup__mdt metadata, NihClinicalTables Named Credential
-**Lenses:** Architecture, UX, Naming, Security
-**Verdict:** GO (0 Critical, 2 High, 9 Medium, 3 Low)
-
-### Findings Summary
-
-| Severity | Total | Applied | Skipped |
-|---|---|---|---|
-| Critical | 0 | - | - |
-| High | 2 | 2 | 0 |
-| Medium | 9 | 9 | 0 |
-| Low | 3 | 2 | 1 |
-| **Total** | **14** | **13** | **1** |
-
-### Applied Fixes
-
-| # | Status | Severity | Area | Fix |
-|---|---|---|---|---|
-| 1 | NEW | High | ICDLookupController + icdLookup.js | Field_Label__c was deleted from CMT but CLAUDE.md still referenced it as an active override - removed from docs |
-| 2 | PARTIAL-FIX | High | icdLookup.html / icdLookup.js | Config load error shown in field validation slot - separated into `configError` property rendered as slds-notify_alert warning banner |
-| 3 | NEW | Medium | ICDLookupController.searchIcd10 | No retry on transient 5xx - added one automatic HTTP retry before throwing |
-| 4 | NEW | Medium | ICDLookupControllerTest | testGetConfigReturnsRecordForValidApiName relied on a deployed CMT record - replaced with testGetConfigReturnsNullForUnrecognizedApiName |
-| 5 | NEW | Medium | icdLookup.js connectedCallback | console.error() in production path - removed; configError surfaces via banner |
-| 6 | NEW | Medium | CLAUDE.md | CMT field documented as Mandatory__c but actual API name is Required__c - corrected throughout |
-| 7 | NEW | Medium | icdLookup.js / icdLookup.html | All string literals hardcoded - created 5 Custom Labels (ICD_Lookup_* prefix, category: ISP-6429, ICD Lookup) |
-| 8 | REGRESSION | Medium | ICD_Lookup__mdt.Active__c | Label changed from Active? (R2) to Active (R3 #7) - restored to Active? with improved admin description |
-| 9 | REGRESSION | Medium | ICD_Lookup__mdt.Required__c | Label changed from Required? (R2) to Required (R3 #8); CLAUDE.md had wrong API name Mandatory__c - restored to Required? with improved description |
-| 10 | NEW | Medium | ICDLookupController (class) | Missing Apex class ApexDoc - added |
-| 11 | NEW | Medium | searchIcd10, getIcdLookupConfig | Missing method ApexDoc - added @param/@return/@throws |
-| 12 | NEW | Low | icdLookup.css .no-results-message | Hardcoded color #c23934 - SKIPPED intentionally: guarantees red independent of Lightning Theme |
-| 13 | NEW | Low | getIcdLookupConfig parameter | automationApiName inconsistent with LWC flowApiName - renamed Apex parameter to flowApiName |
-| 14 | NEW | Low | ICDLookupController.searchIcd10 | searchTerm.trim() without null guard - added null check |
-
-### Known Skipped Findings
-
-| # | Finding | Reason |
-|---|---|---|
-| 12 | CSS hardcoded color #c23934 | Intentional: guarantees red+bold regardless of Lightning Theme. User confirmed. |
+| CSS-1 | Entire `.no-results-message` CSS block hardcoded (`color: #c23934`, `font-size: 1rem`, `font-weight: bold`) | Intentional. Community/Experience Cloud themes can override SLDS tokens and theme variables. Hardcoded values guarantee the no-results message is always red and bold regardless of active Lightning Theme. Do not apply SLDS tokens or theme variables to this block. Do not re-flag. |
