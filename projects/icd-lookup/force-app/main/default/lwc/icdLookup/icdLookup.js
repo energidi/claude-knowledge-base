@@ -4,7 +4,7 @@ import getIcdLookupConfig from '@salesforce/apex/ICDLookupController.getIcdLooku
 import { FlowAttributeChangeEvent } from 'lightning/flowSupport';
 
 export default class IcdLookup extends LightningElement {
-    @api label = 'ICD-10 Diagnosis';
+    @api label = '';
     @api flowApiName;
     @api mandatory = false;
     @api defaultValue;

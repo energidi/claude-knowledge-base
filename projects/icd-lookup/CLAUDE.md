@@ -51,7 +51,7 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `flowApiName` | String | `''` | API name of the host Flow. Used to load the matching `ICD_Lookup__mdt` record. |
-| `label` | String | `'ICD-10 Diagnosis'` | Label above the input. Overridden by `ICD_Lookup__mdt.Field_Label__c`. |
+| `label` | String | `''` | Label above the input. Overridden by `ICD_Lookup__mdt.Field_Label__c`. |
 | `fieldPlaceholder` | String | `'Search by code or description...'` | Input placeholder. Overridden by `ICD_Lookup__mdt.Field_Placeholder__c`. |
 | `noResultsMessage` | String | `'No matching codes found.'` | Message shown on zero results. Overridden by `ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c`. |
 | `mandatory` | Boolean | `false` | Blocks Flow progression if no code is selected. Overridden by `ICD_Lookup__mdt.Mandatory__c`. |
