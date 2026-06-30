@@ -142,6 +142,28 @@ SLDS-specific:
 
 ---
 
+## Category 17: Visual Design & SLDS Compliance
+
+| Check | Standard |
+|---|---|
+| SLDS tokens only | All colors, spacing, font sizes via `--slds-*` / `var(--lwc-*)` tokens - no raw hex, hardcoded px, or `rgba()` in CSS |
+| Button variants | `brand` = primary; `neutral` = secondary; `destructive` = irreversible; `success` = confirmation - never `brand` for destructive |
+| Icon correctness | All icons use `lightning-icon` with `utility:`, `standard:`, `action:`, or `doctype:` sprite - no custom SVGs replacing SLDS icons |
+| Icon sizing | `x-small` = inline text; `small` = button; `medium` = standalone; `large` = empty state |
+| Typography hierarchy | Heading levels semantic (not for visual size); font sizes from `--slds-c-*` tokens, not hardcoded |
+| Spacing consistency | All spacing via `slds-m-*` / `slds-p-*` utility classes or `--slds-g-spacing-*` tokens - no arbitrary `margin: 14px` |
+| Visual hierarchy | Clear primary/secondary/tertiary layers; labels visually distinct from values; section headers distinct from field labels |
+| Color palette compliance | Colors limited to SLDS palette and brand tokens - no one-off hex colors per component |
+| Component variant correctness | Card, badge, pill, avatar variants match data semantics (`slds-badge_lightest` for neutral; color utility for status) |
+| Density appropriateness | Internal power-user layouts may be dense; community/external layouts need increased breathing room |
+
+SLDS-specific:
+- Check `*.css` files for `color: #`, `background: #`, `font-size: Npx`, `margin: Npx` patterns
+- Verify `lightning-button` `variant` props match action semantics, not just visual preference
+- Confirm all icon `assistive-text` values describe meaning, not icon name
+
+---
+
 ## Severity Reference
 
 | Severity | Definition |

@@ -24,7 +24,7 @@ Phase 0: Prior round deduplication
 Phase 1: Parallel review (all 4 lenses)
 Phase 2: Present combined findings table + wait for user approval
 Phase 3: Apply approved fixes
-Phase 4: Update MD files (MetaMapper_Code_Review.md + MetaMapper_Technical_Design.md + CLAUDE.md)
+Phase 4: Update MD files (review log + technical design + CLAUDE.md)
 Phase 5: Deploy to Salesforce
 Phase 6: GitHub push
 ```
@@ -41,13 +41,14 @@ Mark each task **completed** the moment it finishes. Do not mark a phase complet
 
 **Run this before the four review lenses.**
 
-1. Read `MetaMapper_Code_Review.md` from the project root.
-2. Extract every finding that was logged as fixed in prior rounds. Build an in-memory list of fixed issues: their component/area, issue description, and what was changed.
-3. Also extract any findings that appeared in prior rounds but were marked as skipped or not applied.
-4. Also read the **Known Skipped Findings** section if present - treat every entry there as a pre-tagged SKIPPED finding.
-5. Hold this list in memory. You will use it in Phase 2 to tag each new finding.
+1. Glob the project root for `*_Code_Review.md` and `*Code_Review*.md`. Use the first match as the review tracking file for this project. Note the filename - you will use it again in Phase 4.
+2. Read the detected review tracking file.
+3. Extract every finding that was logged as fixed in prior rounds. Build an in-memory list of fixed issues: their component/area, issue description, and what was changed.
+4. Also extract any findings that appeared in prior rounds but were marked as skipped or not applied.
+5. Also read the **Known Skipped Findings** section if present - treat every entry there as a pre-tagged SKIPPED finding.
+6. Hold this list in memory. You will use it in Phase 2 to tag each new finding.
 
-**If `MetaMapper_Code_Review.md` does not exist or has no prior round entries:** note "No prior review history found" and continue to Phase 1 without tagging.
+**If no review tracking file is found or it has no prior round entries:** note "No prior review history found" and continue to Phase 1 without tagging.
 
 Write `PHASE 0 COMPLETE` before proceeding.
 
@@ -58,7 +59,7 @@ Write `PHASE 0 COMPLETE` before proceeding.
 Dispatch all four review lenses **in parallel** in a single message using the Skill tool:
 
 1. `sf-review:sf-review-architecture` - 6 pillars: data model, security, async/limits, integration, queries, failure handling
-2. `sf-review:sf-review-ux` - 16 UX categories: states, accessibility, responsive, interaction consistency, feedback, component sync, copy, forms, data presentation, navigation, task flows, user control, permissions, Salesforce-specific patterns, internationalization, and error handling
+2. `sf-review:sf-review-ui-ux` - 17 UI & UX categories: states, accessibility, responsive, interaction consistency, feedback, component sync, copy, forms, data presentation, navigation, task flows, user control, permissions, Salesforce-specific patterns, internationalization, error handling, and visual design/SLDS compliance
 3. `sf-review:sf-review-naming` - 8 violation categories: V-01 through V-08
 4. `sf-review:sf-review-security` - 10 security domains: authentication, authorization, Apex code, frontend, API/integrations, data privacy, org config, automation/email, monitoring/DevSecOps, emerging threats
 
@@ -79,7 +80,7 @@ There are four distinct tags - choose the most accurate one:
 
 | Tag | Meaning | How to detect |
 |---|---|---|
-| `NEW` | Never appeared in any prior review round | No match in MetaMapper_Code_Review.md |
+| `NEW` | Never appeared in any prior review round | No match in the project's review tracking file |
 | `SKIPPED` | Was flagged in a prior round and deliberately accepted as-is (known limitation, documented trade-off, or explicit skip). Nothing was ever changed. | Prior round entry shows "accepted", "documented", "known limitation", or the finding was listed but no fix was applied |
 | `PARTIAL-FIX` | A prior round addressed part of this area but the fix was incomplete - the remaining gap is what the review is seeing now. The fix was real, but left a residual issue. | Prior round shows a fix was applied in the same component/area, but the specific detail now flagged was not covered by that fix |
 | `REGRESSION` | Was marked as fixed in a prior round (CLAUDE.md was updated or code was changed), but the issue has reappeared - the fix was reverted, overwritten, or a new change re-introduced the problem | Prior round shows the fix was applied AND CLAUDE.md was updated, but the current CLAUDE.md still contains the issue |
@@ -92,7 +93,7 @@ Output exactly this format:
 FULL DESIGN REVIEW
 Source: <file or project>
 Date: <today as "Month DD, YYYY">
-Prior rounds reviewed: <N from MetaMapper_Code_Review.md, or "none">
+Prior rounds reviewed: <N from review tracking file, or "none">
 
 OVERALL VERDICT: GO / NO-GO
 
@@ -166,13 +167,15 @@ Write `PHASE 3 COMPLETE` before proceeding.
 
 After fixes are applied (or skipped), update ALL three documents. This phase is not optional and is not skippable.
 
-### 4a. MetaMapper_Code_Review.md (always)
-Add a new round entry summarizing what changed. Use Edit with targeted diffs only. Never rewrite from scratch. Also update the `Last Updated` line in the file header.
+### 4a. Review tracking file (always)
+Use the filename detected in Phase 0. Add a new round entry summarizing what changed. Use Edit with targeted diffs only. Never rewrite from scratch. Also update the `Last Updated` line in the file header.
+
+If no review tracking file was found in Phase 0, create one in the project root named `<ProjectName>_Code_Review.md` (derive the project name from the project's CLAUDE.md or the root folder name).
 
 If no fixes were applied in Phase 3, add a round entry noting "Review completed, no fixes applied."
 
-### 4b. MetaMapper_Technical_Design.md (conditional)
-Update if any of the following changed: renamed fields or classes, architectural decisions, data model changes, new components. Use Edit with targeted diffs only. If nothing changed, write "MetaMapper_Technical_Design.md - no update needed" explicitly.
+### 4b. Technical design document (conditional)
+Glob the project root for `*Technical_Design*.md` and `*_Design*.md`. Use the first match. Update if any of the following changed: renamed fields or classes, architectural decisions, data model changes, new components. Use Edit with targeted diffs only. If no file is found or nothing changed, write "[filename or 'Technical design file'] - no update needed" explicitly.
 
 ### 4c. CLAUDE.md (conditional)
 Update if any of the following changed: renamed fields, renamed classes, new architectural rules, new data model fields, changes to component behavior described in the spec. Use Edit with targeted diffs only. If nothing changed, write "CLAUDE.md - no update needed" explicitly.
@@ -252,6 +255,6 @@ Write `PHASE 6 COMPLETE` after a successful push.
 - Never use the `RECURRING` tag - always use SKIPPED, PARTIAL-FIX, or REGRESSION. Each has a different action.
 - SKIPPED and PARTIAL-FIX findings are real findings - do not suppress them. The user must see them and decide.
 - REGRESSION findings always appear at the top of their severity group - they represent something that went backwards.
-- Phase 4 requires an explicit statement for each of the three MD files - even if the answer is "no update needed".
+- Phase 4 requires an explicit statement for each of the three files (review log, technical design, CLAUDE.md) - even if the answer is "no update needed".
 - If any phase fails partially (e.g. 3 of 5 fixes applied), state what succeeded and what failed. Do NOT write TASK COMPLETE.
 - Partial completion is not completion.

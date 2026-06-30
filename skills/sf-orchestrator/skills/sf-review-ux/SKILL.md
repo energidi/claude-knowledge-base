@@ -1,13 +1,13 @@
 ---
-name: sf-review-ux
-description: UX and UI design review. Checks empty/error states, accessibility, responsive strategy, interaction consistency, component synchronization, user feedback, copy quality, forms, data presentation, navigation, task flows, user control, permissions, Salesforce-specific patterns, and internationalization. Produces findings with severity and exact changes. Use when user says "review ux", "ux review", "ui review", "review ui", or runs /sf-review-ux.
+name: sf-review-ui-ux
+description: UI and UX design review. Checks empty/error states, accessibility, responsive strategy, interaction consistency, component synchronization, user feedback, copy quality, forms, data presentation, navigation, task flows, user control, permissions, Salesforce-specific patterns, internationalization, and visual design/SLDS compliance. Produces findings with severity and exact changes. Use when user says "review ux", "ux review", "ui review", "review ui", or runs /sf-review-ux.
 allowed-tools: Read, Glob, Grep
 metadata:
   author: Gidi Abramovich
   version: 2.0.0
 ---
 
-# UX & UI Design Review
+# UI & UX Design Review
 
 You are a Principal UX Architect performing a mandatory UX quality gate.
 Your job is to find every gap, ambiguity, and inconsistency in the UI/UX specification.
@@ -268,6 +268,24 @@ Check:
 
 ---
 
+## Category 17: Visual Design & SLDS Compliance
+
+Check:
+- **SLDS tokens only**: are all colors, spacing, font sizes, and shadows expressed as SLDS design tokens (`--slds-*` or `var(--lwc-*)`)? No raw hex values, hardcoded `px` sizes, or `rgba()` in component CSS.
+- **Button variants**: are button variants semantically correct? (`brand` = primary action, `neutral` = secondary, `destructive` = irreversible actions, `success` = confirmation). Never use `brand` for destructive actions.
+- **Icon correctness**: are all icons sourced from the SLDS icon library (`lightning-icon` with correct sprite: `utility:`, `standard:`, `action:`, or `doctype:`)? No custom SVGs substituting SLDS icons.
+- **Icon sizing**: are icon sizes consistent with context? (`x-small` = inline text, `small` = button icon, `medium` = standalone, `large` = empty state illustrations).
+- **Typography hierarchy**: are heading levels (`h1`-`h6`) used semantically, not for visual sizing? Are font sizes pulled from SLDS type tokens, not hardcoded?
+- **Spacing consistency**: are all spacing values from the SLDS spacing scale (`slds-m-*`, `slds-p-*` utility classes or `--slds-g-spacing-*` tokens)? No arbitrary `margin: 14px` or `padding: 7px`.
+- **Visual hierarchy**: is there a clear primary/secondary/tertiary information hierarchy on each screen? Labels visually distinct from values. Section headers distinct from field labels.
+- **Color palette compliance**: are colors limited to the SLDS palette and brand tokens? No one-off colors introduced for individual components.
+- **Component variant correctness**: are card, badge, pill, and avatar variants appropriate for the data they represent? (`slds-badge_lightest` for neutral states; color utilities for status states).
+- **Density appropriateness**: is information density appropriate for the user type? Internal power users tolerate dense layouts; community/external users need more breathing room.
+
+For Salesforce LWC: run `slds-lint` or check `*.css` files for any `color: #`, `background: #`, `font-size: Npx`, or `margin: Npx` patterns. Verify `lightning-button` `variant` props match action semantics, not just visual preference.
+
+---
+
 ## Output Format
 
 ```
@@ -297,7 +315,7 @@ Source: <file or project>
 VERDICT: GO
 FINDINGS: 0
 
-All 16 UX categories pass. Specification is complete.
+All 17 UI & UX categories pass. Specification is complete.
 ```
 
 ---
