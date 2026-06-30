@@ -232,6 +232,7 @@ export default class IcdLookup extends LightningElement {
   }
 
   handleRetry() {
+    this._dropdownDismissed = false;
     if (this.searchTerm.length >= 3) {
       this.searchError = "";
       this.isLoading = true;

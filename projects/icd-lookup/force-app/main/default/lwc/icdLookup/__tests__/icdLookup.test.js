@@ -155,12 +155,17 @@ describe("selection", () => {
     await Promise.resolve();
     await Promise.resolve();
 
+    // Register handler after search so we only capture the selection event
+    const flowHandler = jest.fn();
+    el.addEventListener("lightning__flowattributechange", flowHandler);
+
     const firstOption = el.shadowRoot.querySelector('[role="option"]');
     expect(firstOption).not.toBeNull();
     firstOption.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     firstOption.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await Promise.resolve();
-    expect(el.selectedCode).toBeTruthy();
+    expect(el.selectedCode).toBe("I10: Essential (primary) hypertension");
+    expect(flowHandler).toHaveBeenCalledTimes(1);
     jest.useRealTimers();
   });
 
@@ -199,6 +204,7 @@ describe("focusout behavior", () => {
   });
 
   it("clears results and searchTerm when focus leaves the component with no selection", async () => {
+    jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
     getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
@@ -207,6 +213,11 @@ describe("focusout behavior", () => {
     const input = el.shadowRoot.querySelector("input");
     input.value = "hyp";
     input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    // Advance debounce so results are actually loaded before focusout fires
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
     await Promise.resolve();
 
     const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
@@ -219,9 +230,13 @@ describe("focusout behavior", () => {
       );
       await Promise.resolve();
     }
-    // relatedTarget is outside the component - results should be cleared
+    // Results must be cleared
     const options = el.shadowRoot.querySelectorAll('[role="option"]');
     expect(options.length).toBe(0);
+    // searchTerm must be cleared (no selection was committed)
+    const inputAfter = el.shadowRoot.querySelector("input");
+    expect(inputAfter.value).toBe("");
+    jest.useRealTimers();
   });
 });
 
