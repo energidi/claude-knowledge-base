@@ -13,3 +13,8 @@
     min-height: 2.75rem;
     padding: 0.5rem 1rem;
 }
+
+.slds-dropdown .slds-listbox_vertical {
+    max-height: 20rem;
+    overflow-y: auto;
+}

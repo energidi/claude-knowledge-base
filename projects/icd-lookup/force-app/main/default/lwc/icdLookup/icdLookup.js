@@ -110,6 +110,7 @@ export default class IcdLookup extends LightningElement {
     return this.icdResults.map((res, index) => ({
       code: res.code,
       description: res.description,
+      fullLabel: `${res.code}: ${res.description}`,
       optionId: `icd-option-${index}`,
       isActive: index === this._focusedIndex,
       isSelected: `${res.code}: ${res.description}` === this.selectedCode,
