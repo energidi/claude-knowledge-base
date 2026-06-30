@@ -12,6 +12,7 @@ ISP-6429 - Salesforce DX project implementing a real-time ICD-10 code autocomple
 `C:\Users\GidiAbramovich\Documents\Claude\claude-knowledge-base`
 
 **To push to GitHub:**
+
 1. Copy changed files (e.g. `CLAUDE.md`) into `projects/icd-lookup/` inside that local clone.
 2. `cd` into that clone, `git add`, `git pull --rebase`, then `git push`.
 
@@ -19,18 +20,18 @@ ISP-6429 - Salesforce DX project implementing a real-time ICD-10 code autocomple
 
 ## Commands
 
-| Task | Command |
-|---|---|
-| Lint LWC/Aura JS | `npm run lint` |
-| Run unit tests | `npm run test:unit` |
-| Run tests (watch) | `npm run test:unit:watch` |
-| Run tests (debug) | `npm run test:unit:debug` |
+| Task                    | Command                      |
+| ----------------------- | ---------------------------- |
+| Lint LWC/Aura JS        | `npm run lint`               |
+| Run unit tests          | `npm run test:unit`          |
+| Run tests (watch)       | `npm run test:unit:watch`    |
+| Run tests (debug)       | `npm run test:unit:debug`    |
 | Run tests with coverage | `npm run test:unit:coverage` |
-| Format all files | `npm run prettier` |
-| Verify formatting | `npm run prettier:verify` |
-| Deploy to org | `sf project deploy start` |
-| Retrieve from org | `sf project retrieve start` |
-| Open org | `sf org open` |
+| Format all files        | `npm run prettier`           |
+| Verify formatting       | `npm run prettier:verify`    |
+| Deploy to org           | `sf project deploy start`    |
+| Retrieve from org       | `sf project retrieve start`  |
+| Open org                | `sf org open`                |
 
 Pre-commit hooks (via Husky + lint-staged) run Prettier, ESLint, and Jest automatically on staged files.
 
@@ -48,21 +49,23 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 
 **Flow input properties:**
 
-| Property | Type | Default | Description |
-|---|---|---|---|
-| `flowApiName` | String | `''` | API name of the host Flow. Used to load the matching `ICD_Lookup__mdt` record. |
-| `label` | String | `''` | Label above the input. |
-| `fieldPlaceholder` | String | `'Search by code or description...'` | Input placeholder. Overridden by `ICD_Lookup__mdt.Field_Placeholder__c`. |
-| `noResultsMessage` | String | `'No matching codes found.'` | Message shown on zero results. Overridden by `ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c`. |
-| `mandatory` | Boolean | `false` | Blocks Flow progression if no code is selected. Overridden by `ICD_Lookup__mdt.Required__c`. |
-| `defaultValue` | String | `''` | Pre-populates the field with an existing code (e.g. from a record). Must be in `CODE: Description` format. |
-| `helpText` | String | `''` | Help text shown via `lightning-helptext` next to the label. Overridden by `ICD_Lookup__mdt.Help_Text__c`. |
+| Property           | Type    | Default                              | Description                                                                                                |
+| ------------------ | ------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `flowApiName`      | String  | `''`                                 | API name of the host Flow. Used to load the matching `ICD_Lookup__mdt` record.                             |
+| `label`            | String  | `''`                                 | Label above the input.                                                                                     |
+| `fieldPlaceholder` | String  | `'Search by code or description...'` | Input placeholder. Overridden by `ICD_Lookup__mdt.Field_Placeholder__c`.                                   |
+| `noResultsMessage` | String  | `'No matching codes found.'`         | Message shown on zero results. Overridden by `ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c`.         |
+| `mandatory`        | Boolean | `false`                              | Blocks Flow progression if no code is selected. Overridden by `ICD_Lookup__mdt.Required__c`.               |
+| `defaultValue`     | String  | `''`                                 | Pre-populates the field with an existing code (e.g. from a record). Must be in `CODE: Description` format. |
+| `helpText`         | String  | `''`                                 | Help text shown via `lightning-helptext` next to the label. Overridden by `ICD_Lookup__mdt.Help_Text__c`.  |
 
 **Flow screen validation:** The component implements `@api validate()`. When `mandatory` is true and `selectedCode` is empty, `validate()` returns `{ isValid: false, errorMessage: '<label> is required.' }` to block navigation. The error message uses the field-specific label so it is identifiable when multiple instances appear on the same screen.
 
 **Dropdown behavior:** The dropdown closes on Escape key or Tab/focusout. Clicking outside the component causes the input to lose focus (focusout fires), which also closes the dropdown and clears the input text if no code was selected - preventing a visual disconnect between visible text and empty `selectedCode`. The component does not use `document.addEventListener` - all close logic is handled via `onfocusout` on the dropdown container. Escape clears results (`icdResults`, `_resultsReady`) and sets `_dropdownDismissed`; `searchTerm` is intentionally retained so the user can refine or re-trigger without retyping. Accepted trade-off: after Escape, there is no keyboard-only way to re-open prior results without typing again; typing re-triggers search, which is sufficient for this use case.
 
-**Search UX:** A hint "Type at least 3 characters to search." is shown when the input contains 1-2 characters. After a failed search, a Retry button appears alongside the error message. If a search takes longer than 5 seconds, a "Still searching..." indicator appears below the spinner.
+**Search UX:** A hint "Type at least 3 characters to search." is shown when the input contains 1-2 characters (suppressed if a validation error is already visible). If a search takes longer than 5 seconds, a "Still searching..." indicator appears below the spinner.
+
+**API error UX:** When the NIH API callout fails (non-200 after retry, timeout, or network error), a full-width red alert banner (`slds-notify_alert slds-theme_error`) appears above the field with the error message and a Retry button. The Retry button is in the banner only - there is no inline error below the input. The error message text is stored in Custom Label `ICD_Lookup_Error_API_Unavailable`.
 
 **CMT config load failure:** If `getIcdLookupConfig` fails, a warning banner (`slds-notify_alert slds-theme_warning`) is displayed above the field and the component falls back to the `@api` property defaults set in Flow Properties. **Flow builders must set the `mandatory` property in Flow Properties as a fallback** - if CMT load fails and mandatory was only set via CMT, the field will not be required.
 
@@ -72,16 +75,26 @@ Selected value format: `"CODE: Description"` (e.g. `"I10: Essential (primary) hy
 
 **`searchIcd10(String searchTerm)`** - `@AuraEnabled` (no cacheable - live callout)
 Makes a GET callout to the NIH Clinical Tables API via Named Credential `NihClinicalTables`:
+
 ```
 callout:NihClinicalTables/api/icd10cm/v3/search?terms=<encoded>&sf=code,name&maxList=10
 ```
+
 - Searches by both code and name (`sf=code,name`).
 - Guards: null/blank/< 3 chars returns empty list; > 100 chars throws. Timeout: 10 seconds.
 - One automatic retry via `doCallout()` private helper on HTTP 5xx or `System.CalloutException` (returns null) before throwing. Exactly 2 callout attempts max.
 - Response structure parsed: `[TotalCount, Codes[], null, [[Code, Name], ...]]`
 - Returns up to 10 `ICDResult` objects with `code` and `description` fields.
-- Throws `AuraHandledException` on non-200 status (after retry) or callout failure after retry.
+- On callout failure (after retry): calls `notifyOnError()` then throws `AuraHandledException`.
 - Access controlled via profile assignment - accessible to internal users and authenticated community users only.
+
+**`notifyOnError(String term, Exception e)`** - private, called on unexpected callout failure
+Sends a diagnostic email before the `AuraHandledException` is returned to the LWC. Recipient and subject are environment-aware:
+
+- **Production:** `Label.Salesforce_Support_Email_Address` - subject: `"ICD-10 Lookup Error - <OrgName>"`
+- **Sandbox:** `Label.Test_IS_Team_Email_Address` - subject: `"Sandbox: ICD-10 Lookup Error - <OrgName>"`
+
+Sandbox detected via `[SELECT IsSandbox FROM Organization LIMIT 1]`. Email body includes: running user name, email, user ID, profile ID, org name, environment, search term length, error type, error message, stack trace, and UTC timestamp. Wrapped in its own try/catch - email failure does not suppress the original exception.
 
 **`getIcdLookupConfig(String flowApiName)`** - `@AuraEnabled(cacheable=true)` (SOQL only - no callout)
 Queries `ICD_Lookup__mdt` by `Flow_API_Name__c` where `Active__c = true`. Returns the matching record or `null`.
@@ -94,15 +107,15 @@ Queries `ICD_Lookup__mdt` by `Flow_API_Name__c` where `Active__c = true`. Return
 
 Drives per-flow configuration for every `icdLookup` instance. One record per Screen Flow, identified by `Flow_API_Name__c`.
 
-| Field | API Name | Type | Default |
-|---|---|---|---|
-| Flow API Name | `Flow_API_Name__c` | Text(255) | - |
-| Field Placeholder | `Field_Placeholder__c` | Text(255) | - |
-| No Matching Codes Found Message | `No_Matching_Codes_Found_Message__c` | Text(255) | - |
-| Required? | `Required__c` | Checkbox | false |
-| Active? | `Active__c` | Checkbox | true |
-| Help Text | `Help_Text__c` | Text(255) | - |
-| Description | `Description__c` | LongTextArea(32768) | - |
+| Field                           | API Name                             | Type                | Default |
+| ------------------------------- | ------------------------------------ | ------------------- | ------- |
+| Flow API Name                   | `Flow_API_Name__c`                   | Text(255)           | -       |
+| Field Placeholder               | `Field_Placeholder__c`               | Text(255)           | -       |
+| No Matching Codes Found Message | `No_Matching_Codes_Found_Message__c` | Text(255)           | -       |
+| Required?                       | `Required__c`                        | Checkbox            | false   |
+| Active?                         | `Active__c`                          | Checkbox            | true    |
+| Help Text                       | `Help_Text__c`                       | Text(255)           | -       |
+| Description                     | `Description__c`                     | LongTextArea(32768) | -       |
 
 CMT records live in `force-app/main/default/customMetadata/`. Create one record per Screen Flow that uses the component, setting `Flow_API_Name__c` to the Flow's API name.
 
@@ -110,11 +123,11 @@ CMT records live in `force-app/main/default/customMetadata/`. Create one record 
 
 The component is deployed into these Screen Flows (metadata not in this repo - managed in org directly):
 
-| Flow | Context |
-|---|---|
-| `Community_Rare_eTRF_Page_2_Screen_Flow` | External community |
+| Flow                                             | Context            |
+| ------------------------------------------------ | ------------------ |
+| `Community_Rare_eTRF_Page_2_Screen_Flow`         | External community |
 | `Community_Reproductive_eTRF_Page_4_Screen_Flow` | External community |
-| `Authorization_Order_Revision_Screen_Flow` | Internal |
+| `Authorization_Order_Revision_Screen_Flow`       | Internal           |
 
 ICD10-1 is mandatory for Insurance Billing. ICD10-2 through ICD10-5 are optional. Enforce this via Flow validation rules on the Flow screens, not inside the component.
 

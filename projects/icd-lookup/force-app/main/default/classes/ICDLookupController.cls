@@ -77,6 +77,7 @@ public with sharing class ICDLookupController {
         } catch (AuraHandledException e) {
             throw e;
         } catch (Exception e) {
+            notifyOnError(term, e);
             throw new AuraHandledException('Search failed. Please try again.');
         }
 
@@ -100,6 +101,39 @@ public with sharing class ICDLookupController {
             LIMIT 1
         ];
         return configs.isEmpty() ? null : configs[0];
+    }
+
+    private static void notifyOnError(String term, Exception e) {
+        try {
+            Boolean isSandbox = [SELECT IsSandbox FROM Organization LIMIT 1].IsSandbox;
+            String recipient = isSandbox
+                ? Label.Test_IS_Team_Email_Address
+                : Label.Salesforce_Support_Email_Address;
+            String subjectPrefix = isSandbox ? 'Sandbox: ' : '';
+
+            Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+            mail.setToAddresses(new List<String>{ recipient });
+            mail.setSubject(subjectPrefix + 'ICD-10 Lookup Error - ' + UserInfo.getOrganizationName());
+            mail.setPlainTextBody(
+                'An error occurred in the ICD-10 Lookup component.\n' +
+                '\n' +
+                'Running User:     ' + UserInfo.getName() + '\n' +
+                'Email:            ' + UserInfo.getUserEmail() + '\n' +
+                'User ID:          ' + UserInfo.getUserId() + '\n' +
+                'Profile ID:       ' + UserInfo.getProfileId() + '\n' +
+                'Organisation:     ' + UserInfo.getOrganizationName() + '\n' +
+                'Environment:      ' + (isSandbox ? 'Sandbox' : 'Production') + '\n' +
+                'Search Term:      [' + (term != null ? String.valueOf(term.length()) : '0') + ' characters]\n' +
+                'Error Type:       ' + e.getTypeName() + '\n' +
+                'Error Message:    ' + e.getMessage() + '\n' +
+                'Stack Trace:\n'    + e.getStackTraceString() + '\n' +
+                '\n' +
+                'Timestamp (UTC):  ' + String.valueOf(Datetime.now())
+            );
+            Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ mail }, false);
+        } catch (Exception emailEx) {
+            System.debug(LoggingLevel.ERROR, 'ICD lookup error notification failed: ' + emailEx.getMessage());
+        }
     }
 
     private static HttpResponse doCallout(Http http, HttpRequest request) {

@@ -1,113 +1,158 @@
 <template>
-    <template lwc:if={configError}>
-        <div class="slds-notify slds-notify_alert slds-theme_warning slds-m-bottom_x-small" role="alert" aria-live="assertive">
-            <span class="slds-assistive-text">Warning: </span>
-            {configError}
-        </div>
-    </template>
-    <div class={formElementClass}>
-        <div class="slds-form-element__label-container">
-            <label id={_labelId} class="slds-form-element__label">
-                <template lwc:if={isMandatory}>
-                    <abbr class="slds-required" title="required">*</abbr>
-                </template>
-                {label}
-            </label>
-            <template lwc:if={helpText}>
-                <lightning-helptext content={helpText}></lightning-helptext>
-            </template>
-        </div>
-        <div class="slds-form-element__control">
-            <div class="slds-combobox_container">
-                <div class={dropdownClass}
-                     onkeydown={handleDropdownKeydown}
-                     onfocusout={handleFocusOut}>
-                    <div class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right" role="none">
-                        <input
-                            id="icd-input"
-                            type="text"
-                            role="combobox"
-                            aria-haspopup="listbox"
-                            aria-expanded={isOpen}
-                            aria-labelledby={_labelId}
-                            aria-owns="icd-listbox"
-                            aria-controls="icd-listbox"
-                            aria-activedescendant={activeDescendant}
-                            aria-autocomplete="list"
-                            aria-required={ariaRequired}
-                            class="slds-input slds-combobox__input"
-                            placeholder={fieldPlaceholder}
-                            value={searchTerm}
-                            oninput={handleSearchChange}>
-                        <template lwc:if={searchTerm}>
-                            <button
-                                class="slds-button slds-button_icon slds-input__icon slds-input__icon_right"
-                                title={labels.clear}
-                                type="button"
-                                onclick={handleClear}>
-                                <lightning-icon icon-name="utility:clear" size="x-small" alternative-text={labels.clear}></lightning-icon>
-                            </button>
-                        </template>
-                    </div>
-                    <div class="slds-dropdown slds-dropdown_fluid">
-                        <ul id="icd-listbox"
-                            role="listbox"
-                            class="slds-listbox slds-listbox_vertical">
-                            <template lwc:if={isLoading}>
-                                <li role="presentation" class="slds-listbox__item">
-                                    <div class="slds-align_absolute-center slds-p-around_medium">
-                                        <lightning-spinner alt="Loading" size="small" variant="brand"></lightning-spinner>
-                                    </div>
-                                </li>
-                            </template>
-                            <template lwc:if={searchSlowWarning}>
-                                <li role="presentation" class="slds-listbox__item">
-                                    <div class="slds-align_absolute-center slds-p-around_x-small slds-text-color_weak">{labels.stillSearching}</div>
-                                </li>
-                            </template>
-                            <template for:each={processedResults} for:item="res">
-                                <li key={res.code}
-                                    id={res.optionId}
-                                    role="option"
-                                    aria-selected={res.isSelected}
-                                    class={res.itemClass}
-                                    onmousedown={handleOptionMousedown}
-                                    onclick={handleSelect}
-                                    data-code={res.code}
-                                    data-description={res.description}>
-                                    <span class="slds-media slds-listbox__option slds-listbox__option_plain slds-media_center">
-                                        <span class="slds-media__body">
-                                            <span class="slds-truncate">
-                                                <strong>{res.code}</strong>: {res.description}
-                                            </span>
-                                        </span>
-                                    </span>
-                                </li>
-                            </template>
-                            <template lwc:if={showNoResults}>
-                                <li role="presentation" class="slds-listbox__item">
-                                    <div role="status" class="slds-align_absolute-center slds-p-around_small slds-text-color_error no-results-message">
-                                        {noResultsMessage}
-                                    </div>
-                                </li>
-                            </template>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <template lwc:if={showMinCharHint}>
-            <p class="slds-form-element__help">{labels.minCharHint}</p>
-        </template>
-        <template lwc:if={validationError}>
-            <div class="slds-form-element__help" role="alert">{validationError}</div>
-        </template>
-        <template lwc:if={searchError}>
-            <div class="slds-form-element__help slds-grid slds-grid_align-spread" role="alert">
-                <span>{searchError}</span>
-                <button class="slds-button slds-button_neutral slds-m-left_x-small" type="button" onclick={handleRetry}>{labels.retry}</button>
-            </div>
-        </template>
-        <div aria-live="polite" aria-atomic="true" class="slds-assistive-text">{screenReaderStatus}</div>
+  <template lwc:if={configError}>
+    <div
+      class="slds-notify slds-notify_alert slds-theme_warning slds-m-bottom_x-small"
+      role="alert"
+      aria-live="assertive"
+    >
+      <span class="slds-assistive-text">Warning: </span>
+      {configError}
     </div>
+  </template>
+  <template lwc:if={searchError}>
+    <div
+      class="slds-notify slds-notify_alert slds-theme_error slds-m-bottom_x-small"
+      role="alert"
+      aria-live="assertive"
+    >
+      <span class="slds-assistive-text">Error: </span>
+      {searchError}
+      <button
+        class="slds-button slds-button_inverse slds-m-left_small"
+        type="button"
+        onclick={handleRetry}
+      >
+        {labels.retry}
+      </button>
+    </div>
+  </template>
+  <div class={formElementClass}>
+    <div class="slds-form-element__label-container">
+      <label id={_labelId} class="slds-form-element__label">
+        <template lwc:if={isMandatory}>
+          <abbr class="slds-required" title="required">*</abbr>
+        </template>
+        {label}
+      </label>
+      <template lwc:if={helpText}>
+        <lightning-helptext content={helpText}></lightning-helptext>
+      </template>
+    </div>
+    <div class="slds-form-element__control">
+      <div class="slds-combobox_container">
+        <div
+          class={dropdownClass}
+          onkeydown={handleDropdownKeydown}
+          onfocusout={handleFocusOut}
+        >
+          <div
+            class="slds-combobox__form-element slds-input-has-icon slds-input-has-icon_right"
+            role="none"
+          >
+            <input
+              id="icd-input"
+              type="text"
+              role="combobox"
+              aria-haspopup="listbox"
+              aria-expanded={isOpen}
+              aria-labelledby={_labelId}
+              aria-owns="icd-listbox"
+              aria-controls="icd-listbox"
+              aria-activedescendant={activeDescendant}
+              aria-autocomplete="list"
+              aria-required={ariaRequired}
+              class="slds-input slds-combobox__input"
+              placeholder={fieldPlaceholder}
+              value={searchTerm}
+              oninput={handleSearchChange}
+            />
+            <template lwc:if={searchTerm}>
+              <button
+                class="slds-button slds-button_icon slds-input__icon slds-input__icon_right"
+                title={labels.clear}
+                type="button"
+                onclick={handleClear}
+              >
+                <lightning-icon
+                  icon-name="utility:clear"
+                  size="x-small"
+                  alternative-text={labels.clear}
+                ></lightning-icon>
+              </button>
+            </template>
+          </div>
+          <div class="slds-dropdown slds-dropdown_fluid">
+            <ul
+              id="icd-listbox"
+              role="listbox"
+              class="slds-listbox slds-listbox_vertical"
+            >
+              <template lwc:if={isLoading}>
+                <li role="presentation" class="slds-listbox__item">
+                  <div class="slds-align_absolute-center slds-p-around_medium">
+                    <lightning-spinner
+                      alternative-text=""
+                      size="small"
+                      variant="brand"
+                    ></lightning-spinner>
+                  </div>
+                </li>
+              </template>
+              <template lwc:if={searchSlowWarning}>
+                <li role="presentation" class="slds-listbox__item">
+                  <div
+                    class="slds-align_absolute-center slds-p-around_x-small slds-text-color_weak"
+                  >
+                    {labels.stillSearching}
+                  </div>
+                </li>
+              </template>
+              <template for:each={processedResults} for:item="res">
+                <li
+                  key={res.code}
+                  id={res.optionId}
+                  role="option"
+                  aria-selected={res.isSelected}
+                  class={res.itemClass}
+                  onmousedown={handleOptionMousedown}
+                  onclick={handleSelect}
+                  data-code={res.code}
+                  data-description={res.description}
+                >
+                  <span
+                    class="slds-media slds-listbox__option slds-listbox__option_plain slds-media_center"
+                  >
+                    <span class="slds-media__body">
+                      <span class="slds-truncate">
+                        <strong>{res.code}</strong>: {res.description}
+                      </span>
+                    </span>
+                  </span>
+                </li>
+              </template>
+              <template lwc:if={showNoResults}>
+                <li role="presentation" class="slds-listbox__item">
+                  <div
+                    role="status"
+                    class="slds-align_absolute-center slds-p-around_small slds-text-color_error no-results-message"
+                  >
+                    {noResultsMessage}
+                  </div>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <template lwc:if={showMinCharHint}>
+      <p class="slds-form-element__help">{labels.minCharHint}</p>
+    </template>
+    <template lwc:if={validationError}>
+      <div class="slds-form-element__help" role="alert">{validationError}</div>
+    </template>
+    <div aria-live="polite" aria-atomic="true" class="slds-assistive-text">
+      {screenReaderStatus}
+    </div>
+  </div>
 </template>
