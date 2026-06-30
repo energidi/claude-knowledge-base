@@ -59,7 +59,7 @@ Write `PHASE 0 COMPLETE` before proceeding.
 Dispatch all four review lenses **in parallel** in a single message using the Skill tool:
 
 1. `sf-review:sf-review-architecture` - 6 pillars: data model, security, async/limits, integration, queries, failure handling
-2. `sf-review:sf-review-ux` - 16 UX categories: states, accessibility, responsive, interaction consistency, feedback, component sync, copy, forms, data presentation, navigation, task flows, user control, permissions, Salesforce-specific patterns, internationalization, and error handling
+2. `sf-review:sf-review-ui-ux` - 17 UI & UX categories: states, accessibility, responsive, interaction consistency, feedback, component sync, copy, forms, data presentation, navigation, task flows, user control, permissions, Salesforce-specific patterns, internationalization, error handling, and visual design/SLDS compliance
 3. `sf-review:sf-review-naming` - 8 violation categories: V-01 through V-08
 4. `sf-review:sf-review-security` - 10 security domains: authentication, authorization, Apex code, frontend, API/integrations, data privacy, org config, automation/email, monitoring/DevSecOps, emerging threats
 
