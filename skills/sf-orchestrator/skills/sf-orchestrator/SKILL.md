@@ -1,6 +1,6 @@
 ---
 name: sf-orchestrator
-description: End-to-end Salesforce orchestrator. Reads prior review history first to tag findings as NEW/RECURRING/REGRESSION, then runs all 5 review lenses in parallel, presents a combined findings table with GO/NO-GO verdict, asks whether to fix all or selected findings, applies fixes, updates relevant MD files, asks whether to deploy to Salesforce, then asks whether to push to GitHub. Use when user says "run a review", "code review", "review", "sf review", or runs /sf-orchestrator.
+description: End-to-end Salesforce orchestrator. Reads prior review history first to tag findings as NEW/RECURRING/REGRESSION, then runs all 7 review lenses in parallel (architecture, UI/UX, naming, security, performance, testing, automation), presents a combined findings table with GO/NO-GO verdict, asks whether to fix all or selected findings, applies fixes, updates relevant MD files, asks whether to deploy to Salesforce, then asks whether to push to GitHub. Use when user says "run a review", "code review", "review", "sf review", or runs /sf-orchestrator.
 allowed-tools: Read, Glob, Grep, Edit, Write, Bash, Agent
 metadata:
   author: Gidi Abramovich
