@@ -27,14 +27,6 @@ jest.mock(
   { virtual: true }
 );
 jest.mock(
-  "@salesforce/label/c.ICD_Lookup_Error_Config_Load_Failed",
-  () => ({
-    default:
-      "Field configuration could not be loaded. Refresh the page to retry."
-  }),
-  { virtual: true }
-);
-jest.mock(
   "@salesforce/label/c.ICD_Lookup_Min_Char_Hint",
   () => ({ default: "Type at least 3 characters to search." }),
   { virtual: true }
@@ -352,8 +344,8 @@ describe("min char hint", () => {
   });
 });
 
-describe("configError banner", () => {
-  it("renders warning banner when getIcdLookupConfig rejects", async () => {
+describe("config load failure", () => {
+  it("falls back silently with no warning banner when getIcdLookupConfig rejects", async () => {
     getIcdLookupConfig.mockRejectedValue(new Error("load failed"));
     const el = createElement_icdLookup({ flowApiName: "Some_Flow" });
     await Promise.resolve();
@@ -361,6 +353,6 @@ describe("configError banner", () => {
     await Promise.resolve();
 
     const banner = el.shadowRoot.querySelector(".slds-theme_warning");
-    expect(banner).not.toBeNull();
+    expect(banner).toBeNull();
   });
 });

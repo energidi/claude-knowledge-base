@@ -1,14 +1,4 @@
 <template>
-  <template lwc:if={configError}>
-    <div
-      class="slds-notify slds-notify_alert slds-theme_warning slds-m-bottom_x-small"
-      role="alert"
-      aria-live="assertive"
-    >
-      <span class="slds-assistive-text">Warning: </span>
-      {configError}
-    </div>
-  </template>
   <template lwc:if={searchError}>
     <div
       class="slds-notify slds-notify_alert slds-theme_error slds-m-bottom_x-small"

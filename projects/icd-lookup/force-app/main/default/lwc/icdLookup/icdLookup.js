@@ -3,7 +3,6 @@ import searchIcd10 from "@salesforce/apex/ICDLookupController.searchIcd10";
 import getIcdLookupConfig from "@salesforce/apex/ICDLookupController.getIcdLookupConfig";
 import { FlowAttributeChangeEvent } from "lightning/flowSupport";
 import labelSearchFailed from "@salesforce/label/c.ICD_Lookup_Error_API_Unavailable";
-import labelConfigLoadFailed from "@salesforce/label/c.ICD_Lookup_Error_Config_Load_Failed";
 import labelValidationRequired from "@salesforce/label/c.ICD_Lookup_Validation_Required";
 import labelMinCharHint from "@salesforce/label/c.ICD_Lookup_Min_Char_Hint";
 import labelStillSearching from "@salesforce/label/c.ICD_Lookup_Still_Searching";
@@ -20,10 +19,38 @@ export default class IcdLookup extends LightningElement {
   @api flowApiName;
   @api mandatory = false;
   @api defaultValue;
-  @api helpText;
-  @api noResultsMessage = "No matching codes found.";
-  @api fieldPlaceholder = "Search by code or description (e.g. 'Hypertension')";
-  @api selectedCode;
+
+  _helpText;
+  @api get helpText() {
+    return this._helpText;
+  }
+  set helpText(value) {
+    this._helpText = value;
+  }
+
+  _noResultsMessage = "No matching codes found.";
+  @api get noResultsMessage() {
+    return this._noResultsMessage;
+  }
+  set noResultsMessage(value) {
+    this._noResultsMessage = value;
+  }
+
+  _fieldPlaceholder = "Search by code or description (e.g. 'Hypertension')";
+  @api get fieldPlaceholder() {
+    return this._fieldPlaceholder;
+  }
+  set fieldPlaceholder(value) {
+    this._fieldPlaceholder = value;
+  }
+
+  _selectedCode;
+  @api get selectedCode() {
+    return this._selectedCode;
+  }
+  set selectedCode(value) {
+    this._selectedCode = value;
+  }
 
   labels = {
     stillSearching: labelStillSearching,
@@ -36,7 +63,6 @@ export default class IcdLookup extends LightningElement {
   icdResults = [];
   isLoading = false;
   searchError = "";
-  configError = "";
   isSelected = false;
   validationError = "";
   searchDebounceTimer;
@@ -64,7 +90,7 @@ export default class IcdLookup extends LightningElement {
 
   connectedCallback() {
     if (this.defaultValue) {
-      this.selectedCode = this.defaultValue;
+      this._selectedCode = this.defaultValue;
       this.searchTerm = this.defaultValue;
       this.isSelected = true;
     }
@@ -74,10 +100,11 @@ export default class IcdLookup extends LightningElement {
         .then((config) => {
           if (config) {
             if (config.Field_Placeholder__c)
-              this.fieldPlaceholder = config.Field_Placeholder__c;
+              this._fieldPlaceholder = config.Field_Placeholder__c;
             if (config.No_Matching_Codes_Found_Message__c)
-              this.noResultsMessage = config.No_Matching_Codes_Found_Message__c;
-            if (config.Help_Text__c) this.helpText = config.Help_Text__c;
+              this._noResultsMessage =
+                config.No_Matching_Codes_Found_Message__c;
+            if (config.Help_Text__c) this._helpText = config.Help_Text__c;
             if (
               config.Required__c !== null &&
               config.Required__c !== undefined
@@ -87,7 +114,7 @@ export default class IcdLookup extends LightningElement {
           }
         })
         .catch(() => {
-          this.configError = labelConfigLoadFailed;
+          // Config load failure falls back to @api defaults silently; no user-facing banner.
         });
     }
   }
@@ -181,8 +208,8 @@ export default class IcdLookup extends LightningElement {
   handleSearchChange(event) {
     this._dropdownDismissed = false;
     this.searchTerm = event.target.value;
-    if (this.searchTerm !== this.selectedCode) {
-      this.selectedCode = "";
+    if (this.searchTerm !== this._selectedCode) {
+      this._selectedCode = "";
       this.dispatchEvent(new FlowAttributeChangeEvent("selectedCode", ""));
     }
     this.searchError = "";
@@ -194,6 +221,7 @@ export default class IcdLookup extends LightningElement {
 
     if (this.searchTerm.length >= 3) {
       this.icdResults = [];
+      // eslint-disable-next-line @lwc/lwc/no-async-operation
       this.searchDebounceTimer = setTimeout(() => {
         this.isLoading = true;
         this.fetchIcdResults();
@@ -207,6 +235,7 @@ export default class IcdLookup extends LightningElement {
   fetchIcdResults() {
     this._requestSeq = (this._requestSeq ?? 0) + 1;
     const seq = this._requestSeq;
+    // eslint-disable-next-line @lwc/lwc/no-async-operation
     this._slowSearchTimer = setTimeout(() => {
       if (seq === this._requestSeq && this.isLoading) {
         this._searchIsSlow = true;
@@ -283,12 +312,14 @@ export default class IcdLookup extends LightningElement {
         this._resultsReady = false;
         this._dropdownDismissed = true;
         break;
+      default:
+        break;
     }
   }
 
   handleClear() {
     this.searchTerm = "";
-    this.selectedCode = "";
+    this._selectedCode = "";
     this.icdResults = [];
     this._resultsReady = false;
     this.isSelected = false;
@@ -313,8 +344,8 @@ export default class IcdLookup extends LightningElement {
   _commitSelection(code, description) {
     this._dropdownDismissed = false;
     this.searchError = "";
-    this.selectedCode = `${code}: ${description}`;
-    this.searchTerm = this.selectedCode;
+    this._selectedCode = `${code}: ${description}`;
+    this.searchTerm = this._selectedCode;
     this.icdResults = [];
     this._focusedIndex = -1;
     this._resultsReady = false;

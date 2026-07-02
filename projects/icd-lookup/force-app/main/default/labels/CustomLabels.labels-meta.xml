@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
     <labels>
         <fullName>Salesforce_Support_Email_Address</fullName>
@@ -17,27 +17,22 @@
         <value>Clear</value>
     </labels>
     <labels>
-        <fullName>ICD_Lookup_Error_Config_Load_Failed</fullName>
-        <categories>ISP-6429, ICD Lookup</categories>
-        <language>en_US</language>
-        <protected>false</protected>
-        <shortDescription>ICD Lookup - Config load failure warning</shortDescription>
-        <value>Field configuration could not be loaded. Refresh the page to retry.</value>
-    </labels>
-    <labels>
         <fullName>ICD_Lookup_Error_API_Unavailable</fullName>
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - NIH API callout failure message</shortDescription>
-        <value>ICD-10 search is temporarily unavailable. Please try again. If the issue persists, contact your Clinical Coordinator.</value>
+        <shortDescription
+    >ICD Lookup - NIH API callout failure message</shortDescription>
+        <value
+    >ICD-10 search is temporarily unavailable. Please try again. If the issue persists, contact your Clinical Coordinator.</value>
     </labels>
     <labels>
         <fullName>ICD_Lookup_Min_Char_Hint</fullName>
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - Minimum character hint shown when 1-2 chars typed</shortDescription>
+        <shortDescription
+    >ICD Lookup - Minimum character hint shown when 1-2 chars typed</shortDescription>
         <value>Type at least 3 characters to search.</value>
     </labels>
     <labels>
@@ -45,7 +40,8 @@
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - Retry button label shown after a search failure</shortDescription>
+        <shortDescription
+    >ICD Lookup - Retry button label shown after a search failure</shortDescription>
         <value>Retry</value>
     </labels>
     <labels>
@@ -53,7 +49,8 @@
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - Screen reader announcement when dropdown is dismissed via Escape</shortDescription>
+        <shortDescription
+    >ICD Lookup - Screen reader announcement when dropdown is dismissed via Escape</shortDescription>
         <value>Search results dismissed.</value>
     </labels>
     <labels>
@@ -61,7 +58,8 @@
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - Screen reader announcement while search is loading</shortDescription>
+        <shortDescription
+    >ICD Lookup - Screen reader announcement while search is loading</shortDescription>
         <value>Loading results...</value>
     </labels>
     <labels>
@@ -69,7 +67,8 @@
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - Screen reader singular result count suffix (e.g. &quot;1 result found&quot;)</shortDescription>
+        <shortDescription
+    >ICD Lookup - Screen reader singular result count suffix (e.g. &quot;1 result found&quot;)</shortDescription>
         <value>result found</value>
     </labels>
     <labels>
@@ -77,7 +76,8 @@
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - Screen reader plural result count suffix (e.g. &quot;5 results found&quot;)</shortDescription>
+        <shortDescription
+    >ICD Lookup - Screen reader plural result count suffix (e.g. &quot;5 results found&quot;)</shortDescription>
         <value>results found</value>
     </labels>
     <labels>
@@ -85,7 +85,8 @@
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - Screen reader announcement when search exceeds 5 seconds</shortDescription>
+        <shortDescription
+    >ICD Lookup - Screen reader announcement when search exceeds 5 seconds</shortDescription>
         <value>Still searching, please wait...</value>
     </labels>
     <labels>
@@ -93,7 +94,8 @@
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - Visible slow-search indicator text shown after 5 seconds</shortDescription>
+        <shortDescription
+    >ICD Lookup - Visible slow-search indicator text shown after 5 seconds</shortDescription>
         <value>Still searching...</value>
     </labels>
     <labels>
@@ -101,7 +103,18 @@
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>
         <protected>false</protected>
-        <shortDescription>ICD Lookup - Required field validation suffix</shortDescription>
+        <shortDescription
+    >ICD Lookup - Required field validation suffix</shortDescription>
         <value>is required.</value>
+    </labels>
+    <labels>
+        <fullName>eTRF_Manually_Enter_ICD_10_Codes_Tooltip</fullName>
+        <categories>ISP-6429, eTRF</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription
+    >eTRF - Manually Enter ICD-10 Codes - Tooltip</shortDescription>
+        <value
+    >Select this option if you run into any issues with the ICD-10 Code search feature, and then enter the codes manually.</value>
     </labels>
 </CustomLabels>
