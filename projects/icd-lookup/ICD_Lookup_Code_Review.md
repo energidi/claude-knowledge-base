@@ -1,45 +1,33 @@
 # ICD Lookup Code Review Log (ISP-6429)
 
-Last Updated: June 30, 2026 (Round 11)
+Last Updated: July 2, 2026 (Round 12)
 
 ---
 
-## Round 11 - June 30, 2026
+## Round 12 - July 2, 2026
 
-**Reviewer:** sf-orchestrator (Claude Code)
-**Scope:** Full review - ICDLookupController.cls, icdLookup LWC, ICD_Lookup__mdt metadata, CustomLabels
-**Lenses:** Architecture, UX, Naming, Security
-**Verdict:** GO (0 Critical, 0 High, 1 Medium dropped, 4 Low; 4 fixes applied)
+**Reviewer:** Claude Code (direct user-reported bug fix, not a full sf-orchestrator review)
+**Scope:** icdLookup.js-meta.xml only
+**Verdict:** GO (1 Medium regression fixed)
 
 ### Findings Summary
 
 | Severity  | Total | Applied | Skipped |
 | --------- | ----- | ------- | ------- |
-| Critical  | 0     | -       | -       |
-| High      | 0     | -       | -       |
-| Medium    | 1     | 0       | 1 (dropped - label exists in all orgs, not a project concern) |
-| Low       | 4     | 4       | 0       |
-| **Total** | **5** | **4**   | **1**   |
+| Medium    | 1     | 1       | 0       |
+| **Total** | **1** | **1**   | **0**   |
 
 ### Applied Fixes
 
-| #   | Status       | Severity | Area                    | Fix                                                                                                                                                                                                                                          |
-| --- | ------------ | -------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2   | PARTIAL-FIX  | Low      | icdLookup.test.js:201   | Fixed vacuous focusout test: added `jest.useFakeTimers()`, `advanceTimersByTime(500)` so results actually load before focusout fires; added `expect(inputAfter.value).toBe("")` to assert searchTerm is cleared (per test name)              |
-| 3   | PARTIAL-FIX  | Low      | icdLookup.test.js:142   | Strengthened selection test: added `flowHandler` listener (registered post-search to isolate selection event); added `expect(flowHandler).toHaveBeenCalledTimes(1)` and `expect(el.selectedCode).toBe("I10: Essential (primary) hypertension")` |
-| 4   | NEW          | Low      | ICDLookupController.cls | Removed `System.debug` from `notifyOnError` email-failure catch block; replaced with silent swallow + comment. The search error is already surfaced to the user via the error banner; email failure does not need secondary logging. `System.debug` is not best practice and is unreliable in production (debug logs not always enabled). |
-| 5   | NEW          | Low      | icdLookup.js:234        | Added `this._dropdownDismissed = false;` as first statement of `handleRetry()`. Without this, pressing Escape then clicking Retry caused `screenReaderStatus` to return "Search results dismissed." even when new results were loading.        |
-
-### Skipped / Excluded Findings
-
-| #   | Finding                                                            | Reason                                                                                                                                         |
-| --- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `Label.Test_IS_Team_Email_Address` not in project CustomLabels file | Dropped. User confirmed this label exists in all Salesforce orgs as an org-level managed label - it is not a project-specific deployment concern. |
+| #   | Status                      | Severity | Area                  | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --- | --------------------------- | -------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | REGRESSION (2nd occurrence) | Medium   | icdLookup.js-meta.xml | `default=` attributes on `fieldPlaceholder` and `noResultsMessage` were dropped again by commit `8e081a6` ("Fix ESLint errors...", a formatting-only reformat of the meta file), causing Flow Builder to pass empty strings and blank both fields. Same defect first regressed in Round 9 (fix #2). Restored both `default` attributes, added inline XML comments warning against removing them, and added a permanent note in `CLAUDE.md` (icdLookup component section) instructing that any edit to this file - not just pre-deploy checks - must diff `default` attributes against the previous version. |
 
 ### Known Skipped Findings (carry-forward)
 
 | #      | Finding                                                                                                     | Reason                                                                                                                                                                       |
 | ------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R12-W1 | `default=` attributes on `fieldPlaceholder`/`noResultsMessage` in `icdLookup.js-meta.xml`                   | **Recurring regression (Round 9, Round 12).** Explicitly verify these two attributes are present on every review of this file, even for formatting-only or lint-fix commits. |
 | CSS-1  | Entire `.no-results-message` CSS block hardcoded (`color: #c23934`, `font-size: 1rem`, `font-weight: bold`) | Intentional. Community/Experience Cloud themes can override SLDS tokens. Do not re-flag.                                                                                     |
 | CSS-2  | `slds-text-color_error` on no-results div (reverted from `slds-text-color_weak`)                            | No visual impact - `.no-results-message` hardcoded CSS overrides the SLDS token. Confirmed intentional by user. Do not re-flag.                                              |
 | R6-N1  | Required__c Boolean field API name lacks Is prefix                                                          | Declined. Label renamed to "Required?" for admin clarity. API name rename is destructive.                                                                                    |
@@ -55,6 +43,60 @@ Last Updated: June 30, 2026 (Round 11)
 | N-7    | `_requestSeq` uses unapproved abbreviation "Seq"                                                            | Internal private field. Skipped per user direction. Do not re-flag.                                                                                                          |
 | N-8    | `_uid` uses unapproved abbreviation "uid"                                                                   | Internal private field. Skipped per user direction. Do not re-flag.                                                                                                          |
 | R11-1  | `Label.Test_IS_Team_Email_Address` not in project CustomLabels                                              | Org-level managed label present in all orgs. Not a project deployment concern. Do not re-flag.                                                                               |
+
+---
+
+## Round 11 - June 30, 2026
+
+**Reviewer:** sf-orchestrator (Claude Code)
+**Scope:** Full review - ICDLookupController.cls, icdLookup LWC, ICD_Lookup__mdt metadata, CustomLabels
+**Lenses:** Architecture, UX, Naming, Security
+**Verdict:** GO (0 Critical, 0 High, 1 Medium dropped, 4 Low; 4 fixes applied)
+
+### Findings Summary
+
+| Severity  | Total | Applied | Skipped                                                       |
+| --------- | ----- | ------- | ------------------------------------------------------------- |
+| Critical  | 0     | -       | -                                                             |
+| High      | 0     | -       | -                                                             |
+| Medium    | 1     | 0       | 1 (dropped - label exists in all orgs, not a project concern) |
+| Low       | 4     | 4       | 0                                                             |
+| **Total** | **5** | **4**   | **1**                                                         |
+
+### Applied Fixes
+
+| #   | Status      | Severity | Area                    | Fix                                                                                                                                                                                                                                                                                                                                       |
+| --- | ----------- | -------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2   | PARTIAL-FIX | Low      | icdLookup.test.js:201   | Fixed vacuous focusout test: added `jest.useFakeTimers()`, `advanceTimersByTime(500)` so results actually load before focusout fires; added `expect(inputAfter.value).toBe("")` to assert searchTerm is cleared (per test name)                                                                                                           |
+| 3   | PARTIAL-FIX | Low      | icdLookup.test.js:142   | Strengthened selection test: added `flowHandler` listener (registered post-search to isolate selection event); added `expect(flowHandler).toHaveBeenCalledTimes(1)` and `expect(el.selectedCode).toBe("I10: Essential (primary) hypertension")`                                                                                           |
+| 4   | NEW         | Low      | ICDLookupController.cls | Removed `System.debug` from `notifyOnError` email-failure catch block; replaced with silent swallow + comment. The search error is already surfaced to the user via the error banner; email failure does not need secondary logging. `System.debug` is not best practice and is unreliable in production (debug logs not always enabled). |
+| 5   | NEW         | Low      | icdLookup.js:234        | Added `this._dropdownDismissed = false;` as first statement of `handleRetry()`. Without this, pressing Escape then clicking Retry caused `screenReaderStatus` to return "Search results dismissed." even when new results were loading.                                                                                                   |
+
+### Skipped / Excluded Findings
+
+| #   | Finding                                                             | Reason                                                                                                                                            |
+| --- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `Label.Test_IS_Team_Email_Address` not in project CustomLabels file | Dropped. User confirmed this label exists in all Salesforce orgs as an org-level managed label - it is not a project-specific deployment concern. |
+
+### Known Skipped Findings (carry-forward)
+
+| #     | Finding                                                                                                     | Reason                                                                                                                          |
+| ----- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| CSS-1 | Entire `.no-results-message` CSS block hardcoded (`color: #c23934`, `font-size: 1rem`, `font-weight: bold`) | Intentional. Community/Experience Cloud themes can override SLDS tokens. Do not re-flag.                                        |
+| CSS-2 | `slds-text-color_error` on no-results div (reverted from `slds-text-color_weak`)                            | No visual impact - `.no-results-message` hardcoded CSS overrides the SLDS token. Confirmed intentional by user. Do not re-flag. |
+| R6-N1 | Required__c Boolean field API name lacks Is prefix                                                          | Declined. Label renamed to "Required?" for admin clarity. API name rename is destructive.                                       |
+| R6-N2 | Active__c Boolean field API name lacks Is prefix                                                            | Declined. Label renamed to "Active?" for admin clarity. API name rename is destructive.                                         |
+| R6-U1 | No-results message uses red color without icon                                                              | Intentional: guarantees visibility regardless of community theme overrides.                                                     |
+| #2    | searchIcd10 no auth/rate-limit guard                                                                        | Accepted: component limited to authenticated internal and community (non-guest) profiles; NIH API is public.                    |
+| #5    | getIcdLookupConfig happy path untested                                                                      | Cannot use hardcoded deployed CMT data in tests.                                                                                |
+| #8    | CMT record label/devname "A1"                                                                               | Owner manages via CMDT list view.                                                                                               |
+| #16   | getIcdLookupConfig SOQL without WITH USER_MODE                                                              | CMT globally readable; WITH USER_MODE has no effect.                                                                            |
+| #17   | Named Credential not policy-restricted                                                                      | Classic NC model (pre-57.0); public API, no credentials stored.                                                                 |
+| #24   | No keyboard mechanism to re-open dropdown after Escape                                                      | Accepted trade-off; documented in CLAUDE.md.                                                                                    |
+| N-6   | `SR` abbreviation in 5 Custom Label names                                                                   | Internal developer-facing keys only. Skipped per user direction. Do not re-flag.                                                |
+| N-7   | `_requestSeq` uses unapproved abbreviation "Seq"                                                            | Internal private field. Skipped per user direction. Do not re-flag.                                                             |
+| N-8   | `_uid` uses unapproved abbreviation "uid"                                                                   | Internal private field. Skipped per user direction. Do not re-flag.                                                             |
+| R11-1 | `Label.Test_IS_Team_Email_Address` not in project CustomLabels                                              | Org-level managed label present in all orgs. Not a project deployment concern. Do not re-flag.                                  |
 
 ---
 
@@ -77,40 +119,40 @@ Last Updated: June 30, 2026 (Round 11)
 
 ### Applied Fixes
 
-| #   | Status     | Severity | Area                                | Fix                                                                                                                                                                                                                                             |
-| --- | ---------- | -------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | NEW        | Medium   | ICDLookupController.cls + LWC       | Added `notifyOnError()` - sends email via `Label.Salesforce_Support_Email_Address` (prod) or `Label.Test_IS_Team_Email_Address` (sandbox) with full diagnostic body; sandbox detected via `Organization.IsSandbox` SOQL; added prominent `slds-theme_error` banner with Retry button at top of component; renamed `ICD_Lookup_Error_Search_Failed` → `ICD_Lookup_Error_API_Unavailable` with updated message "ICD-10 search is temporarily unavailable. Please try again. If the issue persists, contact your Clinical Coordinator."; retrieved `Salesforce_Support_Email_Address` label (value: `sf@variantyx.com`) into project |
-| 3   | NEW        | Low      | icdLookup.html:59                   | Changed `alt="Loading"` to `alternative-text=""` on `lightning-spinner` - `alt` is not a recognized LWC prop; SR live region handles announcements                                                                                              |
-| 4   | NEW        | Low      | icdLookup.js                        | Added `&& !this.validationError` to `showMinCharHint` getter - prevents conflicting messages when mandatory field triggers validation while 1-2 chars are typed                                                                                  |
-| 5   | NEW        | Low      | icdLookup.test.js                   | Added assertions to `focusout behavior` and `Escape key behavior` tests; added second focusout test covering the external-focus-leaves path; all 14 tests pass                                                                                  |
+| #   | Status | Severity | Area                          | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --- | ------ | -------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | NEW    | Medium   | ICDLookupController.cls + LWC | Added `notifyOnError()` - sends email via `Label.Salesforce_Support_Email_Address` (prod) or `Label.Test_IS_Team_Email_Address` (sandbox) with full diagnostic body; sandbox detected via `Organization.IsSandbox` SOQL; added prominent `slds-theme_error` banner with Retry button at top of component; renamed `ICD_Lookup_Error_Search_Failed` → `ICD_Lookup_Error_API_Unavailable` with updated message "ICD-10 search is temporarily unavailable. Please try again. If the issue persists, contact your Clinical Coordinator."; retrieved `Salesforce_Support_Email_Address` label (value: `sf@variantyx.com`) into project |
+| 3   | NEW    | Low      | icdLookup.html:59             | Changed `alt="Loading"` to `alternative-text=""` on `lightning-spinner` - `alt` is not a recognized LWC prop; SR live region handles announcements                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 4   | NEW    | Low      | icdLookup.js                  | Added `&& !this.validationError` to `showMinCharHint` getter - prevents conflicting messages when mandatory field triggers validation while 1-2 chars are typed                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 5   | NEW    | Low      | icdLookup.test.js             | Added assertions to `focusout behavior` and `Escape key behavior` tests; added second focusout test covering the external-focus-leaves path; all 14 tests pass                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### Skipped / Excluded Findings
 
-| #   | Finding                                                  | Reason                                                                                                                              |
-| --- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| 2   | `slds-text-color_error` on no-results div (REGRESSION)   | No visual impact - `.no-results-message` hardcoded CSS overrides the SLDS token. User confirmed intentional. Added to Known Skipped. |
-| 6   | `SR` abbreviation in 5 Custom Label names                | Internal developer-facing keys only; zero runtime impact. Skipped per user direction.                                               |
-| 7   | `_requestSeq` uses unapproved abbreviation "Seq"         | Internal private field; zero runtime impact. Skipped per user direction.                                                            |
-| 8   | `_uid` uses unapproved abbreviation "uid"                | Internal private field; zero runtime impact. Skipped per user direction.                                                            |
+| #   | Finding                                                | Reason                                                                                                                               |
+| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 2   | `slds-text-color_error` on no-results div (REGRESSION) | No visual impact - `.no-results-message` hardcoded CSS overrides the SLDS token. User confirmed intentional. Added to Known Skipped. |
+| 6   | `SR` abbreviation in 5 Custom Label names              | Internal developer-facing keys only; zero runtime impact. Skipped per user direction.                                                |
+| 7   | `_requestSeq` uses unapproved abbreviation "Seq"       | Internal private field; zero runtime impact. Skipped per user direction.                                                             |
+| 8   | `_uid` uses unapproved abbreviation "uid"              | Internal private field; zero runtime impact. Skipped per user direction.                                                             |
 
 ### Known Skipped Findings (carry-forward)
 
-| #      | Finding                                                                                                     | Reason                                                                                                                                                                       |
-| ------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CSS-1  | Entire `.no-results-message` CSS block hardcoded (`color: #c23934`, `font-size: 1rem`, `font-weight: bold`) | Intentional. Community/Experience Cloud themes can override SLDS tokens. Do not re-flag.                                                                                     |
-| CSS-2  | `slds-text-color_error` on no-results div (reverted from `slds-text-color_weak`)                            | No visual impact - `.no-results-message` hardcoded CSS overrides the SLDS token. Confirmed intentional by user. Do not re-flag.                                              |
-| R6-N1  | Required__c Boolean field API name lacks Is prefix                                                          | Declined. Label renamed to "Required?" for admin clarity. API name rename is destructive.                                                                                    |
-| R6-N2  | Active__c Boolean field API name lacks Is prefix                                                            | Declined. Label renamed to "Active?" for admin clarity. API name rename is destructive.                                                                                      |
-| R6-U1  | No-results message uses red color without icon                                                              | Intentional: guarantees visibility regardless of community theme overrides.                                                                                                  |
-| #2     | searchIcd10 no auth/rate-limit guard                                                                        | Accepted: component limited to authenticated internal and community (non-guest) profiles; NIH API is public.                                                                 |
-| #5     | getIcdLookupConfig happy path untested                                                                      | Cannot use hardcoded deployed CMT data in tests.                                                                                                                             |
-| #8     | CMT record label/devname "A1"                                                                               | Owner manages via CMDT list view.                                                                                                                                            |
-| #16    | getIcdLookupConfig SOQL without WITH USER_MODE                                                              | CMT globally readable; WITH USER_MODE has no effect.                                                                                                                         |
-| #17    | Named Credential not policy-restricted                                                                      | Classic NC model (pre-57.0); public API, no credentials stored.                                                                                                              |
-| #24    | No keyboard mechanism to re-open dropdown after Escape                                                      | Accepted trade-off; documented in CLAUDE.md.                                                                                                                                 |
-| N-6    | `SR` abbreviation in 5 Custom Label names                                                                   | Internal developer-facing keys only. Skipped per user direction. Do not re-flag.                                                                                             |
-| N-7    | `_requestSeq` uses unapproved abbreviation "Seq"                                                            | Internal private field. Skipped per user direction. Do not re-flag.                                                                                                          |
-| N-8    | `_uid` uses unapproved abbreviation "uid"                                                                   | Internal private field. Skipped per user direction. Do not re-flag.                                                                                                          |
+| #     | Finding                                                                                                     | Reason                                                                                                                          |
+| ----- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| CSS-1 | Entire `.no-results-message` CSS block hardcoded (`color: #c23934`, `font-size: 1rem`, `font-weight: bold`) | Intentional. Community/Experience Cloud themes can override SLDS tokens. Do not re-flag.                                        |
+| CSS-2 | `slds-text-color_error` on no-results div (reverted from `slds-text-color_weak`)                            | No visual impact - `.no-results-message` hardcoded CSS overrides the SLDS token. Confirmed intentional by user. Do not re-flag. |
+| R6-N1 | Required__c Boolean field API name lacks Is prefix                                                          | Declined. Label renamed to "Required?" for admin clarity. API name rename is destructive.                                       |
+| R6-N2 | Active__c Boolean field API name lacks Is prefix                                                            | Declined. Label renamed to "Active?" for admin clarity. API name rename is destructive.                                         |
+| R6-U1 | No-results message uses red color without icon                                                              | Intentional: guarantees visibility regardless of community theme overrides.                                                     |
+| #2    | searchIcd10 no auth/rate-limit guard                                                                        | Accepted: component limited to authenticated internal and community (non-guest) profiles; NIH API is public.                    |
+| #5    | getIcdLookupConfig happy path untested                                                                      | Cannot use hardcoded deployed CMT data in tests.                                                                                |
+| #8    | CMT record label/devname "A1"                                                                               | Owner manages via CMDT list view.                                                                                               |
+| #16   | getIcdLookupConfig SOQL without WITH USER_MODE                                                              | CMT globally readable; WITH USER_MODE has no effect.                                                                            |
+| #17   | Named Credential not policy-restricted                                                                      | Classic NC model (pre-57.0); public API, no credentials stored.                                                                 |
+| #24   | No keyboard mechanism to re-open dropdown after Escape                                                      | Accepted trade-off; documented in CLAUDE.md.                                                                                    |
+| N-6   | `SR` abbreviation in 5 Custom Label names                                                                   | Internal developer-facing keys only. Skipped per user direction. Do not re-flag.                                                |
+| N-7   | `_requestSeq` uses unapproved abbreviation "Seq"                                                            | Internal private field. Skipped per user direction. Do not re-flag.                                                             |
+| N-8   | `_uid` uses unapproved abbreviation "uid"                                                                   | Internal private field. Skipped per user direction. Do not re-flag.                                                             |
 
 ---
 
