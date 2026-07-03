@@ -1,10 +1,10 @@
 ---
 name: sf-orchestrator
-description: End-to-end Salesforce orchestrator. Reads prior review history first to tag findings as NEW/RECURRING/REGRESSION, then runs all 7 review lenses in parallel (architecture, UI/UX, naming, security, performance, testing, automation), presents a combined findings table with GO/NO-GO verdict, asks whether to fix all or selected findings, applies fixes, updates relevant MD files, asks whether to deploy to Salesforce, then asks whether to push to GitHub. Use when user says "run a review", "code review", "review", "sf review", or runs /sf-orchestrator.
+description: End-to-end Salesforce orchestrator. Reads prior review history first to tag findings as NEW/RECURRING/REGRESSION, then runs all 8 review lenses in parallel (architecture, UI/UX, naming, security, performance, testing, automation, static analysis), presents a combined findings table with GO/NO-GO verdict, asks whether to fix all or selected findings, applies fixes, updates relevant MD files, asks whether to deploy to Salesforce, then asks whether to push to GitHub. Use when user says "run a review", "code review", "review", "sf review", or runs /sf-orchestrator.
 allowed-tools: Read, Glob, Grep, Edit, Write, Bash, Agent
 metadata:
   author: Gidi Abramovich
-  version: 1.4.0
+  version: 1.5.0
 ---
 
 # SF Orchestrator - End-to-End Review, Fix & Ship
@@ -21,7 +21,7 @@ Before doing anything else, create a TodoWrite checklist with exactly these task
 
 ```
 Phase 0: Prior round deduplication
-Phase 1: Parallel review (all 7 lenses)
+Phase 1: Parallel review (all 8 lenses)
 Phase 2: Present combined findings table + wait for user approval
 Phase 3: Apply approved fixes
 Phase 4: Update MD files (review log + technical design + CLAUDE.md)
@@ -54,9 +54,9 @@ Write `PHASE 0 COMPLETE` before proceeding.
 
 ---
 
-## Phase 1: Parallel Review (Run all 7 lenses simultaneously)
+## Phase 1: Parallel Review (Run all 8 lenses simultaneously)
 
-Dispatch all seven review lenses **in parallel** in a single message using the Skill tool:
+Dispatch all eight review lenses **in parallel** in a single message using the Skill tool:
 
 1. `sf-review:sf-review-architecture` - 10 pillars: data model, security, async/limits, integration, queries, failure handling, automation architecture, testing architecture, operational architecture, deployment architecture
 2. `sf-review:sf-review-ui-ux` - 17 UI & UX categories: states, accessibility, responsive, interaction consistency, feedback, component sync, copy, forms, data presentation, navigation, task flows, user control, permissions, Salesforce-specific patterns, internationalization, error handling, and visual design/SLDS compliance
@@ -65,8 +65,9 @@ Dispatch all seven review lenses **in parallel** in a single message using the S
 5. `sf-review:sf-review-performance` - 8 domains: Apex bulkification, CPU/heap limits, SOQL efficiency, Flow performance, LWC performance, Platform Cache, LDV readiness, limit observability
 6. `sf-review:sf-review-testing` - 7 domains: assertion quality, bulk testing, test data strategy, mocking/isolation, async testing, coverage quality, test maintainability
 7. `sf-review:sf-review-automation` - 7 domains: tool selection, trigger architecture, order of execution, Flow design quality, recursion prevention, documentation, deprecation/migration
+8. `sf-review:sf-review-static-analysis` - deterministic Salesforce Code Analyzer scan (PMD, ESLint, RetireJS, Graph Engine). If the `code-analyzer` plugin is not installed, skip this lens and note it as skipped in the summary rather than failing the whole phase.
 
-Wait for all seven to complete before proceeding to Phase 2.
+Wait for all eight to complete before proceeding to Phase 2.
 
 **Input detection:** Read CLAUDE.md, any open IDE file, or scan the codebase via Glob + Grep. All four lenses run against the same input source.
 
@@ -108,6 +109,7 @@ SUMMARY:
   Performance   | <N findings>  Critical: <N>  High: <N>  Medium: <N>  Low: <N>
   Testing       | <N findings>  Critical: <N>  High: <N>  Medium: <N>  Low: <N>
   Automation    | <N findings>  Critical: <N>  High: <N>  Medium: <N>  Low: <N>
+  Static Analysis | <N findings>  Critical: <N>  High: <N>  Medium: <N>  Low: <N>
   -------------------------------------------------------------------------
   TOTAL         | <N findings>  Critical: <N>  High: <N>  Medium: <N>  Low: <N>
   NEW: <N>  |  SKIPPED: <N>  |  PARTIAL-FIX: <N>  |  REGRESSION: <N>
@@ -250,7 +252,7 @@ Write `PHASE 6 COMPLETE` after a successful push.
 - Write `PHASE <N> COMPLETE` at the end of every phase before moving to the next.
 - Do NOT write `TASK COMPLETE` until all seven phases are marked complete.
 - Always run Phase 0 first. Never skip prior round deduplication.
-- Run all seven review lenses in parallel. Never skip one.
+- Run all eight review lenses in parallel. Never skip one, except `sf-review-static-analysis` when the `code-analyzer` plugin is not installed — note the skip explicitly.
 - Never apply fixes before showing the findings table and asking the user.
 - Apply every severity level that the user approved - never silently drop a finding.
 - Verify every fix against the actual source file - not from memory.
