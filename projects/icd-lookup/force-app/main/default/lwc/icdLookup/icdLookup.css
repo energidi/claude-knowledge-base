@@ -1,20 +1,20 @@
 .slds-form-element__label-container {
-    display: flex;
-    align-items: center;
+  display: flex;
+  align-items: center;
 }
 
 .no-results-message {
-    color: #c23934;
-    font-size: 1rem;
-    font-weight: bold;
+  color: #c23934;
+  font-size: 1rem;
+  font-weight: bold;
 }
 
 .slds-listbox__option {
-    min-height: 2.75rem;
-    padding: 0.5rem 1rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
 }
 
 .slds-dropdown .slds-listbox_vertical {
-    max-height: 20rem;
-    overflow-y: auto;
+  max-height: 20rem;
+  overflow-y: auto;
 }

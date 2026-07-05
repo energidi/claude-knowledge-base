@@ -4,6 +4,7 @@ import getIcdLookupConfig from "@salesforce/apex/ICDLookupController.getIcdLooku
 import { FlowAttributeChangeEvent } from "lightning/flowSupport";
 import labelSearchFailed from "@salesforce/label/c.ICD_Lookup_Error_API_Unavailable";
 import labelValidationRequired from "@salesforce/label/c.ICD_Lookup_Validation_Required";
+import labelInvalidValue from "@salesforce/label/c.ICD_Lookup_Invalid_Default_Value";
 import labelMinCharHint from "@salesforce/label/c.ICD_Lookup_Min_Char_Hint";
 import labelStillSearching from "@salesforce/label/c.ICD_Lookup_Still_Searching";
 import labelRetry from "@salesforce/label/c.ICD_Lookup_Retry";
@@ -15,6 +16,7 @@ import labelSRResult from "@salesforce/label/c.ICD_Lookup_SR_Result";
 import labelSRResults from "@salesforce/label/c.ICD_Lookup_SR_Results";
 
 export default class IcdLookup extends LightningElement {
+  @api uniquenessKey = "";
   @api label = "";
   @api flowApiName;
   @api mandatory = false;
@@ -93,6 +95,9 @@ export default class IcdLookup extends LightningElement {
       this._selectedCode = this.defaultValue;
       this.searchTerm = this.defaultValue;
       this.isSelected = true;
+      this._verifyDefaultValue(this.defaultValue);
+    } else if (this.uniquenessKey) {
+      this._restoreUncommittedValue();
     }
 
     if (this.flowApiName) {
@@ -124,10 +129,80 @@ export default class IcdLookup extends LightningElement {
     clearTimeout(this._slowSearchTimer);
   }
 
+  // Legacy record values arrive via defaultValue with no guarantee they came from the API
+  // (pre-existing eTRF data entered before this component existed). Re-verify against the
+  // NIH API on load; only a confirmed non-match is flagged invalid - a failed/unreachable
+  // API call must not falsely flag valid legacy data, so it fails silently like getIcdLookupConfig.
+  _verifyDefaultValue(value) {
+    const separatorIndex = value.indexOf(": ");
+    const codePart =
+      separatorIndex >= 0 ? value.slice(0, separatorIndex) : value;
+    searchIcd10({ searchTerm: codePart })
+      .then((results) => {
+        const isVerified = (results || []).some(
+          (res) => res.code && res.code.toLowerCase() === codePart.toLowerCase()
+        );
+        if (!isVerified) {
+          this.isSelected = false;
+          this._selectedCode = "";
+          this.validationError = labelInvalidValue;
+          this.dispatchEvent(new FlowAttributeChangeEvent("selectedCode", ""));
+        }
+      })
+      .catch(() => {
+        // API unavailable during verification: do not falsely flag legacy data as invalid.
+      });
+  }
+
+  // Flow destroys and recreates this component when it redisplays the screen after a
+  // blocked Next click (confirmed via diagnostic logging), wiping searchTerm/validationError
+  // from local memory since neither is backed by an @api input for a brand-new field.
+  // uniquenessKey lets that state survive via sessionStorage, keyed by a value the Flow
+  // admin binds to {!$Flow.InterviewGuid} (+ a distinct suffix per field on the same
+  // screen) - the same pattern the community fileUploadImproved component uses.
+  _restoreUncommittedValue() {
+    let cached;
+    try {
+      cached = JSON.parse(sessionStorage.getItem(this.uniquenessKey));
+    } catch {
+      return;
+    }
+    if (cached && cached.searchTerm) {
+      this.searchTerm = cached.searchTerm;
+      this.isSelected = false;
+      this.validationError = labelInvalidValue;
+    }
+  }
+
+  _syncUncommittedValue() {
+    if (!this.uniquenessKey) return;
+    if (this.searchTerm) {
+      sessionStorage.setItem(
+        this.uniquenessKey,
+        JSON.stringify({ searchTerm: this.searchTerm })
+      );
+    } else {
+      sessionStorage.removeItem(this.uniquenessKey);
+    }
+  }
+
+  // Flow renders its own copy of the returned errorMessage next to the component,
+  // separate from our own inline block below - confirmed by a diagnostic build where
+  // a token appended only to the returned errorMessage (never to validationError, which
+  // our own template binds to) showed up on screen. A single space keeps errorMessage
+  // non-empty/truthy - required for Flow to reliably block Next across a screen with
+  // multiple icdLookup instances (confirmed: switching to a fully empty string broke
+  // that blocking, even though isValid: false was still returned) - while rendering
+  // nothing visible, so our own inline block (always visible whenever validationError
+  // is set, no suppression logic) remains the only source of visible message text.
   @api validate() {
+    if (this.searchTerm && !this.isSelected) {
+      this.validationError = labelInvalidValue;
+      return { isValid: false, errorMessage: " " };
+    }
     if (this.isMandatory && !this.selectedCode) {
       this.validationError = `${this.label} ${labelValidationRequired}`;
-      return { isValid: false, errorMessage: this.validationError };
+      return { isValid: false, errorMessage: " " };
     }
     this.validationError = "";
     return { isValid: true };
@@ -218,6 +293,7 @@ export default class IcdLookup extends LightningElement {
     this._focusedIndex = -1;
     this._resultsReady = false;
     clearTimeout(this.searchDebounceTimer);
+    this._syncUncommittedValue();
 
     if (this.searchTerm.length >= 3) {
       this.icdResults = [];
@@ -269,14 +345,15 @@ export default class IcdLookup extends LightningElement {
     }
   }
 
+  // Uncommitted text is intentionally left in place on blur (rather than cleared) so
+  // validate() can still detect it via searchTerm - clicking Flow's Next button blurs
+  // the input before validate() runs, so clearing searchTerm here would silently defeat
+  // that check every time, leaving invalid text unflagged with no visible indication.
   handleFocusOut(event) {
     if (!this.template.contains(event.relatedTarget)) {
       this.icdResults = [];
       this._resultsReady = false;
       this._focusedIndex = -1;
-      if (!this.isSelected) {
-        this.searchTerm = "";
-      }
     }
   }
 
@@ -299,8 +376,8 @@ export default class IcdLookup extends LightningElement {
         }
         break;
       case "Enter":
-        event.preventDefault();
         if (this._focusedIndex >= 0 && this._focusedIndex < count) {
+          event.preventDefault();
           const res = this.icdResults[this._focusedIndex];
           this._commitSelection(res.code, res.description);
         }
@@ -326,6 +403,7 @@ export default class IcdLookup extends LightningElement {
     this.searchError = "";
     this.validationError = "";
     this._dropdownDismissed = false;
+    if (this.uniquenessKey) sessionStorage.removeItem(this.uniquenessKey);
     this.dispatchEvent(new FlowAttributeChangeEvent("selectedCode", ""));
     this.template.querySelector("input").focus();
   }
@@ -351,6 +429,7 @@ export default class IcdLookup extends LightningElement {
     this._resultsReady = false;
     this.isSelected = true;
     this.validationError = "";
+    if (this.uniquenessKey) sessionStorage.removeItem(this.uniquenessKey);
     this.dispatchEvent(
       new FlowAttributeChangeEvent("selectedCode", this.selectedCode)
     );

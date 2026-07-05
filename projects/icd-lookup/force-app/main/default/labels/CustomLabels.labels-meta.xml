@@ -108,6 +108,16 @@
         <value>is required.</value>
     </labels>
     <labels>
+        <fullName>ICD_Lookup_Invalid_Default_Value</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription
+    >ICD Lookup - Error when the field holds an unselected/unverified value</shortDescription>
+        <value
+    >The code could not be verified. Please search and select a new code.</value>
+    </labels>
+    <labels>
         <fullName>eTRF_Manually_Enter_ICD_10_Codes_Tooltip</fullName>
         <categories>ISP-6429, eTRF</categories>
         <language>en_US</language>

@@ -19,6 +19,14 @@ jest.mock(
   { virtual: true }
 );
 jest.mock(
+  "@salesforce/label/c.ICD_Lookup_Invalid_Default_Value",
+  () => ({
+    default:
+      "The code could not be verified. Please search and select a new code."
+  }),
+  { virtual: true }
+);
+jest.mock(
   "@salesforce/label/c.ICD_Lookup_Error_API_Unavailable",
   () => ({
     default:
@@ -89,6 +97,7 @@ afterEach(() => {
     document.body.removeChild(document.body.firstChild);
   }
   jest.clearAllMocks();
+  sessionStorage.clear();
 });
 
 describe("validate()", () => {
@@ -98,7 +107,7 @@ describe("validate()", () => {
     expect(el.validate().isValid).toBe(true);
   });
 
-  it("returns isValid false with field-specific message when mandatory and no selection", async () => {
+  it("returns isValid false with a blank (non-empty) errorMessage so Flow reliably blocks Next, and shows the field-specific message inline when mandatory and no selection", async () => {
     const el = createElement_icdLookup({
       mandatory: true,
       label: "Primary Diagnosis"
@@ -106,7 +115,10 @@ describe("validate()", () => {
     await Promise.resolve();
     const result = el.validate();
     expect(result.isValid).toBe(false);
-    expect(result.errorMessage).toBe("Primary Diagnosis is required.");
+    expect(result.errorMessage).toBe(" ");
+    await Promise.resolve();
+    const helpText = el.shadowRoot.querySelector(".slds-form-element__help");
+    expect(helpText.textContent).toBe("Primary Diagnosis is required.");
   });
 
   it("returns isValid true when mandatory and selectedCode is set", async () => {
@@ -115,10 +127,50 @@ describe("validate()", () => {
     await Promise.resolve();
     expect(el.validate().isValid).toBe(true);
   });
+
+  it("returns isValid false with a blank (non-empty) errorMessage and shows the invalid-value message inline when text was typed but never selected from the list, even when optional", async () => {
+    const el = createElement_icdLookup({ mandatory: false });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    const result = el.validate();
+    expect(result.isValid).toBe(false);
+    expect(result.errorMessage).toBe(" ");
+    await Promise.resolve();
+    const helpText = el.shadowRoot.querySelector(".slds-form-element__help");
+    expect(helpText.textContent).toBe(
+      "The code could not be verified. Please search and select a new code."
+    );
+  });
+
+  it("keeps showing its own inline error text after validate() runs, since validate() returns a blank (non-empty) errorMessage for Flow to render", async () => {
+    const el = createElement_icdLookup({ mandatory: false });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    el.validate();
+    await Promise.resolve();
+
+    const helpText = el.shadowRoot.querySelector(".slds-form-element__help");
+    expect(helpText.textContent).toBe(
+      "The code could not be verified. Please search and select a new code."
+    );
+    const formElement = el.shadowRoot.querySelector(".slds-form-element");
+    expect(formElement.className).toContain("slds-has-error");
+  });
 });
 
 describe("defaultValue pre-population", () => {
   it("sets selectedCode from defaultValue on init without dispatching FlowAttributeChangeEvent", async () => {
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
     const handler = jest.fn();
     const el = createElement_icdLookup({
       defaultValue: "I10: Essential (primary) hypertension"
@@ -127,6 +179,85 @@ describe("defaultValue pre-population", () => {
     await Promise.resolve();
     expect(el.selectedCode).toBe("I10: Essential (primary) hypertension");
     expect(handler).not.toHaveBeenCalled();
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(searchIcd10).toHaveBeenCalledWith({ searchTerm: "I10" });
+    expect(el.selectedCode).toBe("I10: Essential (primary) hypertension");
+  });
+
+  it("clears selectedCode and shows a red frame with the shared invalid-value message when defaultValue cannot be verified against the API", async () => {
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    const handler = jest.fn();
+    const el = createElement_icdLookup({
+      defaultValue: "Z99: Not a real code"
+    });
+    el.addEventListener("lightning__flowattributechange", handler);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(el.selectedCode).toBe("");
+    expect(handler).toHaveBeenCalledTimes(1);
+    const formElement = el.shadowRoot.querySelector(".slds-form-element");
+    expect(formElement.className).toContain("slds-has-error");
+    const helpText = el.shadowRoot.querySelector(".slds-form-element__help");
+    expect(helpText.textContent).toBe(
+      "The code could not be verified. Please search and select a new code."
+    );
+
+    const result = el.validate();
+    expect(result.isValid).toBe(false);
+    expect(result.errorMessage).toBe(" ");
+  });
+
+  it("shows the same inline message whether the value came from stray typed text or a failed defaultValue verification", async () => {
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+
+    const defaultValueEl = createElement_icdLookup({
+      defaultValue: "Z99: Not a real code"
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    defaultValueEl.validate();
+    await Promise.resolve();
+    const defaultValueHelpText = defaultValueEl.shadowRoot.querySelector(
+      ".slds-form-element__help"
+    );
+
+    const typedTextEl = createElement_icdLookup({});
+    await Promise.resolve();
+    const input = typedTextEl.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    typedTextEl.validate();
+    await Promise.resolve();
+    const typedTextHelpText = typedTextEl.shadowRoot.querySelector(
+      ".slds-form-element__help"
+    );
+
+    expect(defaultValueHelpText.textContent).toBe(
+      "The code could not be verified. Please search and select a new code."
+    );
+    expect(typedTextHelpText.textContent).toBe(
+      defaultValueHelpText.textContent
+    );
+  });
+
+  it("does not flag defaultValue as invalid when the verification callout fails", async () => {
+    searchIcd10.mockRejectedValue(new Error("API unavailable"));
+    const el = createElement_icdLookup({
+      defaultValue: "I10: Essential (primary) hypertension"
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(el.selectedCode).toBe("I10: Essential (primary) hypertension");
+    const formElement = el.shadowRoot.querySelector(".slds-form-element");
+    expect(formElement.className).not.toContain("slds-has-error");
   });
 });
 
@@ -195,7 +326,7 @@ describe("focusout behavior", () => {
     expect(dropdown).not.toBeNull();
   });
 
-  it("clears results and searchTerm when focus leaves the component with no selection", async () => {
+  it("clears results but retains searchTerm when focus leaves the component with no selection", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
     getIcdLookupConfig.mockResolvedValue(null);
@@ -225,16 +356,47 @@ describe("focusout behavior", () => {
     // Results must be cleared
     const options = el.shadowRoot.querySelectorAll('[role="option"]');
     expect(options.length).toBe(0);
-    // searchTerm must be cleared (no selection was committed)
+    // searchTerm must be retained (not cleared) - clicking Flow's Next button blurs the
+    // input before validate() runs, so clearing searchTerm here would defeat validate()'s
+    // uncommitted-text check every time, per the regression covered in the next test.
     const inputAfter = el.shadowRoot.querySelector("input");
-    expect(inputAfter.value).toBe("");
+    expect(inputAfter.value).toBe("hyp");
     jest.useRealTimers();
+  });
+
+  it("still flags uncommitted text as invalid on validate() after the Next-button-click blur sequence (type, blur, then validate)", async () => {
+    const el = createElement_icdLookup({ mandatory: false });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    // Clicking Flow's Next button blurs the currently-focused input before validate() runs.
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    dropdownDiv.dispatchEvent(
+      new FocusEvent("focusout", {
+        relatedTarget: document.body,
+        bubbles: true
+      })
+    );
+    await Promise.resolve();
+
+    const result = el.validate();
+    expect(result.isValid).toBe(false);
+    await Promise.resolve();
+    const helpText = el.shadowRoot.querySelector(".slds-form-element__help");
+    expect(helpText.textContent).toBe(
+      "The code could not be verified. Please search and select a new code."
+    );
   });
 });
 
 describe("handleClear()", () => {
   it("resets all state and fires FlowAttributeChangeEvent with empty string", async () => {
     // defaultValue sets both searchTerm and selectedCode, making the clear button visible
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
     const el = createElement_icdLookup({
       defaultValue: "I10: Essential (primary) hypertension"
     });
@@ -321,6 +483,37 @@ describe("Escape key behavior", () => {
   });
 });
 
+describe("Enter key behavior", () => {
+  it("does not preventDefault or commit a selection when Enter is pressed with no option focused", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    const enterEvent = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true
+    });
+    dropdownDiv.dispatchEvent(enterEvent);
+    await Promise.resolve();
+
+    expect(enterEvent.defaultPrevented).toBe(false);
+    expect(el.selectedCode).toBe("");
+    jest.useRealTimers();
+  });
+});
+
 describe("min char hint", () => {
   it("shows hint paragraph when 1-2 characters are typed", async () => {
     const el = createElement_icdLookup({});
@@ -354,5 +547,105 @@ describe("config load failure", () => {
 
     const banner = el.shadowRoot.querySelector(".slds-theme_warning");
     expect(banner).toBeNull();
+  });
+});
+
+describe("uniquenessKey / sessionStorage persistence", () => {
+  it("writes the uncommitted typed value to sessionStorage when uniquenessKey is set", async () => {
+    const el = createElement_icdLookup({ uniquenessKey: "test-key-1" });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    expect(JSON.parse(sessionStorage.getItem("test-key-1"))).toEqual({
+      searchTerm: "hyp"
+    });
+  });
+
+  it("does not touch sessionStorage when uniquenessKey is not set", async () => {
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it("restores searchTerm and shows the invalid-value message on a fresh instance when sessionStorage has a cached uncommitted value", async () => {
+    sessionStorage.setItem(
+      "test-key-2",
+      JSON.stringify({ searchTerm: "sdfdsf" })
+    );
+    const el = createElement_icdLookup({ uniquenessKey: "test-key-2" });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    expect(input.value).toBe("sdfdsf");
+    const formElement = el.shadowRoot.querySelector(".slds-form-element");
+    expect(formElement.className).toContain("slds-has-error");
+    const helpText = el.shadowRoot.querySelector(".slds-form-element__help");
+    expect(helpText.textContent).toBe(
+      "The code could not be verified. Please search and select a new code."
+    );
+  });
+
+  it("does not restore anything when sessionStorage has no cached value for uniquenessKey", async () => {
+    const el = createElement_icdLookup({ uniquenessKey: "test-key-3" });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    expect(input.value).toBe("");
+    const formElement = el.shadowRoot.querySelector(".slds-form-element");
+    expect(formElement.className).not.toContain("slds-has-error");
+  });
+
+  it("clears the cached sessionStorage entry once a valid selection is committed", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({ uniquenessKey: "test-key-4" });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sessionStorage.getItem("test-key-4")).not.toBeNull();
+
+    const firstOption = el.shadowRoot.querySelector('[role="option"]');
+    firstOption.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    firstOption.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+
+    expect(sessionStorage.getItem("test-key-4")).toBeNull();
+    jest.useRealTimers();
+  });
+
+  it("clears the cached sessionStorage entry when handleClear() runs", async () => {
+    const el = createElement_icdLookup({ uniquenessKey: "test-key-5" });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    expect(sessionStorage.getItem("test-key-5")).not.toBeNull();
+
+    const clearBtn = el.shadowRoot.querySelector('button[type="button"]');
+    clearBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+
+    expect(sessionStorage.getItem("test-key-5")).toBeNull();
   });
 });
