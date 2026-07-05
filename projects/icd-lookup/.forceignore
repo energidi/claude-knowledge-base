@@ -13,5 +13,5 @@ package.xml
 
 node_modules/
 
-# Demo/dev-only CMT record - do not deploy to production
-force-app/main/default/customMetadata/ICD_Lookup.A1.md-meta.xml
+# ICD_Lookup__mdt CMDT records are configured live per-org/per-flow - never track or deploy them
+force-app/main/default/customMetadata/ICD_Lookup.*.md-meta.xml

@@ -130,6 +130,8 @@ Drives per-flow configuration for every `icdLookup` instance. One record per Scr
 
 CMT records live in `force-app/main/default/customMetadata/`. Create one record per Screen Flow that uses the component, setting `Flow_API_Name__c` to the Flow's API name.
 
+**CMT records are configured live per-org/per-flow and are intentionally excluded from source control** (`.forceignore` ignores `force-app/main/default/customMetadata/ICD_Lookup.*.md-meta.xml`). Do not retrieve, deploy, or commit these records. **Incident:** a source snapshot of record `A1` (pointing at a demo flow) was checked in and drifted from the org's live record, which had since been reconfigured to point at a real, active flow (`Community_Rare_eTRF_Page_2_Screen_Flow`) with its own help text - a deploy of that stale source file would have silently overwritten the live config. Create and edit these records directly in each org via Setup, not through source deploys.
+
 ICD10-1 is mandatory for Insurance Billing. ICD10-2 through ICD10-5 are optional. Enforce this via Flow validation rules on the Flow screens, not inside the component.
 
 ---
