@@ -123,7 +123,7 @@ describe("validate()", () => {
 
   it("returns isValid true when mandatory and selectedCode is set", async () => {
     const el = createElement_icdLookup({ mandatory: true });
-    el.selectedCode = "I10: Essential (primary) hypertension";
+    el.selectedCode = "I10";
     await Promise.resolve();
     expect(el.validate().isValid).toBe(true);
   });
@@ -169,7 +169,7 @@ describe("validate()", () => {
 });
 
 describe("defaultValue pre-population", () => {
-  it("sets selectedCode from defaultValue on init without dispatching FlowAttributeChangeEvent", async () => {
+  it("sets selectedCode and selectedDescription from defaultValue on init without dispatching FlowAttributeChangeEvent", async () => {
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
     const handler = jest.fn();
     const el = createElement_icdLookup({
@@ -177,13 +177,15 @@ describe("defaultValue pre-population", () => {
     });
     el.addEventListener("flowattributechange", handler);
     await Promise.resolve();
-    expect(el.selectedCode).toBe("I10: Essential (primary) hypertension");
+    expect(el.selectedCode).toBe("I10");
+    expect(el.selectedDescription).toBe("Essential (primary) hypertension");
     expect(handler).not.toHaveBeenCalled();
 
     await Promise.resolve();
     await Promise.resolve();
     expect(searchIcd10).toHaveBeenCalledWith({ searchTerm: "I10" });
-    expect(el.selectedCode).toBe("I10: Essential (primary) hypertension");
+    expect(el.selectedCode).toBe("I10");
+    expect(el.selectedDescription).toBe("Essential (primary) hypertension");
   });
 
   it("clears selectedCode and shows a red frame with the shared invalid-value message when defaultValue cannot be verified against the API", async () => {
@@ -198,7 +200,8 @@ describe("defaultValue pre-population", () => {
     await Promise.resolve();
 
     expect(el.selectedCode).toBe("");
-    expect(handler).toHaveBeenCalledTimes(1);
+    expect(el.selectedDescription).toBe("");
+    expect(handler).toHaveBeenCalledTimes(2);
     const formElement = el.shadowRoot.querySelector(".slds-form-element");
     expect(formElement.className).toContain("slds-has-error");
     const helpText = el.shadowRoot.querySelector(".slds-form-element__help");
@@ -255,7 +258,8 @@ describe("defaultValue pre-population", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(el.selectedCode).toBe("I10: Essential (primary) hypertension");
+    expect(el.selectedCode).toBe("I10");
+    expect(el.selectedDescription).toBe("Essential (primary) hypertension");
     const formElement = el.shadowRoot.querySelector(".slds-form-element");
     expect(formElement.className).not.toContain("slds-has-error");
   });
@@ -287,14 +291,15 @@ describe("selection", () => {
     firstOption.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     firstOption.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await Promise.resolve();
-    expect(el.selectedCode).toBe("I10: Essential (primary) hypertension");
-    expect(flowHandler).toHaveBeenCalledTimes(1);
+    expect(el.selectedCode).toBe("I10");
+    expect(el.selectedDescription).toBe("Essential (primary) hypertension");
+    expect(flowHandler).toHaveBeenCalledTimes(2);
     jest.useRealTimers();
   });
 
   it("clears selectedCode when user re-types after selection", async () => {
     const el = createElement_icdLookup({});
-    el.selectedCode = "I10: Essential (primary) hypertension";
+    el.selectedCode = "I10";
     await Promise.resolve();
 
     const input = el.shadowRoot.querySelector("input");
@@ -403,7 +408,7 @@ describe("handleClear()", () => {
     await Promise.resolve();
 
     const handler = jest.fn();
-    el.addEventListener("flowattributechange", handler);
+    el.addEventListener("lightning__flowattributechange", handler);
 
     const clearBtn = el.shadowRoot.querySelector('button[type="button"]');
     expect(clearBtn).not.toBeNull();
@@ -411,6 +416,8 @@ describe("handleClear()", () => {
     await Promise.resolve();
 
     expect(el.selectedCode).toBe("");
+    expect(el.selectedDescription).toBe("");
+    expect(handler).toHaveBeenCalledTimes(2);
   });
 });
 

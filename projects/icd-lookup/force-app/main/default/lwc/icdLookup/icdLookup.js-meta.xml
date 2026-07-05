@@ -4,7 +4,7 @@
     <isExposed>true</isExposed>
     <masterLabel>ICD Lookup</masterLabel>
     <description
-  >Single-selection ICD-10 code typeahead for Screen Flows. Searches the NIH Clinical Tables API live; emits selectedCode in "CODE: Description" format. Configure per-flow behavior via ICD_Lookup__mdt Custom Metadata.</description>
+  >Single-selection ICD-10 code typeahead for Screen Flows. Searches the NIH Clinical Tables API live; emits code-only selectedCode plus selectedDescription as separate outputs. Configure per-flow behavior via ICD_Lookup__mdt Custom Metadata.</description>
     <targets>
         <target>lightning__FlowScreen</target>
     </targets>
@@ -78,7 +78,14 @@
         type="String"
         label="Selected ICD Code"
         role="outputOnly"
-        description="The selected ICD-10 code in CODE: Description format (e.g., I10: Essential (primary) hypertension). Populated when the user selects a result from the dropdown. Assign to a Flow variable to use downstream."
+        description="The selected ICD-10 code only (e.g., I10). Populated when the user selects a result from the dropdown. Assign to a Flow variable to use downstream."
+      />
+            <property
+        name="selectedDescription"
+        type="String"
+        label="Selected ICD Description"
+        role="outputOnly"
+        description="The description text for the selected ICD-10 code (e.g., Essential (primary) hypertension). Populated alongside selectedCode when the user selects a result. Assign to a Flow variable to use downstream."
       />
         </targetConfig>
     </targetConfigs>

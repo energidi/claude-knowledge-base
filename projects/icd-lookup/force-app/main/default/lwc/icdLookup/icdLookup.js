@@ -46,12 +46,22 @@ export default class IcdLookup extends LightningElement {
     this._fieldPlaceholder = value;
   }
 
+  // Code-only. Description is tracked separately in _selectedDescription; defaultValue
+  // (input) still accepts the combined "CODE: Description" format for compatibility.
   _selectedCode;
   @api get selectedCode() {
     return this._selectedCode;
   }
   set selectedCode(value) {
     this._selectedCode = value;
+  }
+
+  _selectedDescription;
+  @api get selectedDescription() {
+    return this._selectedDescription;
+  }
+  set selectedDescription(value) {
+    this._selectedDescription = value;
   }
 
   labels = {
@@ -92,10 +102,18 @@ export default class IcdLookup extends LightningElement {
 
   connectedCallback() {
     if (this.defaultValue) {
-      this._selectedCode = this.defaultValue;
-      this.searchTerm = this.defaultValue;
+      const separatorIndex = this.defaultValue.indexOf(": ");
+      const codePart =
+        separatorIndex >= 0
+          ? this.defaultValue.slice(0, separatorIndex)
+          : this.defaultValue;
+      const descriptionPart =
+        separatorIndex >= 0 ? this.defaultValue.slice(separatorIndex + 2) : "";
+      this._selectedCode = codePart;
+      this._selectedDescription = descriptionPart;
+      this.searchTerm = codePart;
       this.isSelected = true;
-      this._verifyDefaultValue(this.defaultValue);
+      this._verifyDefaultValue(codePart);
     } else if (this.uniquenessKey) {
       this._restoreUncommittedValue();
     }
@@ -133,10 +151,8 @@ export default class IcdLookup extends LightningElement {
   // (pre-existing eTRF data entered before this component existed). Re-verify against the
   // NIH API on load; only a confirmed non-match is flagged invalid - a failed/unreachable
   // API call must not falsely flag valid legacy data, so it fails silently like getIcdLookupConfig.
-  _verifyDefaultValue(value) {
-    const separatorIndex = value.indexOf(": ");
-    const codePart =
-      separatorIndex >= 0 ? value.slice(0, separatorIndex) : value;
+  // codePart is already split from defaultValue by the caller.
+  _verifyDefaultValue(codePart) {
     searchIcd10({ searchTerm: codePart })
       .then((results) => {
         const isVerified = (results || []).some(
@@ -145,12 +161,16 @@ export default class IcdLookup extends LightningElement {
         if (!isVerified) {
           this.isSelected = false;
           this._selectedCode = "";
+          this._selectedDescription = "";
           this.validationError = labelInvalidValue;
           this.dispatchEvent(new FlowAttributeChangeEvent("selectedCode", ""));
+          this.dispatchEvent(
+            new FlowAttributeChangeEvent("selectedDescription", "")
+          );
         }
       })
       .catch(() => {
-        // API unavailable during verification: do not falsely flag legacy data as invalid.
+        // API unavailable during verification: do not falsely flag valid legacy data as invalid.
       });
   }
 
@@ -215,7 +235,7 @@ export default class IcdLookup extends LightningElement {
       fullLabel: `${res.code}: ${res.description}`,
       optionId: `icd-option-${index}`,
       isActive: index === this._focusedIndex,
-      isSelected: `${res.code}: ${res.description}` === this.selectedCode,
+      isSelected: res.code === this.selectedCode,
       itemClass: `slds-listbox__item${index === this._focusedIndex ? " slds-has-focus" : ""}`
     }));
   }
@@ -285,7 +305,11 @@ export default class IcdLookup extends LightningElement {
     this.searchTerm = event.target.value;
     if (this.searchTerm !== this._selectedCode) {
       this._selectedCode = "";
+      this._selectedDescription = "";
       this.dispatchEvent(new FlowAttributeChangeEvent("selectedCode", ""));
+      this.dispatchEvent(
+        new FlowAttributeChangeEvent("selectedDescription", "")
+      );
     }
     this.searchError = "";
     this.isSelected = false;
@@ -397,6 +421,7 @@ export default class IcdLookup extends LightningElement {
   handleClear() {
     this.searchTerm = "";
     this._selectedCode = "";
+    this._selectedDescription = "";
     this.icdResults = [];
     this._resultsReady = false;
     this.isSelected = false;
@@ -405,6 +430,7 @@ export default class IcdLookup extends LightningElement {
     this._dropdownDismissed = false;
     if (this.uniquenessKey) sessionStorage.removeItem(this.uniquenessKey);
     this.dispatchEvent(new FlowAttributeChangeEvent("selectedCode", ""));
+    this.dispatchEvent(new FlowAttributeChangeEvent("selectedDescription", ""));
     this.template.querySelector("input").focus();
   }
 
@@ -422,8 +448,9 @@ export default class IcdLookup extends LightningElement {
   _commitSelection(code, description) {
     this._dropdownDismissed = false;
     this.searchError = "";
-    this._selectedCode = `${code}: ${description}`;
-    this.searchTerm = this._selectedCode;
+    this._selectedCode = code;
+    this._selectedDescription = description;
+    this.searchTerm = code;
     this.icdResults = [];
     this._focusedIndex = -1;
     this._resultsReady = false;
@@ -432,6 +459,12 @@ export default class IcdLookup extends LightningElement {
     if (this.uniquenessKey) sessionStorage.removeItem(this.uniquenessKey);
     this.dispatchEvent(
       new FlowAttributeChangeEvent("selectedCode", this.selectedCode)
+    );
+    this.dispatchEvent(
+      new FlowAttributeChangeEvent(
+        "selectedDescription",
+        this.selectedDescription
+      )
     );
   }
 }
