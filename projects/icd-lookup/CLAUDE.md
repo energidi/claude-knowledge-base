@@ -78,7 +78,7 @@ The displayed input text shows the code only after a selection (or a verified `d
 
 **API error UX:** When the NIH API callout fails (non-200 after retry, timeout, or network error), a full-width red alert banner (`slds-notify_alert slds-theme_error`) appears above the field with the error message and a Retry button. The Retry button is in the banner only - there is no inline error below the input. The error message text is stored in Custom Label `ICD_Lookup_Error_API_Unavailable`.
 
-**CMT config load failure:** If `getIcdLookupConfig` fails, a warning banner (`slds-notify_alert slds-theme_warning`) is displayed above the field and the component falls back to the `@api` property defaults set in Flow Properties. **Flow builders must set the `mandatory` property in Flow Properties as a fallback** - if CMT load fails and mandatory was only set via CMT, the field will not be required.
+**CMT config load failure:** If `getIcdLookupConfig` fails, no message is shown to the user - the component falls back to the `@api` property defaults set in Flow Properties silently, since a config load failure is an admin/config issue, not something the person filling out the Flow can act on. The Apex side calls `notifyOnError()` (same email mechanism as `searchIcd10` failures) so the IS team is notified. **Flow builders must set the `mandatory` property in Flow Properties as a fallback** - if CMT load fails and mandatory was only set via CMT, the field will not be required.
 
 ### Apex: `ICDLookupController`
 
@@ -99,16 +99,16 @@ callout:NihClinicalTables/api/icd10cm/v3/search?terms=<encoded>&sf=code,name&max
 - On callout failure (after retry): calls `notifyOnError()` then throws `AuraHandledException`.
 - Access controlled via profile assignment - accessible to internal users and authenticated community users only.
 
-**`notifyOnError(String term, Exception e)`** - private, called on unexpected callout failure
-Sends a diagnostic email before the `AuraHandledException` is returned to the LWC. Recipient and subject are environment-aware:
+**`notifyOnError(String context, Exception e)`** - private, called on unexpected `searchIcd10` callout failure and on `getIcdLookupConfig` SOQL failure
+Sends a diagnostic email. Recipient and subject are environment-aware:
 
 - **Production:** `Label.Salesforce_Support_Email_Address` - subject: `"ICD-10 Lookup Error - <OrgName>"`
 - **Sandbox:** `Label.Test_IS_Team_Email_Address` - subject: `"Sandbox: ICD-10 Lookup Error - <OrgName>"`
 
-Sandbox detected via `[SELECT IsSandbox FROM Organization LIMIT 1]`. Email body includes: running user name, email, user ID, profile ID, org name, environment, search term length, error type, error message, stack trace, and UTC timestamp. Wrapped in its own try/catch - email failure does not suppress the original exception.
+Sandbox detected via `[SELECT IsSandbox FROM Organization LIMIT 1]`. Email body includes: running user name, email, user ID, profile ID, org name, environment, a `context` string describing which operation failed (e.g. search term length, or the Flow API name for a config load failure), error type, error message, stack trace, and UTC timestamp. Wrapped in its own try/catch - email failure never suppresses or replaces the original error being reported.
 
 **`getIcdLookupConfig(String flowApiName)`** - `@AuraEnabled(cacheable=true)` (SOQL only - no callout)
-Queries `ICD_Lookup__mdt` by `Flow_API_Name__c` where `Active__c = true`. Returns the matching record or `null`.
+Queries `ICD_Lookup__mdt` by `Flow_API_Name__c` where `Active__c = true`. Returns the matching record or `null`. On a SOQL/query exception, calls `notifyOnError()` and returns `null` - no exception is surfaced to the LWC.
 
 **Named Credential required:** Deploy `NihClinicalTables` Named Credential (`force-app/main/default/namedCredentials/NihClinicalTables.namedCredential-meta.xml`) via `sf project deploy start` before callouts will succeed. The credential points to `https://clinicaltables.nlm.nih.gov` with no authentication (public API).
 
