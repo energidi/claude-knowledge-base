@@ -18,6 +18,8 @@ ISP-6429 - Salesforce DX project implementing a real-time ICD-10 code autocomple
 
 **To deploy to Salesforce:** run `sf project deploy start` from this project directory.
 
+**Cross-project problem/solution log:** `C:\Users\GidiAbramovich\Documents\Claude\claude-knowledge-base\docs\problem-solutions.md` (also on GitHub, sibling to `projects/`). Check it for complex problems already solved elsewhere before re-diagnosing from scratch; add an entry there (not here) when a fix generalizes beyond this project.
+
 ## Commands
 
 | Task                    | Command                      |
