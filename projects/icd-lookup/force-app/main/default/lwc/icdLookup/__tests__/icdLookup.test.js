@@ -758,7 +758,7 @@ describe("uniquenessKey / sessionStorage persistence", () => {
     expect(formElement.className).not.toContain("slds-has-error");
   });
 
-  it("clears the cached sessionStorage entry once a valid selection is committed", async () => {
+  it("persists the committed selection to sessionStorage once one is made", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
     getIcdLookupConfig.mockResolvedValue(null);
@@ -780,8 +780,39 @@ describe("uniquenessKey / sessionStorage persistence", () => {
     firstOption.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await Promise.resolve();
 
-    expect(sessionStorage.getItem("test-key-4")).toBeNull();
+    expect(JSON.parse(sessionStorage.getItem("test-key-4"))).toEqual({
+      searchTerm: "I10",
+      isSelected: true,
+      selectedCode: "I10",
+      selectedDescription: "Essential (primary) hypertension"
+    });
     jest.useRealTimers();
+  });
+
+  it("restores a committed selection and re-dispatches its FlowAttributeChangeEvents on a fresh instance (Next blocked by a different field)", async () => {
+    sessionStorage.setItem(
+      "test-key-6",
+      JSON.stringify({
+        searchTerm: "I10",
+        isSelected: true,
+        selectedCode: "I10",
+        selectedDescription: "Essential (primary) hypertension"
+      })
+    );
+    const el = createElement("c-icd-lookup", { is: IcdLookup });
+    el.uniquenessKey = "test-key-6";
+    const flowHandler = jest.fn();
+    el.addEventListener("lightning__flowattributechange", flowHandler);
+    document.body.appendChild(el);
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    expect(input.value).toBe("I10");
+    expect(el.selectedCode).toBe("I10");
+    expect(el.selectedDescription).toBe("Essential (primary) hypertension");
+    const formElement = el.shadowRoot.querySelector(".slds-form-element");
+    expect(formElement.className).not.toContain("slds-has-error");
+    expect(flowHandler).toHaveBeenCalledTimes(2);
   });
 
   it("clears the cached sessionStorage entry when handleClear() runs", async () => {

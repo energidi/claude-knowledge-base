@@ -15,8 +15,8 @@
         type="String"
         role="inputOnly"
         label="1. Uniqueness Key"
-        default=""
-        description="If you use more than one ICD Lookup component in this Flow, you must enter a unique value to avoid incorrect values appearing, such as [Field API Name]_{!$Flow.InterviewGuid}. More information can be found in the component design documentation."
+        required="true"
+        description="Fill in a unique value across the whole Flow, such as [Field API Name]_{!$Flow.InterviewGuid}, to prevent field values from being lost or mixed up."
       />
             <property
         name="label"

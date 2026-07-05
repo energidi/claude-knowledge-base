@@ -161,7 +161,7 @@ export default class IcdLookup extends LightningElement {
       this.isSelected = true;
       this._verifyDefaultValue(codePart);
     } else if (this.uniquenessKey) {
-      this._restoreUncommittedValue();
+      this._restorePersistedValue();
     }
 
     if (this.flowApiName) {
@@ -221,20 +221,38 @@ export default class IcdLookup extends LightningElement {
   }
 
   // Flow destroys and recreates this component when it redisplays the screen after a
-  // blocked Next click (confirmed via diagnostic logging), wiping searchTerm/validationError
-  // from local memory since neither is backed by an @api input for a brand-new field.
-  // uniquenessKey lets that state survive via sessionStorage, keyed by a value the Flow
-  // admin binds to {!$Flow.InterviewGuid} (+ a distinct suffix per field on the same
-  // screen) - the same pattern the community fileUploadImproved component uses.
-  _restoreUncommittedValue() {
+  // blocked Next click (confirmed via diagnostic logging), wiping searchTerm/isSelected/
+  // validationError from local memory since none of them is backed by an @api input for a
+  // brand-new field. This happens even when Next was blocked by a *different* field on the
+  // screen, in which case this field's already-committed selection is lost too, not just
+  // uncommitted invalid text. uniquenessKey lets that state survive via sessionStorage,
+  // keyed by a value the Flow admin binds to {!$Flow.InterviewGuid} (+ a distinct suffix
+  // per field on the same screen) - the same pattern the community fileUploadImproved
+  // component uses. A committed selection re-dispatches its FlowAttributeChangeEvents on
+  // restore since the freshly-mounted instance has no memory of ever emitting them.
+  _restorePersistedValue() {
     let cached;
     try {
       cached = JSON.parse(sessionStorage.getItem(this.uniquenessKey));
     } catch {
       return;
     }
-    if (cached && cached.searchTerm) {
-      this.searchTerm = cached.searchTerm;
+    if (!cached || !cached.searchTerm) return;
+    this.searchTerm = cached.searchTerm;
+    if (cached.isSelected) {
+      this.isSelected = true;
+      this._selectedCode = cached.selectedCode;
+      this._selectedDescription = cached.selectedDescription;
+      this.dispatchEvent(
+        new FlowAttributeChangeEvent("selectedCode", this._selectedCode)
+      );
+      this.dispatchEvent(
+        new FlowAttributeChangeEvent(
+          "selectedDescription",
+          this._selectedDescription
+        )
+      );
+    } else {
       this.isSelected = false;
       this.validationError = labelInvalidValue;
     }
@@ -523,7 +541,17 @@ export default class IcdLookup extends LightningElement {
     this._resultsReady = false;
     this.isSelected = true;
     this.validationError = "";
-    if (this.uniquenessKey) sessionStorage.removeItem(this.uniquenessKey);
+    if (this.uniquenessKey) {
+      sessionStorage.setItem(
+        this.uniquenessKey,
+        JSON.stringify({
+          searchTerm: this.searchTerm,
+          isSelected: true,
+          selectedCode: this._selectedCode,
+          selectedDescription: this._selectedDescription
+        })
+      );
+    }
     this.dispatchEvent(
       new FlowAttributeChangeEvent("selectedCode", this.selectedCode)
     );
