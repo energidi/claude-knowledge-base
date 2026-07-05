@@ -285,7 +285,7 @@ export default class IcdLookup extends LightningElement {
       isSelected: res.code === this.selectedCode,
       showTooltip: index === this._focusedIndex && this._focusedOptionTruncated,
       itemClass: "slds-listbox__item",
-      optionClass: `slds-media slds-listbox__option slds-listbox__option_plain slds-media_center${index === this._focusedIndex ? " slds-has-focus" : ""}`
+      optionClass: `slds-media slds-listbox__option slds-listbox__option_plain slds-media_center icd-listbox-option${index === this._focusedIndex ? " slds-has-focus" : ""}`
     }));
   }
 
@@ -380,7 +380,6 @@ export default class IcdLookup extends LightningElement {
 
     if (this.searchTerm.length >= 3) {
       this.icdResults = [];
-      // eslint-disable-next-line @lwc/lwc/no-async-operation
       this.searchDebounceTimer = setTimeout(() => {
         this.isLoading = true;
         this.fetchIcdResults();
@@ -394,7 +393,6 @@ export default class IcdLookup extends LightningElement {
   fetchIcdResults() {
     this._requestSeq = (this._requestSeq ?? 0) + 1;
     const seq = this._requestSeq;
-    // eslint-disable-next-line @lwc/lwc/no-async-operation
     this._slowSearchTimer = setTimeout(() => {
       if (seq === this._requestSeq && this.isLoading) {
         this._searchIsSlow = true;

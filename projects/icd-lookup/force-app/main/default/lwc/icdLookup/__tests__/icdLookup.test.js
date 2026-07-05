@@ -646,6 +646,63 @@ describe("config load failure", () => {
   });
 });
 
+describe("CMT config override (getIcdLookupConfig success)", () => {
+  it("applies fieldPlaceholder and helpText from CMT, and Required__c overrides @api mandatory", async () => {
+    getIcdLookupConfig.mockResolvedValue({
+      Field_Placeholder__c: "Search CMT placeholder",
+      No_Matching_Codes_Found_Message__c: "CMT no results message",
+      Help_Text__c: "CMT help text",
+      Required__c: true
+    });
+    const el = createElement_icdLookup({
+      flowApiName: "Some_Flow",
+      mandatory: false
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    expect(input.placeholder).toBe("Search CMT placeholder");
+
+    const helptext = el.shadowRoot.querySelector("lightning-helptext");
+    expect(helptext).not.toBeNull();
+    expect(helptext.content).toBe("CMT help text");
+
+    // @api mandatory was false; CMT Required__c=true must take precedence
+    const result = el.validate();
+    expect(result.isValid).toBe(false);
+  });
+
+  it("applies noResultsMessage from CMT config to the rendered no-results message", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue([]);
+    getIcdLookupConfig.mockResolvedValue({
+      No_Matching_Codes_Found_Message__c: "CMT no results message"
+    });
+    const el = createElement_icdLookup({ flowApiName: "Some_Flow" });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "zzz";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const noResultsEl = el.shadowRoot.querySelector(".no-results-message");
+    expect(noResultsEl.textContent).toBe("CMT no results message");
+    jest.useRealTimers();
+  });
+});
+
 describe("uniquenessKey / sessionStorage persistence", () => {
   it("writes the uncommitted typed value to sessionStorage when uniquenessKey is set", async () => {
     const el = createElement_icdLookup({ uniquenessKey: "test-key-1" });
