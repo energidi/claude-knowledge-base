@@ -10,6 +10,7 @@
 }
 
 .slds-listbox__option {
+  position: relative;
   min-height: 2.75rem;
   padding: 0.5rem 1rem;
 }
@@ -17,4 +18,21 @@
 .slds-dropdown .slds-listbox_vertical {
   max-height: 20rem;
   overflow-y: auto;
+}
+
+.icd-keyboard-tooltip {
+  position: absolute;
+  left: 1rem;
+  bottom: 100%;
+  z-index: 1;
+  margin-bottom: 0.25rem;
+  max-width: calc(100% - 2rem);
+  width: max-content;
+  padding: 0.25rem 0.5rem;
+  background: #16325c;
+  color: #fff;
+  font-size: 0.75rem;
+  white-space: normal;
+  border-radius: 0.25rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }

@@ -529,6 +529,49 @@ describe("Enter key behavior", () => {
   });
 });
 
+describe("ArrowDown keyboard tooltip", () => {
+  it("shows a custom tooltip only for the focused option when its text is truncated", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const truncateSpans = el.shadowRoot.querySelectorAll(".slds-truncate");
+    Object.defineProperty(truncateSpans[0], "scrollWidth", { value: 300 });
+    Object.defineProperty(truncateSpans[0], "clientWidth", { value: 150 });
+    Object.defineProperty(truncateSpans[1], "scrollWidth", { value: 100 });
+    Object.defineProperty(truncateSpans[1], "clientWidth", { value: 150 });
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(el.shadowRoot.querySelector(".icd-keyboard-tooltip")).not.toBeNull();
+
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(el.shadowRoot.querySelector(".icd-keyboard-tooltip")).toBeNull();
+
+    jest.useRealTimers();
+  });
+});
+
 describe("min char hint", () => {
   it("shows hint paragraph when 1-2 characters are typed", async () => {
     const el = createElement_icdLookup({});

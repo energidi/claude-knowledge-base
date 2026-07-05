@@ -81,6 +81,8 @@ export default class IcdLookup extends LightningElement {
   validationError = "";
   searchDebounceTimer;
   _focusedIndex = -1;
+  _focusedOptionTruncated = false;
+  _shouldCheckTruncation = false;
   _resultsReady = false;
   _shouldScrollToFocused = false;
   _mandatory = null;
@@ -104,29 +106,44 @@ export default class IcdLookup extends LightningElement {
   }
 
   renderedCallback() {
-    if (!this._shouldScrollToFocused) {
+    if (this._shouldScrollToFocused) {
+      this._shouldScrollToFocused = false;
+      // Salesforce appends its own uniqueness suffix to rendered id attributes,
+      // including static ones like id="icd-listbox" (confirmed via DevTools:
+      // e.g. "icd-option-1" becomes "icd-option-1-1349" in the DOM), so an exact
+      // id match never finds the element. data-* attributes are left untouched
+      // by that suffixing and are used to locate both elements instead.
+      const listEl = this.template.querySelector("[data-listbox]");
+      const optionEl = this.template.querySelector(
+        `[data-option-index="${this._focusedIndex}"]`
+      );
+      if (listEl && optionEl) {
+        const listRect = listEl.getBoundingClientRect();
+        const optionRect = optionEl.getBoundingClientRect();
+        if (optionRect.top < listRect.top) {
+          listEl.scrollTop += optionRect.top - listRect.top;
+        } else if (optionRect.bottom > listRect.bottom) {
+          listEl.scrollTop += optionRect.bottom - listRect.bottom;
+        }
+      }
+    }
+    this.checkTruncation();
+  }
+
+  // Keyboard-only tooltip: mouse hover already relies on the native title attribute
+  // (browsers never fire title on focus), so this measures whether the focused
+  // option's text is actually clipped before showing a custom tooltip for it.
+  checkTruncation() {
+    if (!this._shouldCheckTruncation) {
       return;
     }
-    this._shouldScrollToFocused = false;
-    // Salesforce appends its own uniqueness suffix to rendered id attributes,
-    // including static ones like id="icd-listbox" (confirmed via DevTools:
-    // e.g. "icd-option-1" becomes "icd-option-1-1349" in the DOM), so an exact
-    // id match never finds the element. data-* attributes are left untouched
-    // by that suffixing and are used to locate both elements instead.
-    const listEl = this.template.querySelector("[data-listbox]");
+    this._shouldCheckTruncation = false;
     const optionEl = this.template.querySelector(
-      `[data-option-index="${this._focusedIndex}"]`
+      `[data-option-index="${this._focusedIndex}"] .slds-truncate`
     );
-    if (!listEl || !optionEl) {
-      return;
-    }
-    const listRect = listEl.getBoundingClientRect();
-    const optionRect = optionEl.getBoundingClientRect();
-    if (optionRect.top < listRect.top) {
-      listEl.scrollTop += optionRect.top - listRect.top;
-    } else if (optionRect.bottom > listRect.bottom) {
-      listEl.scrollTop += optionRect.bottom - listRect.bottom;
-    }
+    this._focusedOptionTruncated = optionEl
+      ? optionEl.scrollWidth > optionEl.clientWidth
+      : false;
   }
 
   connectedCallback() {
@@ -266,6 +283,7 @@ export default class IcdLookup extends LightningElement {
       optionIndex: index,
       isActive: index === this._focusedIndex,
       isSelected: res.code === this.selectedCode,
+      showTooltip: index === this._focusedIndex && this._focusedOptionTruncated,
       itemClass: "slds-listbox__item",
       optionClass: `slds-media slds-listbox__option slds-listbox__option_plain slds-media_center${index === this._focusedIndex ? " slds-has-focus" : ""}`
     }));
@@ -419,6 +437,7 @@ export default class IcdLookup extends LightningElement {
       this.icdResults = [];
       this._resultsReady = false;
       this._focusedIndex = -1;
+      this._focusedOptionTruncated = false;
     }
   }
 
@@ -431,15 +450,19 @@ export default class IcdLookup extends LightningElement {
         this._focusedIndex =
           count > 0 ? Math.min(this._focusedIndex + 1, count - 1) : -1;
         this._shouldScrollToFocused = this._focusedIndex >= 0;
+        this._shouldCheckTruncation = this._focusedIndex >= 0;
+        if (this._focusedIndex < 0) this._focusedOptionTruncated = false;
         break;
       case "ArrowUp":
         event.preventDefault();
         if (this._focusedIndex <= 0) {
           this._focusedIndex = -1;
+          this._focusedOptionTruncated = false;
           this.template.querySelector("input").focus();
         } else {
           this._focusedIndex = this._focusedIndex - 1;
           this._shouldScrollToFocused = true;
+          this._shouldCheckTruncation = true;
         }
         break;
       case "Enter":
@@ -453,6 +476,7 @@ export default class IcdLookup extends LightningElement {
         event.preventDefault();
         this.icdResults = [];
         this._focusedIndex = -1;
+        this._focusedOptionTruncated = false;
         this._resultsReady = false;
         this._dropdownDismissed = true;
         break;
@@ -466,6 +490,7 @@ export default class IcdLookup extends LightningElement {
     this._selectedCode = "";
     this._selectedDescription = "";
     this.icdResults = [];
+    this._focusedOptionTruncated = false;
     this._resultsReady = false;
     this.isSelected = false;
     this.searchError = "";
@@ -496,6 +521,7 @@ export default class IcdLookup extends LightningElement {
     this.searchTerm = code;
     this.icdResults = [];
     this._focusedIndex = -1;
+    this._focusedOptionTruncated = false;
     this._resultsReady = false;
     this.isSelected = true;
     this.validationError = "";

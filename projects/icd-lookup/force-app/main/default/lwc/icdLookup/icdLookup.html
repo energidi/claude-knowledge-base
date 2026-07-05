@@ -119,6 +119,11 @@
                       </span>
                     </span>
                   </span>
+                  <template lwc:if={res.showTooltip}>
+                    <span class="icd-keyboard-tooltip" aria-hidden="true">
+                      {res.fullLabel}
+                    </span>
+                  </template>
                 </li>
               </template>
               <template lwc:if={showNoResults}>
