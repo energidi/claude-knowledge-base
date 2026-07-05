@@ -138,6 +138,11 @@
     <template lwc:if={showMinCharHint}>
       <p class="slds-form-element__help">{labels.minCharHint}</p>
     </template>
+    <template lwc:if={showMaxCharError}>
+      <div class="slds-form-element__help" role="alert">
+        {labels.maxCharError}
+      </div>
+    </template>
     <template lwc:if={validationError}>
       <div class="slds-form-element__help" role="alert">{validationError}</div>
     </template>

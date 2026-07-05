@@ -40,6 +40,14 @@ jest.mock(
   { virtual: true }
 );
 jest.mock(
+  "@salesforce/label/c.ICD_Lookup_Max_Char_Error",
+  () => ({
+    default:
+      "The text is over the character limit. Please shorten it and try again."
+  }),
+  { virtual: true }
+);
+jest.mock(
   "@salesforce/label/c.ICD_Lookup_Still_Searching",
   () => ({ default: "Still searching..." }),
   { virtual: true }
@@ -541,6 +549,44 @@ describe("min char hint", () => {
 
     const hints = el.shadowRoot.querySelectorAll(".slds-form-element__help");
     expect(hints.length).toBe(0);
+  });
+});
+
+describe("max char error", () => {
+  it("shows inline error and skips the Apex call when over 100 characters", async () => {
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "a".repeat(101);
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    const alert = el.shadowRoot.querySelector('div[role="alert"]');
+    expect(alert.textContent).toBe(
+      "The text is over the character limit. Please shorten it and try again."
+    );
+    expect(searchIcd10).not.toHaveBeenCalled();
+
+    const banner = el.shadowRoot.querySelector(".slds-theme_error");
+    expect(banner).toBeNull();
+  });
+
+  it("clears the error once the term is back to 100 characters or fewer", async () => {
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "a".repeat(101);
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    input.value = "a".repeat(100);
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    const alert = el.shadowRoot.querySelector('div[role="alert"]');
+    expect(alert).toBeNull();
   });
 });
 

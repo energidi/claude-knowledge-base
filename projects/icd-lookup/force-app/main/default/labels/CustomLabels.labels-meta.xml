@@ -36,6 +36,16 @@
         <value>Type at least 3 characters to search.</value>
     </labels>
     <labels>
+        <fullName>ICD_Lookup_Max_Char_Error</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription
+    >ICD Lookup - Message shown when search term exceeds the 100-character limit</shortDescription>
+        <value
+    >The text is over the character limit. Please shorten it and try again.</value>
+    </labels>
+    <labels>
         <fullName>ICD_Lookup_Retry</fullName>
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>

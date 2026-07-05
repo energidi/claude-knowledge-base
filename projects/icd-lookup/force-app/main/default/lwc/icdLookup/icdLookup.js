@@ -6,6 +6,7 @@ import labelSearchFailed from "@salesforce/label/c.ICD_Lookup_Error_API_Unavaila
 import labelValidationRequired from "@salesforce/label/c.ICD_Lookup_Validation_Required";
 import labelInvalidValue from "@salesforce/label/c.ICD_Lookup_Invalid_Default_Value";
 import labelMinCharHint from "@salesforce/label/c.ICD_Lookup_Min_Char_Hint";
+import labelMaxCharError from "@salesforce/label/c.ICD_Lookup_Max_Char_Error";
 import labelStillSearching from "@salesforce/label/c.ICD_Lookup_Still_Searching";
 import labelRetry from "@salesforce/label/c.ICD_Lookup_Retry";
 import labelClear from "@salesforce/label/c.ICD_Lookup_Clear";
@@ -67,6 +68,7 @@ export default class IcdLookup extends LightningElement {
   labels = {
     stillSearching: labelStillSearching,
     minCharHint: labelMinCharHint,
+    maxCharError: labelMaxCharError,
     retry: labelRetry,
     clear: labelClear
   };
@@ -251,7 +253,7 @@ export default class IcdLookup extends LightningElement {
   }
 
   get formElementClass() {
-    return this.validationError || this.searchError
+    return this.validationError || this.searchError || this.showMaxCharError
       ? "slds-form-element slds-has-error"
       : "slds-form-element";
   }
@@ -281,6 +283,10 @@ export default class IcdLookup extends LightningElement {
       this.searchTerm.length < 3 &&
       !this.validationError
     );
+  }
+
+  get showMaxCharError() {
+    return this.searchTerm.length > 100 && !this.validationError;
   }
 
   get searchSlowWarning() {
@@ -318,6 +324,12 @@ export default class IcdLookup extends LightningElement {
     this._resultsReady = false;
     clearTimeout(this.searchDebounceTimer);
     this._syncUncommittedValue();
+
+    if (this.searchTerm.length > 100) {
+      this.icdResults = [];
+      this.isLoading = false;
+      return;
+    }
 
     if (this.searchTerm.length >= 3) {
       this.icdResults = [];
