@@ -74,6 +74,7 @@
           <div class="slds-dropdown slds-dropdown_fluid">
             <ul
               id="icd-listbox"
+              data-listbox="true"
               role="listbox"
               class="slds-listbox slds-listbox_vertical"
             >
@@ -108,10 +109,9 @@
                   onclick={handleSelect}
                   data-code={res.code}
                   data-description={res.description}
+                  data-option-index={res.optionIndex}
                 >
-                  <span
-                    class="slds-media slds-listbox__option slds-listbox__option_plain slds-media_center"
-                  >
+                  <span class={res.optionClass}>
                     <span class="slds-media__body">
                       <span class="slds-truncate" title={res.fullLabel}>
                         <strong>{res.code}</strong>: {res.description}

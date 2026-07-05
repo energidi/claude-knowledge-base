@@ -82,6 +82,7 @@ export default class IcdLookup extends LightningElement {
   searchDebounceTimer;
   _focusedIndex = -1;
   _resultsReady = false;
+  _shouldScrollToFocused = false;
   _mandatory = null;
   _requestSeq = 0;
   _dropdownDismissed = false;
@@ -100,6 +101,32 @@ export default class IcdLookup extends LightningElement {
 
   get ariaRequired() {
     return this.isMandatory ? "true" : "false";
+  }
+
+  renderedCallback() {
+    if (!this._shouldScrollToFocused) {
+      return;
+    }
+    this._shouldScrollToFocused = false;
+    // Salesforce appends its own uniqueness suffix to rendered id attributes,
+    // including static ones like id="icd-listbox" (confirmed via DevTools:
+    // e.g. "icd-option-1" becomes "icd-option-1-1349" in the DOM), so an exact
+    // id match never finds the element. data-* attributes are left untouched
+    // by that suffixing and are used to locate both elements instead.
+    const listEl = this.template.querySelector("[data-listbox]");
+    const optionEl = this.template.querySelector(
+      `[data-option-index="${this._focusedIndex}"]`
+    );
+    if (!listEl || !optionEl) {
+      return;
+    }
+    const listRect = listEl.getBoundingClientRect();
+    const optionRect = optionEl.getBoundingClientRect();
+    if (optionRect.top < listRect.top) {
+      listEl.scrollTop += optionRect.top - listRect.top;
+    } else if (optionRect.bottom > listRect.bottom) {
+      listEl.scrollTop += optionRect.bottom - listRect.bottom;
+    }
   }
 
   connectedCallback() {
@@ -236,9 +263,11 @@ export default class IcdLookup extends LightningElement {
       description: res.description,
       fullLabel: `${res.code}: ${res.description}`,
       optionId: `icd-option-${index}`,
+      optionIndex: index,
       isActive: index === this._focusedIndex,
       isSelected: res.code === this.selectedCode,
-      itemClass: `slds-listbox__item${index === this._focusedIndex ? " slds-has-focus" : ""}`
+      itemClass: "slds-listbox__item",
+      optionClass: `slds-media slds-listbox__option slds-listbox__option_plain slds-media_center${index === this._focusedIndex ? " slds-has-focus" : ""}`
     }));
   }
 
@@ -401,6 +430,7 @@ export default class IcdLookup extends LightningElement {
         event.preventDefault();
         this._focusedIndex =
           count > 0 ? Math.min(this._focusedIndex + 1, count - 1) : -1;
+        this._shouldScrollToFocused = this._focusedIndex >= 0;
         break;
       case "ArrowUp":
         event.preventDefault();
@@ -409,6 +439,7 @@ export default class IcdLookup extends LightningElement {
           this.template.querySelector("input").focus();
         } else {
           this._focusedIndex = this._focusedIndex - 1;
+          this._shouldScrollToFocused = true;
         }
         break;
       case "Enter":
