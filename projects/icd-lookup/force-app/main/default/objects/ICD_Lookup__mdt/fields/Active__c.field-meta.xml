@@ -1,10 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Active__c</fullName>
-    <description>Checkbox (Yes/No). When checked, this configuration record is active and will be applied to the matching Flow at runtime. When unchecked, the record is ignored and the component falls back to the defaults set in Flow Properties. Defaults to true. Uncheck to disable a configuration without deleting the record. ref: ISP-6429</description>
     <defaultValue>true</defaultValue>
-    <externalId>false</externalId>
+    <description
+  >Checkbox (Yes/No). When checked, this configuration record is active and will be applied to the matching Flow at runtime. When unchecked, the record is ignored and the component falls back to the defaults set in Flow Properties. Defaults to true. Uncheck to disable a configuration without deleting the record. ref: ISP-6429</description>
+    <fieldManageability>DeveloperControlled</fieldManageability>
     <label>Active?</label>
-    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

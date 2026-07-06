@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Drives per-flow configuration for each icdLookup LWC instance, controlling field label, placeholder text, no-results message, help text, and mandatory validation. Identify records by Flow API Name matching the Screen Flow API name. ref: ISP-6429</description>
+    <description
+  >Drives per-flow configuration for each icdLookup LWC instance, controlling field label, placeholder text, no-results message, help text, and mandatory validation. Identify records by Flow API Name matching the Screen Flow API name. ref: ISP-6429</description>
     <label>ICD Lookup</label>
     <pluralLabel>ICD Lookups</pluralLabel>
     <visibility>Public</visibility>
