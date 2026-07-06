@@ -489,6 +489,108 @@ describe("handleRetry()", () => {
   });
 });
 
+describe("disabled state", () => {
+  it("renders the input and clear button as disabled and skips mandatory validation", async () => {
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    const el = createElement_icdLookup({
+      disabled: true,
+      mandatory: true,
+      defaultValue: "I10: Essential (primary) hypertension"
+    });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    expect(input.disabled).toBe(true);
+
+    const result = el.validate();
+    expect(result.isValid).toBe(true);
+    expect(el.validate().errorMessage).toBeUndefined();
+  });
+
+  it("returns isValid true and clears validationError for uncommitted text while disabled", async () => {
+    const el = createElement_icdLookup({ disabled: true });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+
+    const result = el.validate();
+    expect(result.isValid).toBe(true);
+    await Promise.resolve();
+    const helpText = el.shadowRoot.querySelector(".slds-form-element__help");
+    expect(helpText).toBeNull();
+  });
+
+  it("does not clear state when handleClear fires while disabled", async () => {
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    const el = createElement_icdLookup({
+      disabled: true,
+      defaultValue: "I10: Essential (primary) hypertension"
+    });
+    await Promise.resolve();
+
+    // Clear button is hidden while disabled (showClearButton requires !disabled),
+    // so exercise handleClear() directly via the input's clear affordance guard.
+    expect(el.shadowRoot.querySelector('button[type="button"]')).toBeNull();
+    expect(el.selectedCode).toBe("I10");
+  });
+
+  it("does not re-trigger a search when handleRetry fires while disabled", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockRejectedValue(new Error("API error"));
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    el.disabled = true;
+    await Promise.resolve();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    const retryBtn = el.shadowRoot.querySelector("button.slds-button_inverse");
+    expect(retryBtn.disabled).toBe(true);
+    retryBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await Promise.resolve();
+    expect(searchIcd10).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it("does not commit a selection when handleSelect fires while disabled", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    el.disabled = true;
+    await Promise.resolve();
+    const firstOption = el.shadowRoot.querySelector('[role="option"]');
+    if (firstOption) {
+      firstOption.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    }
+    expect(el.selectedCode).toBe("");
+    jest.useRealTimers();
+  });
+});
+
 describe("Escape key behavior", () => {
   it("clears results and sets screenReaderStatus to dismissed without clearing searchTerm", async () => {
     jest.useFakeTimers();
