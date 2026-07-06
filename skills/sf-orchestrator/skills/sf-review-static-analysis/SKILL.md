@@ -4,7 +4,7 @@ description: Deterministic static-analysis pass using Salesforce Code Analyzer (
 allowed-tools: Read, Glob, Grep, Bash
 metadata:
   author: Gidi Abramovich
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # Salesforce Static Analysis (Code Analyzer)
@@ -17,7 +17,7 @@ You are running a deterministic linting/static-analysis pass, not a judgment-bas
    ```
    sf plugins
    ```
-   Look for a `code-analyzer` entry. If missing, stop and tell the user to run `sf plugins install code-analyzer` — do not attempt to install it yourself without approval.
+   Look for a `code-analyzer` entry. If missing, check `package.json` for `lint` / `format` / `prettier:verify` scripts and run those instead as a fallback — note the substitution in the output header (`Engines run: <lint tool> (code-analyzer unavailable)`). Only stop and tell the user to run `sf plugins install code-analyzer` if no such fallback command exists either — do not attempt to install the plugin yourself without approval.
 2. Confirm this is a Salesforce project (`sfdx-project.json` present). If not, stop — this skill is Salesforce-specific.
 
 ## Run
@@ -70,4 +70,4 @@ No rule violations found across all configured engines.
 - Never hand-wave a fix — every finding must include the exact rule name and file:line from the scanner's own output, not an LLM guess.
 - Do not re-run qualitative judgment on findings this tool reports — if Code Analyzer flags it, report it as-is; do not second-guess or downgrade severity.
 - A single Critical finding = NO-GO, consistent with the other six lenses.
-- If the scan itself errors (plugin missing, invalid workspace), report the exact CLI error and stop — do not fall back to a manual/LLM-only scan silently.
+- If the scan itself errors (invalid workspace, unexpected CLI failure), report the exact CLI error and stop — do not fall back to a manual/LLM-only scan silently. The only permitted fallback is the deterministic lint/format substitution in the Prerequisite Check when `code-analyzer` is missing — that is a tool substitution, not an LLM judgment call.

@@ -4,7 +4,7 @@ description: End-to-end Salesforce orchestrator. Reads prior review history firs
 allowed-tools: Read, Glob, Grep, Edit, Write, Bash, Agent
 metadata:
   author: Gidi Abramovich
-  version: 1.5.0
+  version: 1.6.0
 ---
 
 # SF Orchestrator - End-to-End Review, Fix & Ship
@@ -65,7 +65,7 @@ Dispatch all eight review lenses **in parallel** in a single message using the S
 5. `sf-review:sf-review-performance` - 8 domains: Apex bulkification, CPU/heap limits, SOQL efficiency, Flow performance, LWC performance, Platform Cache, LDV readiness, limit observability
 6. `sf-review:sf-review-testing` - 7 domains: assertion quality, bulk testing, test data strategy, mocking/isolation, async testing, coverage quality, test maintainability
 7. `sf-review:sf-review-automation` - 7 domains: tool selection, trigger architecture, order of execution, Flow design quality, recursion prevention, documentation, deprecation/migration
-8. `sf-review:sf-review-static-analysis` - deterministic Salesforce Code Analyzer scan (PMD, ESLint, RetireJS, Graph Engine). If the `code-analyzer` plugin is not installed, skip this lens and note it as skipped in the summary rather than failing the whole phase.
+8. `sf-review:sf-review-static-analysis` - deterministic Salesforce Code Analyzer scan (PMD, ESLint, RetireJS, Graph Engine). If the `code-analyzer` plugin is not installed, fall back to running the project's own lint/format commands (e.g. `npm run lint`, `npm run prettier:verify`) if available, and note the substitution in the summary. If neither the plugin nor project lint commands are available, skip this lens and note it as skipped.
 
 Wait for all eight to complete before proceeding to Phase 2.
 
@@ -161,6 +161,13 @@ Write `PHASE 2 COMPLETE` after presenting the table and asking the question.
 4. Mark the finding as done in the tracking table
 5. If a fix cannot be applied (file not found, conflict, ambiguous scope): state it explicitly and continue
 
+### Automated Verification (run once, after all selected findings are applied)
+
+1. Detect available check commands: look for `lint` / `test` / `test:unit` scripts in `package.json`, or any test/lint commands documented in the project's CLAUDE.md.
+2. Run every detected command once.
+3. If a command fails, do not mark the findings in the affected area as `Verified: yes` - mark them `Verified: no (see <command> failure)` and include the relevant failure output in the verification table.
+4. If no check commands are found, note "No automated test/lint commands detected for this project" and rely on the per-finding re-read (step 3 of the Application Protocol) only.
+
 After all selected findings are applied, output a verification table:
 
 `#` | `Finding` | `Fix Applied` | `Verified` (yes / no / skipped + reason)
@@ -177,6 +184,8 @@ After fixes are applied (or skipped), update ALL three documents. This phase is 
 
 ### 4a. Review tracking file (always)
 Use the filename detected in Phase 0. Add a new round entry summarizing what changed. Use Edit with targeted diffs only. Never rewrite from scratch. Also update the `Last Updated` line in the file header.
+
+For every Critical or High severity finding that was fixed in Phase 3, include a one-line rollback note in the round entry (e.g. "revert: `<file>` lines X-Y to prior version"). Medium/Low findings do not require a rollback note.
 
 If no review tracking file was found in Phase 0, create one in the project root named `<ProjectName>_Code_Review.md` (derive the project name from the project's CLAUDE.md or the root folder name).
 
@@ -252,10 +261,11 @@ Write `PHASE 6 COMPLETE` after a successful push.
 - Write `PHASE <N> COMPLETE` at the end of every phase before moving to the next.
 - Do NOT write `TASK COMPLETE` until all seven phases are marked complete.
 - Always run Phase 0 first. Never skip prior round deduplication.
-- Run all eight review lenses in parallel. Never skip one, except `sf-review-static-analysis` when the `code-analyzer` plugin is not installed — note the skip explicitly.
+- Run all eight review lenses in parallel. Never skip one, except `sf-review-static-analysis` when neither the `code-analyzer` plugin nor a project lint/format fallback is available — note the skip explicitly.
 - Never apply fixes before showing the findings table and asking the user.
 - Apply every severity level that the user approved - never silently drop a finding.
 - Verify every fix against the actual source file - not from memory.
+- Run any detected lint/test commands once after applying fixes - do not mark a fix verified from a source re-read alone if automated checks are available.
 - Use Edit with targeted diffs - never rewrite a full file unless truly unavoidable.
 - Never deploy to Salesforce without explicit user approval.
 - Never push to GitHub without explicit user approval.
