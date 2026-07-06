@@ -5,7 +5,7 @@
       role="alert"
       aria-live="assertive"
     >
-      <span class="slds-assistive-text">Error: </span>
+      <span class="slds-assistive-text">{labels.srErrorPrefix}</span>
       {searchError}
       <button
         class="slds-button slds-button_inverse slds-m-left_small"
@@ -60,8 +60,7 @@
               oninput={handleSearchChange}
             />
             <span id={_keyboardHintId} class="slds-assistive-text"
-              >Use arrow keys to navigate results, Enter to select, Escape to
-              close.</span
+              >{labels.srKeyboardHint}</span
             >
             <template lwc:if={showClearButton}>
               <button

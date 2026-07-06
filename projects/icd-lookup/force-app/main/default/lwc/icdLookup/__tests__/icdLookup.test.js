@@ -501,6 +501,9 @@ describe("disabled state", () => {
 
     const input = el.shadowRoot.querySelector("input");
     expect(input.disabled).toBe(true);
+    expect(input.placeholder).toBe("");
+    expect(input.getAttribute("aria-required")).toBe("true");
+    expect(el.shadowRoot.querySelector("abbr.slds-required")).toBeNull();
 
     const result = el.validate();
     expect(result.isValid).toBe(true);
@@ -1152,6 +1155,28 @@ describe("_restoreDescriptionForCode", () => {
 
     expect(searchIcd10).toHaveBeenCalledWith({ searchTerm: "Z99" });
     expect(el.selectedDescription).toBe("");
+  });
+
+  it("leaves selectedDescription unset when the restore lookup rejects", async () => {
+    searchIcd10.mockRejectedValue(new Error("API unavailable"));
+    sessionStorage.setItem(
+      "test-key-10",
+      JSON.stringify({
+        searchTerm: "I10",
+        isSelected: true,
+        selectedCode: "I10"
+      })
+    );
+    const el = createElement("c-icd-lookup", { is: IcdLookup });
+    el.uniquenessKey = "test-key-10";
+    document.body.appendChild(el);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(searchIcd10).toHaveBeenCalledWith({ searchTerm: "I10" });
+    expect(el.selectedDescription).toBeUndefined();
+    expect(el.selectedCode).toBe("I10");
   });
 });
 

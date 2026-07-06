@@ -55,6 +55,25 @@
         <value>Retry</value>
     </labels>
     <labels>
+        <fullName>ICD_Lookup_SR_Error_Prefix</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription
+    >ICD Lookup - SR error prefix before validation error text</shortDescription>
+        <value>Error: </value>
+    </labels>
+    <labels>
+        <fullName>ICD_Lookup_SR_Keyboard_Hint</fullName>
+        <categories>ISP-6429, ICD Lookup</categories>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription
+    >ICD Lookup - SR keyboard hint for aria-describedby</shortDescription>
+        <value
+    >Use arrow keys to navigate results, Enter to select, Escape to close.</value>
+    </labels>
+    <labels>
         <fullName>ICD_Lookup_SR_Dismissed</fullName>
         <categories>ISP-6429, ICD Lookup</categories>
         <language>en_US</language>

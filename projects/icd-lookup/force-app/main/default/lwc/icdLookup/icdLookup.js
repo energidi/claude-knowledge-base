@@ -15,6 +15,8 @@ import labelSRLoading from "@salesforce/label/c.ICD_Lookup_SR_Loading";
 import labelSRStillSearching from "@salesforce/label/c.ICD_Lookup_SR_Still_Searching";
 import labelSRResult from "@salesforce/label/c.ICD_Lookup_SR_Result";
 import labelSRResults from "@salesforce/label/c.ICD_Lookup_SR_Results";
+import labelSRErrorPrefix from "@salesforce/label/c.ICD_Lookup_SR_Error_Prefix";
+import labelSRKeyboardHint from "@salesforce/label/c.ICD_Lookup_SR_Keyboard_Hint";
 
 export default class IcdLookup extends LightningElement {
   @api uniquenessKey = "";
@@ -71,7 +73,9 @@ export default class IcdLookup extends LightningElement {
     minCharHint: labelMinCharHint,
     maxCharError: labelMaxCharError,
     retry: labelRetry,
-    clear: labelClear
+    clear: labelClear,
+    srErrorPrefix: labelSRErrorPrefix,
+    srKeyboardHint: labelSRKeyboardHint
   };
 
   searchTerm = "";

@@ -183,6 +183,37 @@ private class ICDLookupControllerTest {
   }
 
   @isTest
+  static void testSearchWhitespaceOnlyReturnsEmpty() {
+    Test.startTest();
+    List<ICDLookupController.ICDResult> results = ICDLookupController.searchIcd10(
+      '   '
+    );
+    Test.stopTest();
+    System.assert(
+      results.isEmpty(),
+      'Expected empty results for a whitespace-only search term'
+    );
+  }
+
+  @isTest
+  static void testSearchPaddedTermAtMaxLengthSucceeds() {
+    Test.setMock(HttpCalloutMock.class, new MockHttpSuccess());
+    String paddedTerm = '   ' + 'a'.repeat(100) + '   ';
+    Boolean exceptionThrown = false;
+    Test.startTest();
+    try {
+      ICDLookupController.searchIcd10(paddedTerm);
+    } catch (AuraHandledException e) {
+      exceptionThrown = true;
+    }
+    Test.stopTest();
+    System.assert(
+      !exceptionThrown,
+      'Expected no exception when the term is over 100 raw characters but exactly 100 after trimming surrounding whitespace'
+    );
+  }
+
+  @isTest
   static void testSearchTermTooLongThrows() {
     String longTerm = 'a'.repeat(101);
     Boolean exceptionThrown = false;
