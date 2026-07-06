@@ -176,6 +176,26 @@ describe("validate()", () => {
   });
 });
 
+describe("api property passthrough", () => {
+  it("reflects helpText, noResultsMessage, fieldPlaceholder, and selectedDescription when set as external properties", async () => {
+    const el = createElement_icdLookup({
+      helpText: "Custom help text",
+      noResultsMessage: "Custom no results message",
+      fieldPlaceholder: "Custom placeholder"
+    });
+    await Promise.resolve();
+    el.selectedDescription = "Custom description";
+
+    expect(el.helpText).toBe("Custom help text");
+    expect(el.noResultsMessage).toBe("Custom no results message");
+    expect(el.fieldPlaceholder).toBe("Custom placeholder");
+    expect(el.selectedDescription).toBe("Custom description");
+
+    const input = el.shadowRoot.querySelector("input");
+    expect(input.placeholder).toBe("Custom placeholder");
+  });
+});
+
 describe("defaultValue pre-population", () => {
   it("sets selectedCode and selectedDescription from defaultValue on init without dispatching FlowAttributeChangeEvent", async () => {
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
@@ -194,6 +214,17 @@ describe("defaultValue pre-population", () => {
     expect(searchIcd10).toHaveBeenCalledWith({ searchTerm: "I10" });
     expect(el.selectedCode).toBe("I10");
     expect(el.selectedDescription).toBe("Essential (primary) hypertension");
+  });
+
+  it("treats a defaultValue with no ': ' separator as a bare code with an empty description", async () => {
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    const el = createElement_icdLookup({ defaultValue: "I10" });
+    await Promise.resolve();
+
+    expect(el.selectedCode).toBe("I10");
+    expect(el.selectedDescription).toBe("");
+    const input = el.shadowRoot.querySelector("input");
+    expect(input.value).toBe("I10");
   });
 
   it("clears selectedCode and shows a red frame with the shared invalid-value message when defaultValue cannot be verified against the API", async () => {
@@ -487,7 +518,7 @@ describe("Escape key behavior", () => {
     expect(options.length).toBe(0);
 
     // SR live region must announce dismissal
-    const liveRegion = el.shadowRoot.querySelector(".slds-assistive-text");
+    const liveRegion = el.shadowRoot.querySelector('[aria-live="polite"]');
     expect(liveRegion.textContent).toBe("Search results dismissed.");
 
     // searchTerm must be retained (not cleared on Escape)
@@ -524,6 +555,69 @@ describe("Enter key behavior", () => {
     await Promise.resolve();
 
     expect(enterEvent.defaultPrevented).toBe(false);
+    expect(el.selectedCode).toBe("");
+    jest.useRealTimers();
+  });
+
+  it("commits the focused option when Enter is pressed with an option focused", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    );
+    await Promise.resolve();
+
+    const enterEvent = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true
+    });
+    dropdownDiv.dispatchEvent(enterEvent);
+    await Promise.resolve();
+
+    expect(enterEvent.defaultPrevented).toBe(true);
+    expect(el.selectedCode).toBe("I10");
+    jest.useRealTimers();
+  });
+
+  it("ignores unhandled keys without changing state", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    const tabEvent = new KeyboardEvent("keydown", {
+      key: "Tab",
+      bubbles: true,
+      cancelable: true
+    });
+    dropdownDiv.dispatchEvent(tabEvent);
+    await Promise.resolve();
+
+    expect(tabEvent.defaultPrevented).toBe(false);
     expect(el.selectedCode).toBe("");
     jest.useRealTimers();
   });
@@ -568,6 +662,197 @@ describe("ArrowDown keyboard tooltip", () => {
 
     expect(el.shadowRoot.querySelector(".icd-keyboard-tooltip")).toBeNull();
 
+    jest.useRealTimers();
+  });
+});
+
+describe("ArrowUp keyboard navigation", () => {
+  it("returns focus to the input and clears the active option when ArrowUp is pressed with no option above (keyboard trap regression, Round 5 #8)", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    );
+    await Promise.resolve();
+    expect(el.shadowRoot.querySelector(".slds-has-focus")).not.toBeNull();
+
+    const focusSpy = jest.spyOn(input, "focus");
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })
+    );
+    await Promise.resolve();
+
+    expect(focusSpy).toHaveBeenCalled();
+    expect(el.shadowRoot.querySelector(".slds-has-focus")).toBeNull();
+    jest.useRealTimers();
+  });
+
+  it("moves focus up to the previous option (not back to the input) when an option above is available", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    // Focus option 0, then option 1.
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    );
+    await Promise.resolve();
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    );
+    await Promise.resolve();
+
+    const focusSpy = jest.spyOn(input, "focus");
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })
+    );
+    await Promise.resolve();
+
+    // Moved from option 1 back to option 0 - input must not regain focus.
+    expect(focusSpy).not.toHaveBeenCalled();
+    expect(el.shadowRoot.querySelector(".slds-has-focus")).not.toBeNull();
+    jest.useRealTimers();
+  });
+});
+
+describe("renderedCallback scroll-into-view", () => {
+  it("scrolls the list up when the focused option is above the visible area", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const listEl = el.shadowRoot.querySelector("[data-listbox]");
+    let scrollTopValue = 50;
+    Object.defineProperty(listEl, "scrollTop", {
+      get: () => scrollTopValue,
+      set: (v) => {
+        scrollTopValue = v;
+      },
+      configurable: true
+    });
+    listEl.getBoundingClientRect = () => ({ top: 100, bottom: 200 });
+    const optionEl = el.shadowRoot.querySelector('[data-option-index="0"]');
+    optionEl.getBoundingClientRect = () => ({ top: 50, bottom: 90 });
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Option top (50) is above the list's visible top (100) - scrollTop moves by (50 - 100).
+    expect(scrollTopValue).toBe(0);
+    jest.useRealTimers();
+  });
+
+  it("scrolls the list down when the focused option is below the visible area", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const listEl = el.shadowRoot.querySelector("[data-listbox]");
+    let scrollTopValue = 0;
+    Object.defineProperty(listEl, "scrollTop", {
+      get: () => scrollTopValue,
+      set: (v) => {
+        scrollTopValue = v;
+      },
+      configurable: true
+    });
+    listEl.getBoundingClientRect = () => ({ top: 0, bottom: 100 });
+    const optionEl = el.shadowRoot.querySelector('[data-option-index="0"]');
+    optionEl.getBoundingClientRect = () => ({ top: 120, bottom: 160 });
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    dropdownDiv.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Option bottom (160) is below the list's visible bottom (100) - scrollTop moves by (160 - 100).
+    expect(scrollTopValue).toBe(60);
+    jest.useRealTimers();
+  });
+});
+
+describe("still searching indicator", () => {
+  it("shows the still-searching message and its screen-reader announcement after 5 seconds of a slow search", async () => {
+    jest.useFakeTimers();
+    let resolveSearch;
+    searchIcd10.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSearch = resolve;
+      })
+    );
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(400);
+    await Promise.resolve();
+
+    jest.advanceTimersByTime(5000);
+    await Promise.resolve();
+
+    const slowMessage = el.shadowRoot.querySelector(".slds-text-color_weak");
+    expect(slowMessage.textContent.trim()).toBe("Still searching...");
+
+    const liveRegion = el.shadowRoot.querySelector('[aria-live="polite"]');
+    expect(liveRegion.textContent).toBe("Still searching, please wait...");
+
+    resolveSearch(MOCK_RESULTS);
+    await Promise.resolve();
+    await Promise.resolve();
     jest.useRealTimers();
   });
 });
@@ -633,6 +918,141 @@ describe("max char error", () => {
   });
 });
 
+describe("search request handling", () => {
+  it("ignores a stale response when a newer search has already started", async () => {
+    jest.useFakeTimers();
+    getIcdLookupConfig.mockResolvedValue(null);
+    let resolveFirst;
+    searchIcd10.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        })
+    );
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(400);
+    await Promise.resolve();
+
+    // Start a second, newer search before the first one resolves.
+    searchIcd10.mockResolvedValue([
+      { code: "I11", description: "Hypertensive heart disease" }
+    ]);
+    input.value = "hype";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(400);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // The stale first response resolves after the second search already completed.
+    resolveFirst(MOCK_RESULTS);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const options = el.shadowRoot.querySelectorAll('[role="option"]');
+    expect(options.length).toBe(1);
+    jest.useRealTimers();
+  });
+
+  it("shows the singular result label when exactly one result is returned", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue([MOCK_RESULTS[0]]);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(400);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const liveRegion = el.shadowRoot.querySelector('[aria-live="polite"]');
+    expect(liveRegion.textContent).toBe("1 result found");
+    jest.useRealTimers();
+  });
+
+  it("ignores keydown events when the dropdown is not open", async () => {
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    const event = new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      bubbles: true,
+      cancelable: true
+    });
+    dropdownDiv.dispatchEvent(event);
+    await Promise.resolve();
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(el.shadowRoot.querySelector(".slds-has-focus")).toBeNull();
+  });
+
+  it("clamps focus to no-selection and resets truncation when ArrowDown is pressed while results are still loading", async () => {
+    jest.useFakeTimers();
+    getIcdLookupConfig.mockResolvedValue(null);
+    searchIcd10.mockReturnValue(new Promise(() => {}));
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(400);
+    await Promise.resolve();
+
+    const dropdownDiv = el.shadowRoot.querySelector(".slds-combobox");
+    const event = new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      bubbles: true,
+      cancelable: true
+    });
+    dropdownDiv.dispatchEvent(event);
+    await Promise.resolve();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(el.shadowRoot.querySelector(".slds-has-focus")).toBeNull();
+    jest.useRealTimers();
+  });
+});
+
+describe("_restoreDescriptionForCode", () => {
+  it("leaves selectedDescription empty when the restored code no longer matches any API result", async () => {
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    sessionStorage.setItem(
+      "test-key-9",
+      JSON.stringify({
+        searchTerm: "Z99",
+        isSelected: true,
+        selectedCode: "Z99"
+      })
+    );
+    const el = createElement("c-icd-lookup", { is: IcdLookup });
+    el.uniquenessKey = "test-key-9";
+    document.body.appendChild(el);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(searchIcd10).toHaveBeenCalledWith({ searchTerm: "Z99" });
+    expect(el.selectedDescription).toBe("");
+  });
+});
+
 describe("config load failure", () => {
   it("falls back silently with no warning banner when getIcdLookupConfig rejects", async () => {
     getIcdLookupConfig.mockRejectedValue(new Error("load failed"));
@@ -661,6 +1081,9 @@ describe("CMT config override (getIcdLookupConfig success)", () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
 
     const input = el.shadowRoot.querySelector("input");
     expect(input.placeholder).toBe("Search CMT placeholder");
@@ -684,6 +1107,9 @@ describe("CMT config override (getIcdLookupConfig success)", () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
 
     const input = el.shadowRoot.querySelector("input");
     input.value = "zzz";
@@ -704,7 +1130,10 @@ describe("CMT config override (getIcdLookupConfig success)", () => {
 });
 
 describe("uniquenessKey / sessionStorage persistence", () => {
-  it("writes the uncommitted typed value to sessionStorage when uniquenessKey is set", async () => {
+  it("writes the uncommitted typed value to sessionStorage (debounced alongside the search) when uniquenessKey is set", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({ uniquenessKey: "test-key-1" });
     await Promise.resolve();
 
@@ -712,10 +1141,13 @@ describe("uniquenessKey / sessionStorage persistence", () => {
     input.value = "hyp";
     input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
     await Promise.resolve();
+    jest.advanceTimersByTime(400);
+    await Promise.resolve();
 
     expect(JSON.parse(sessionStorage.getItem("test-key-1"))).toEqual({
       searchTerm: "hyp"
     });
+    jest.useRealTimers();
   });
 
   it("does not touch sessionStorage when uniquenessKey is not set", async () => {
@@ -758,6 +1190,15 @@ describe("uniquenessKey / sessionStorage persistence", () => {
     expect(formElement.className).not.toContain("slds-has-error");
   });
 
+  it("does not throw and leaves searchTerm empty when sessionStorage contains malformed JSON", async () => {
+    sessionStorage.setItem("test-key-8", "not valid json{{{");
+    const el = createElement_icdLookup({ uniquenessKey: "test-key-8" });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    expect(input.value).toBe("");
+  });
+
   it("persists the committed selection to sessionStorage once one is made", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
@@ -780,23 +1221,23 @@ describe("uniquenessKey / sessionStorage persistence", () => {
     firstOption.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await Promise.resolve();
 
+    // Only the code is persisted (not the description) - PHI minimization.
     expect(JSON.parse(sessionStorage.getItem("test-key-4"))).toEqual({
       searchTerm: "I10",
       isSelected: true,
-      selectedCode: "I10",
-      selectedDescription: "Essential (primary) hypertension"
+      selectedCode: "I10"
     });
     jest.useRealTimers();
   });
 
-  it("restores a committed selection and re-dispatches its FlowAttributeChangeEvents on a fresh instance (Next blocked by a different field)", async () => {
+  it("restores a committed selection (code only) and re-derives the description via a fresh API lookup, re-dispatching FlowAttributeChangeEvents on a fresh instance (Next blocked by a different field)", async () => {
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
     sessionStorage.setItem(
       "test-key-6",
       JSON.stringify({
         searchTerm: "I10",
         isSelected: true,
-        selectedCode: "I10",
-        selectedDescription: "Essential (primary) hypertension"
+        selectedCode: "I10"
       })
     );
     const el = createElement("c-icd-lookup", { is: IcdLookup });
@@ -809,19 +1250,45 @@ describe("uniquenessKey / sessionStorage persistence", () => {
     const input = el.shadowRoot.querySelector("input");
     expect(input.value).toBe("I10");
     expect(el.selectedCode).toBe("I10");
-    expect(el.selectedDescription).toBe("Essential (primary) hypertension");
     const formElement = el.shadowRoot.querySelector(".slds-form-element");
     expect(formElement.className).not.toContain("slds-has-error");
+
+    // selectedDescription is re-derived asynchronously via searchIcd10, not read from storage.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(searchIcd10).toHaveBeenCalledWith({ searchTerm: "I10" });
+    expect(el.selectedDescription).toBe("Essential (primary) hypertension");
     expect(flowHandler).toHaveBeenCalledTimes(2);
   });
 
+  it("clears the cached sessionStorage entry once searchTerm is typed back down to empty", async () => {
+    const el = createElement_icdLookup({ uniquenessKey: "test-key-7" });
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hy";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    expect(sessionStorage.getItem("test-key-7")).not.toBeNull();
+
+    input.value = "";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    expect(sessionStorage.getItem("test-key-7")).toBeNull();
+  });
+
   it("clears the cached sessionStorage entry when handleClear() runs", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({ uniquenessKey: "test-key-5" });
     await Promise.resolve();
 
     const input = el.shadowRoot.querySelector("input");
     input.value = "hyp";
     input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(400);
     await Promise.resolve();
 
     expect(sessionStorage.getItem("test-key-5")).not.toBeNull();
@@ -831,5 +1298,6 @@ describe("uniquenessKey / sessionStorage persistence", () => {
     await Promise.resolve();
 
     expect(sessionStorage.getItem("test-key-5")).toBeNull();
+    jest.useRealTimers();
   });
 });

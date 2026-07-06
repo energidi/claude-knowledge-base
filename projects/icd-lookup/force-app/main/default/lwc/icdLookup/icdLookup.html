@@ -51,11 +51,16 @@
               aria-activedescendant={activeDescendant}
               aria-autocomplete="list"
               aria-required={ariaRequired}
+              aria-describedby={_keyboardHintId}
               class="slds-input slds-combobox__input"
               placeholder={fieldPlaceholder}
               value={searchTerm}
               oninput={handleSearchChange}
             />
+            <span id={_keyboardHintId} class="slds-assistive-text"
+              >Use arrow keys to navigate results, Enter to select, Escape to
+              close.</span
+            >
             <template lwc:if={searchTerm}>
               <button
                 class="slds-button slds-button_icon slds-input__icon slds-input__icon_right"
@@ -110,7 +115,6 @@
                   data-code={res.code}
                   data-description={res.description}
                   data-option-index={res.optionIndex}
-                  title={res.fullLabel}
                 >
                   <span class={res.optionClass}>
                     <span class="slds-media__body">

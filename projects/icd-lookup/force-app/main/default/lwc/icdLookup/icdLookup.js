@@ -101,6 +101,10 @@ export default class IcdLookup extends LightningElement {
     return `icd-label-${this._uid}`;
   }
 
+  get _keyboardHintId() {
+    return `icd-keyboard-hint-${this._uid}`;
+  }
+
   get ariaRequired() {
     return this.isMandatory ? "true" : "false";
   }
@@ -242,20 +246,37 @@ export default class IcdLookup extends LightningElement {
     if (cached.isSelected) {
       this.isSelected = true;
       this._selectedCode = cached.selectedCode;
-      this._selectedDescription = cached.selectedDescription;
       this.dispatchEvent(
         new FlowAttributeChangeEvent("selectedCode", this._selectedCode)
       );
-      this.dispatchEvent(
-        new FlowAttributeChangeEvent(
-          "selectedDescription",
-          this._selectedDescription
-        )
-      );
+      this._restoreDescriptionForCode(cached.selectedCode);
     } else {
       this.isSelected = false;
       this.validationError = labelInvalidValue;
     }
+  }
+
+  // Only the code is persisted to sessionStorage (see _commitSelection) - the description
+  // is re-derived here via the same NIH lookup _verifyDefaultValue already uses for legacy
+  // defaultValue data, so no diagnosis text sits in browser storage.
+  _restoreDescriptionForCode(code) {
+    searchIcd10({ searchTerm: code })
+      .then((results) => {
+        const match = (results || []).find(
+          (res) => res.code && res.code.toLowerCase() === code.toLowerCase()
+        );
+        this._selectedDescription = match ? match.description : "";
+        this.dispatchEvent(
+          new FlowAttributeChangeEvent(
+            "selectedDescription",
+            this._selectedDescription
+          )
+        );
+      })
+      .catch(() => {
+        // API unavailable during restore: leave selectedDescription unset rather than
+        // falsely clearing a valid, already-committed selectedCode.
+      });
   }
 
   _syncUncommittedValue() {
@@ -338,10 +359,6 @@ export default class IcdLookup extends LightningElement {
     return this.isLoading || this.icdResults.length > 0 || this.showNoResults;
   }
 
-  get displayError() {
-    return this.validationError || this.searchError;
-  }
-
   get showMinCharHint() {
     return (
       this.searchTerm.length > 0 &&
@@ -358,12 +375,13 @@ export default class IcdLookup extends LightningElement {
     return this._searchIsSlow && this.isLoading;
   }
 
+  // searchError and showNoResults are intentionally NOT covered here - each already has
+  // its own live region in the template (role="alert" / role="status"), so announcing
+  // them again here would speak the same text to screen reader users twice.
   get screenReaderStatus() {
     if (this._dropdownDismissed) return labelSRDismissed;
     if (this.searchSlowWarning) return labelSRStillSearching;
     if (this.isLoading) return labelSRLoading;
-    if (this.searchError) return this.searchError;
-    if (this.showNoResults) return this.noResultsMessage;
     if (this.icdResults.length > 0) {
       const count = this.icdResults.length;
       return `${count} ${count === 1 ? labelSRResult : labelSRResults}`;
@@ -388,23 +406,25 @@ export default class IcdLookup extends LightningElement {
     this._focusedIndex = -1;
     this._resultsReady = false;
     clearTimeout(this.searchDebounceTimer);
-    this._syncUncommittedValue();
 
     if (this.searchTerm.length > 100) {
       this.icdResults = [];
       this.isLoading = false;
+      this._syncUncommittedValue();
       return;
     }
 
     if (this.searchTerm.length >= 3) {
       this.icdResults = [];
       this.searchDebounceTimer = setTimeout(() => {
+        this._syncUncommittedValue();
         this.isLoading = true;
         this.fetchIcdResults();
       }, 400);
     } else {
       this.icdResults = [];
       this.isLoading = false;
+      this._syncUncommittedValue();
     }
   }
 
@@ -542,13 +562,14 @@ export default class IcdLookup extends LightningElement {
     this.isSelected = true;
     this.validationError = "";
     if (this.uniquenessKey) {
+      // Only the code is persisted (not the description) - PHI minimization; the
+      // description is re-derived via _restoreDescriptionForCode on restore.
       sessionStorage.setItem(
         this.uniquenessKey,
         JSON.stringify({
           searchTerm: this.searchTerm,
           isSelected: true,
-          selectedCode: this._selectedCode,
-          selectedDescription: this._selectedDescription
+          selectedCode: this._selectedCode
         })
       );
     }

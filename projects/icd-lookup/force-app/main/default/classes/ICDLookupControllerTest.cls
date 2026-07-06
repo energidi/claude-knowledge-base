@@ -79,6 +79,15 @@ private class ICDLookupControllerTest {
     }
   }
 
+  private class MockHttpShortRootArray implements HttpCalloutMock {
+    public HttpResponse respond(HttpRequest req) {
+      HttpResponse res = new HttpResponse();
+      res.setStatusCode(200);
+      res.setBody('[0, []]');
+      return res;
+    }
+  }
+
   @isTest
   static void testSearchReturnsResults() {
     Test.setMock(HttpCalloutMock.class, new MockHttpSuccess());
@@ -88,8 +97,16 @@ private class ICDLookupControllerTest {
     );
     Test.stopTest();
     System.assertEquals(2, results.size(), 'Expected 2 results');
-    System.assertEquals('A001', results[0].code);
-    System.assertEquals('I10', results[1].code);
+    System.assertEquals(
+      'A001',
+      results[0].code,
+      'Expected first result code A001'
+    );
+    System.assertEquals(
+      'I10',
+      results[1].code,
+      'Expected second result code I10'
+    );
     System.assertEquals(
       'Essential (primary) hypertension',
       results[1].description
@@ -130,6 +147,38 @@ private class ICDLookupControllerTest {
     System.assert(
       results.isEmpty(),
       'Expected empty results for short search term'
+    );
+  }
+
+  @isTest
+  static void testSearchExactlyThreeCharsSucceeds() {
+    Test.setMock(HttpCalloutMock.class, new MockHttpSuccess());
+    Test.startTest();
+    List<ICDLookupController.ICDResult> results = ICDLookupController.searchIcd10(
+      'abc'
+    );
+    Test.stopTest();
+    System.assert(
+      !results.isEmpty(),
+      'Expected results returned for a search term at the 3-character minimum'
+    );
+  }
+
+  @isTest
+  static void testSearchExactlyOneHundredCharsSucceeds() {
+    Test.setMock(HttpCalloutMock.class, new MockHttpSuccess());
+    String maxTerm = 'a'.repeat(100);
+    Boolean exceptionThrown = false;
+    Test.startTest();
+    try {
+      ICDLookupController.searchIcd10(maxTerm);
+    } catch (AuraHandledException e) {
+      exceptionThrown = true;
+    }
+    Test.stopTest();
+    System.assert(
+      !exceptionThrown,
+      'Expected no exception for a search term at the 100-character maximum'
     );
   }
 
@@ -257,6 +306,20 @@ private class ICDLookupControllerTest {
       'Clinical Diagnosis for A001',
       results[0].description,
       'Expected fallback description when the API row has only one element'
+    );
+  }
+
+  @isTest
+  static void testShortRootArrayReturnsEmpty() {
+    Test.setMock(HttpCalloutMock.class, new MockHttpShortRootArray());
+    Test.startTest();
+    List<ICDLookupController.ICDResult> results = ICDLookupController.searchIcd10(
+      'hypertension'
+    );
+    Test.stopTest();
+    System.assert(
+      results.isEmpty(),
+      'Expected empty results when the API response root array has fewer than 4 elements'
     );
   }
 }

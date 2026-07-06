@@ -81,6 +81,18 @@ public with sharing class ICDLookupController {
           results.add(new ICDResult(code, name));
         }
       } else {
+        notifyOnError(
+          'Search (term length: ' +
+            term.length() +
+            ' characters, HTTP status: ' +
+            (response != null
+              ? String.valueOf(response.getStatusCode())
+              : 'null (callout failed)') +
+            ')',
+          new System.CalloutException(
+            'Non-200 response from NIH Clinical Tables API'
+          )
+        );
         throw new AuraHandledException(
           'ICD-10 lookup failed. Please try again.'
         );
