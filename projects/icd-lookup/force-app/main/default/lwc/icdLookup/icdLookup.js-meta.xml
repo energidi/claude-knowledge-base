@@ -34,25 +34,34 @@
         default="false"
         description="When true, blocks Flow progression if no code is selected. Overridden by ICD_Lookup__mdt.Required__c when Flow API Name is set."
       />
+            <!-- default here must stay in sync with the JS class-field default in icdLookup.js. Flow Builder reads defaults from THIS file, not from JS - do not remove default when reformatting. -->
+            <property
+        name="disabled"
+        type="Boolean"
+        role="inputOnly"
+        label="4. Disabled"
+        default="false"
+        description="When true, the field is fully disabled and non-interactive - matches standard Flow screen component behavior. Validation is skipped while disabled."
+      />
             <property
         name="defaultValue"
         type="String"
         role="inputOnly"
-        label="4. Default Value"
+        label="5. Default Value"
         description="Pre-populates the field with an existing ICD-10 code (e.g., from a record). Format must match the output format: CODE: Description."
       />
             <property
         name="flowApiName"
         type="String"
         role="inputOnly"
-        label="5. Flow API Name"
-        description="API name of the Screen Flow using this component. Used to load configuration from the ICD_Lookup__mdt Custom Metadata Type. Overrides fields 6, 7, and 8 when a matching record exists."
+        label="6. Flow API Name"
+        description="API name of the Screen Flow using this component. Used to load configuration from the ICD_Lookup__mdt Custom Metadata Type. Overrides fields 7, 8, and 9 when a matching record exists."
       />
             <property
         name="helpText"
         type="String"
         role="inputOnly"
-        label="6. Help Text"
+        label="7. Help Text"
         description="Help text displayed next to the field label via a help icon. Overridden by ICD_Lookup__mdt.Help_Text__c when Flow API Name is set."
       />
             <!-- default here must stay in sync with the JS class-field default in icdLookup.js. Flow Builder reads defaults from THIS file, not from JS - do not remove default when reformatting. -->
@@ -60,7 +69,7 @@
         name="noResultsMessage"
         type="String"
         role="inputOnly"
-        label="7. No Results Message"
+        label="8. No Results Message"
         default="No matching codes found."
         description="Message shown when the search returns no results. Defaults to 'No matching codes found.' Overridden by ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c when Flow API Name is set."
       />
@@ -69,7 +78,7 @@
         name="fieldPlaceholder"
         type="String"
         role="inputOnly"
-        label="8. Placeholder Text"
+        label="9. Placeholder Text"
         default="Search by code or description (e.g. 'Hypertension')"
         description="Placeholder text inside the search input. Defaults to 'Search by code or description (e.g. Hypertension)'. Overridden by ICD_Lookup__mdt.Field_Placeholder__c when Flow API Name is set."
       />

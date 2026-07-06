@@ -10,6 +10,7 @@
       <button
         class="slds-button slds-button_inverse slds-m-left_small"
         type="button"
+        disabled={disabled}
         onclick={handleRetry}
       >
         {labels.retry}
@@ -19,7 +20,7 @@
   <div class={formElementClass}>
     <div class="slds-form-element__label-container">
       <label id={_labelId} class="slds-form-element__label">
-        <template lwc:if={isMandatory}>
+        <template lwc:if={showRequiredAsterisk}>
           <abbr class="slds-required" title="required">*</abbr>
         </template>
         {label}
@@ -53,15 +54,16 @@
               aria-required={ariaRequired}
               aria-describedby={_keyboardHintId}
               class="slds-input slds-combobox__input"
-              placeholder={fieldPlaceholder}
+              placeholder={displayPlaceholder}
               value={searchTerm}
+              disabled={disabled}
               oninput={handleSearchChange}
             />
             <span id={_keyboardHintId} class="slds-assistive-text"
               >Use arrow keys to navigate results, Enter to select, Escape to
               close.</span
             >
-            <template lwc:if={searchTerm}>
+            <template lwc:if={showClearButton}>
               <button
                 class="slds-button slds-button_icon slds-input__icon slds-input__icon_right"
                 title={labels.clear}
@@ -153,7 +155,7 @@
         {labels.maxCharError}
       </div>
     </template>
-    <template lwc:if={validationError}>
+    <template lwc:if={showValidationError}>
       <div class="slds-form-element__help" role="alert">{validationError}</div>
     </template>
     <div aria-live="polite" aria-atomic="true" class="slds-assistive-text">

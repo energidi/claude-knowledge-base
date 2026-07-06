@@ -22,6 +22,7 @@ export default class IcdLookup extends LightningElement {
   @api flowApiName;
   @api mandatory = false;
   @api defaultValue;
+  @api disabled = false;
 
   _helpText;
   @api get helpText() {
@@ -107,6 +108,16 @@ export default class IcdLookup extends LightningElement {
 
   get ariaRequired() {
     return this.isMandatory ? "true" : "false";
+  }
+
+  // Hidden while disabled since validate() skips the mandatory check in that state -
+  // showing "required" for a field nothing enforces would be misleading.
+  get showRequiredAsterisk() {
+    return this.isMandatory && !this.disabled;
+  }
+
+  get displayPlaceholder() {
+    return this.disabled ? "" : this.fieldPlaceholder;
   }
 
   renderedCallback() {
@@ -301,6 +312,10 @@ export default class IcdLookup extends LightningElement {
   // nothing visible, so our own inline block (always visible whenever validationError
   // is set, no suppression logic) remains the only source of visible message text.
   @api validate() {
+    if (this.disabled) {
+      this.validationError = "";
+      return { isValid: true };
+    }
     if (this.searchTerm && !this.isSelected) {
       this.validationError = labelInvalidValue;
       return { isValid: false, errorMessage: " " };
@@ -338,10 +353,19 @@ export default class IcdLookup extends LightningElement {
       : "slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click";
   }
 
+  // Error styling is hidden whenever disabled, regardless of when validationError was set -
+  // a disabled field can't be acted on, so flagging it as invalid is not actionable. The
+  // underlying validationError is left untouched so it reappears correctly if disabled
+  // later flips back to false.
   get formElementClass() {
+    if (this.disabled) return "slds-form-element";
     return this.validationError || this.searchError || this.showMaxCharError
       ? "slds-form-element slds-has-error"
       : "slds-form-element";
+  }
+
+  get showValidationError() {
+    return this.validationError && !this.disabled;
   }
 
   get showNoResults() {
@@ -373,6 +397,10 @@ export default class IcdLookup extends LightningElement {
 
   get searchSlowWarning() {
     return this._searchIsSlow && this.isLoading;
+  }
+
+  get showClearButton() {
+    return this.searchTerm && !this.disabled;
   }
 
   // searchError and showNoResults are intentionally NOT covered here - each already has
@@ -456,6 +484,7 @@ export default class IcdLookup extends LightningElement {
   }
 
   handleRetry() {
+    if (this.disabled) return;
     this._dropdownDismissed = false;
     if (this.searchTerm.length >= 3) {
       this.searchError = "";
@@ -478,6 +507,7 @@ export default class IcdLookup extends LightningElement {
   }
 
   handleDropdownKeydown(event) {
+    if (this.disabled) return;
     if (!this.isOpen) return;
     const count = this.icdResults.length;
     switch (event.key) {
@@ -522,6 +552,7 @@ export default class IcdLookup extends LightningElement {
   }
 
   handleClear() {
+    if (this.disabled) return;
     this.searchTerm = "";
     this._selectedCode = "";
     this._selectedDescription = "";
@@ -539,10 +570,12 @@ export default class IcdLookup extends LightningElement {
   }
 
   handleOptionMousedown(event) {
+    if (this.disabled) return;
     event.preventDefault();
   }
 
   handleSelect(event) {
+    if (this.disabled) return;
     const code = event.currentTarget.dataset.code;
     const description = event.currentTarget.dataset.description;
     this._commitSelection(code, description);
