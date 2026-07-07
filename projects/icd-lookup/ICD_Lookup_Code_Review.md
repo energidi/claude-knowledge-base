@@ -1,6 +1,58 @@
 # ICD Lookup Code Review Log (ISP-6429)
 
-Last Updated: July 6, 2026 (Round 16)
+Last Updated: July 7, 2026 (Round 18)
+
+---
+
+## Round 18 - July 7, 2026
+
+**Reviewer:** sf-orchestrator (Claude Code)
+**Scope:** Full review - ICDLookupController.cls, ICDLookupControllerTest.cls, icdLookup LWC, ICD_Lookup__mdt, TRF2__c, NihClinicalTables Named Credential, CustomLabels
+**Lenses:** Architecture, UI/UX, Naming, Security, Performance, Testing, Automation, Static Analysis (ESLint engine ran via the now-installed `code-analyzer` plugin; PMD/CPD/SFGE/Flow engines still unavailable - Java v11+/Python v3.10+ not installed, unchanged from prior rounds)
+**Verdict:** GO (0 Critical, 0 High, 1 Medium, 0 Low new; 1 finding applied)
+
+### Findings Summary
+
+| Severity | Total New | Applied | Skipped (carry-forward)                                                                         |
+| -------- | --------- | ------- | ----------------------------------------------------------------------------------------------- |
+| Medium   | 1         | 1       | 2 (Code Analyzer no-async-operation tooling divergence, matches R14-W2)                         |
+| Low      | 0         | 0       | 14 (CSS hardcoded values, matches CSS-1/R13-W1/R15-W1) + 5 metadata/naming/access carry-forward |
+
+Live checks this round: `npm run lint` clean, `sf code-analyzer` scan run for the first time (plugin now installed) - ESLint engine surfaced findings, all matched to existing carry-forward entries; PMD/CPD/SFGE/Flow still fail to instantiate (missing Java/Python).
+
+### Applied Fixes
+
+| #   | Status | Severity | Area                             | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --- | ------ | -------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | NEW    | Medium   | icdLookup.js / icdLookup.test.js | `handleOptionMouseEnter` (icdLookup.js:178-185) was modified the same day (commit `4c01a48`, prior to this round) to check truncation on the nested `.slds-truncate` child instead of the `<li>` itself, but shipped with zero test coverage. Added 2 Jest tests: truncated-text case (asserts `li.title` is set to `li.dataset.fullLabel`) and non-truncated case (asserts `li.title` is cleared to `""`). 57/57 Jest passing, `npm run lint` clean; both new tests verified to pass in isolation against the real handler. |
+
+### Correction Note
+
+A Code Analyzer finding on `icdLookup.css:34,36` (hardcoded `font-size`/`border-radius` on `.icd-keyboard-tooltip`) was initially mis-tagged `NEW` in this round's draft findings table. It is the same "keep hardcoded CSS values so Community/Experience Cloud theme overrides can't affect this component" decision already declined in `CSS-1`, `CSS-2`, `R13-W1`, and `R15-W1` - the sf-orchestrator SKIPPED-tagging rule (match by category/rationale, not exact line number) already covers this. Re-tagged `SKIPPED` and folded into `R13-W1`; not re-litigated with the user.
+
+### Known Skipped Findings (carry-forward)
+
+No changes this round. See Round 16's Known Skipped Findings table (reconfirmed present and unchanged in Round 17 and Round 18) for the full list, including `R13-W1` (now also covering the `.icd-keyboard-tooltip` `font-size`/`border-radius` properties flagged in Round 18, in addition to the colors/shadow already named there).
+
+---
+
+## Round 17 - July 7, 2026
+
+**Reviewer:** sf-orchestrator (Claude Code)
+**Scope:** Full review - ICDLookupController.cls, ICDLookupControllerTest.cls, icdLookup LWC, ICD_Lookup__mdt, TRF2__c, NihClinicalTables Named Credential, CustomLabels
+**Lenses:** Architecture, UI/UX, Naming, Security, Performance, Testing, Automation, Static Analysis (ESLint/retire-js/regex engines only - PMD/CPD/SFGE/Flow engines still unavailable in this environment: Java v11+/Python v3.10+ not installed, unchanged from prior rounds)
+**Verdict:** GO (0 Critical, 0 High, 4 Medium, 17 Low across 8 lenses; all 21 findings are carry-forward items already declined in prior rounds - review completed, no fixes applied)
+
+### Findings Summary
+
+| Severity | Total | Applied | Skipped (carry-forward) |
+| -------- | ----- | ------- | ----------------------- |
+| Medium   | 4     | 0       | 4                       |
+| Low      | 17    | 0       | 17                      |
+
+No NEW, PARTIAL-FIX, or REGRESSION findings this round. All 21 findings matched existing entries in the Known Skipped Findings carry-forward list below (TRF2__c naming/description declines, Static Analysis ESLint/SLDS tooling divergences, and the access-control documentation decline). `npm run lint` clean, 55/55 Jest tests passing, all `js-meta.xml` defaults verified present (R12-W1 regression watch - clean).
+
+Per updated sf-orchestrator skill behavior, SKIPPED findings are no longer re-listed row-by-row each round - see prior rounds' Known Skipped Findings tables for the full carry-forward detail.
 
 ---
 

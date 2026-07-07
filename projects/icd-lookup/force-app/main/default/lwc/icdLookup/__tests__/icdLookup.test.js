@@ -771,6 +771,63 @@ describe("ArrowDown keyboard tooltip", () => {
   });
 });
 
+describe("handleOptionMouseEnter tooltip", () => {
+  it("sets the native title attribute to the full label when the option text is truncated", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const options = el.shadowRoot.querySelectorAll('[role="option"]');
+    const truncateSpan = options[0].querySelector(".slds-truncate");
+    Object.defineProperty(truncateSpan, "scrollWidth", { value: 300 });
+    Object.defineProperty(truncateSpan, "clientWidth", { value: 150 });
+
+    options[0].dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    await Promise.resolve();
+
+    expect(options[0].title).toBe(options[0].dataset.fullLabel);
+    jest.useRealTimers();
+  });
+
+  it("clears the native title attribute when the option text is not truncated", async () => {
+    jest.useFakeTimers();
+    searchIcd10.mockResolvedValue(MOCK_RESULTS);
+    getIcdLookupConfig.mockResolvedValue(null);
+    const el = createElement_icdLookup({});
+    await Promise.resolve();
+
+    const input = el.shadowRoot.querySelector("input");
+    input.value = "hyp";
+    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    await Promise.resolve();
+    jest.advanceTimersByTime(500);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const options = el.shadowRoot.querySelectorAll('[role="option"]');
+    const truncateSpan = options[1].querySelector(".slds-truncate");
+    Object.defineProperty(truncateSpan, "scrollWidth", { value: 100 });
+    Object.defineProperty(truncateSpan, "clientWidth", { value: 150 });
+    options[1].title = "stale value";
+
+    options[1].dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    await Promise.resolve();
+
+    expect(options[1].title).toBe("");
+    jest.useRealTimers();
+  });
+});
+
 describe("ArrowUp keyboard navigation", () => {
   it("returns focus to the input and clears the active option when ArrowUp is pressed with no option above (keyboard trap regression, Round 5 #8)", async () => {
     jest.useFakeTimers();
