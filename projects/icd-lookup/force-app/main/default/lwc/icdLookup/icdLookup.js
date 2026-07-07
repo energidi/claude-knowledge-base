@@ -149,9 +149,10 @@ export default class IcdLookup extends LightningElement {
     this.checkTruncation();
   }
 
-  // Keyboard-only tooltip: mouse hover already relies on the native title attribute
-  // (browsers never fire title on focus), so this measures whether the focused
-  // option's text is actually clipped before showing a custom tooltip for it.
+  // Keyboard-only tooltip: mouse hover has its own truncation check
+  // (handleOptionMouseEnter) since focus never fires mouseenter, so this
+  // measures whether the focused option's text is actually clipped before
+  // showing a custom tooltip for it.
   checkTruncation() {
     if (!this._shouldCheckTruncation) {
       return;
@@ -161,8 +162,26 @@ export default class IcdLookup extends LightningElement {
       `[data-option-index="${this._focusedIndex}"] .slds-truncate`
     );
     this._focusedOptionTruncated = optionEl
-      ? optionEl.scrollWidth > optionEl.clientWidth
+      ? this.isElementTruncated(optionEl)
       : false;
+  }
+
+  isElementTruncated(el) {
+    return el.scrollWidth > el.clientWidth;
+  }
+
+  // Native title attribute is set only when the hovered option's text is
+  // actually clipped by .slds-truncate - showing a browser tooltip for text
+  // that already fits fully in the row is unnecessary noise. The listener is
+  // on the <li> (full row) rather than the inner .slds-truncate span so the
+  // whole row is hoverable, not just the text glyphs themselves.
+  handleOptionMouseEnter(event) {
+    const li = event.currentTarget;
+    const truncateEl = li.querySelector(".slds-truncate");
+    li.title =
+      truncateEl && this.isElementTruncated(truncateEl)
+        ? li.dataset.fullLabel
+        : "";
   }
 
   connectedCallback() {

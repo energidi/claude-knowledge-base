@@ -116,10 +116,12 @@
                   data-code={res.code}
                   data-description={res.description}
                   data-option-index={res.optionIndex}
+                  data-full-label={res.fullLabel}
+                  onmouseenter={handleOptionMouseEnter}
                 >
                   <span class={res.optionClass}>
                     <span class="slds-media__body">
-                      <span class="slds-truncate" title={res.fullLabel}>
+                      <span class="slds-truncate">
                         <strong>{res.code}</strong>: {res.description}
                       </span>
                     </span>
