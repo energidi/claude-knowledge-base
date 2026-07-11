@@ -2,7 +2,7 @@ import { LightningElement, api, track } from 'lwc';
 import cancelJob from '@salesforce/apex/DependencyJobController.cancelJob';
 import resumeJob from '@salesforce/apex/DependencyJobController.resumeJob';
 import getJobStatus from '@salesforce/apex/DependencyJobController.getJobStatus';
-import { formatElapsed } from 'c/metaMapperFormatters';
+import { formatElapsed, truncateApiName } from 'c/metaMapperFormatters';
 
 const POLL_INTERVAL_PROCESSING = 5000;
 const POLL_INTERVAL_PAUSED     = 10000;
@@ -193,6 +193,22 @@ export default class MetaMapperProgress extends LightningElement {
         return 50;
     }
 
+    // Static API-name display area (distinct from the full-sentence statusLabel below, which
+    // is never truncated per spec). Truncated at 47 chars + "..." when over 50 chars; full name
+    // always available via the title attribute tooltip.
+    get displayApiName() {
+        const name = (this.job && this.job.Target_API_Name__c) || '';
+        return truncateApiName(name);
+    }
+
+    get fullApiNameTitle() {
+        return (this.job && this.job.Target_API_Name__c) || '';
+    }
+
+    get showApiNameDisplay() {
+        return !!(this.job && this.job.Target_API_Name__c);
+    }
+
     get statusLabel() {
         if (!this.job) return '';
         const name = this.job.Target_API_Name__c || '';
@@ -214,7 +230,6 @@ export default class MetaMapperProgress extends LightningElement {
     // --- Elapsed timer ---
 
     _startElapsedTimer() {
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._elapsedTimer = setInterval(() => {
             if (!this._isMounted) return;
             this._elapsedTick++;
@@ -240,7 +255,6 @@ export default class MetaMapperProgress extends LightningElement {
         // Use 5s after a successful resumeJob() call regardless of current Paused status,
         // so the Processing transition is caught quickly before the Queueable runs.
         const interval = (this.isPaused && !this._isResuming) ? POLL_INTERVAL_PAUSED : POLL_INTERVAL_PROCESSING;
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._pollTimer = setTimeout(() => this._poll(), interval);
         this.showPollingNotice = true;
         this.pollingNoticeText = (this.isPaused && !this._isResuming)
@@ -260,7 +274,6 @@ export default class MetaMapperProgress extends LightningElement {
     _resetPeWatchdog() {
         clearTimeout(this._peWatchdogTimer);
         if (this.isTerminal || this._peSuppressionActiveProp || this._pollTimer || !this._isMounted) return;
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._peWatchdogTimer = setTimeout(() => this._peWatchdogFired(), 45000);
     }
 
@@ -312,7 +325,6 @@ export default class MetaMapperProgress extends LightningElement {
             // (resume in-flight but Queueable hasn't woken yet).
             if (this.resumeLoading && status === 'Paused') {
                 clearTimeout(this._resumeTimeoutTimer);
-                // eslint-disable-next-line @lwc/lwc/no-async-operation
                 this._resumeTimeoutTimer = setTimeout(() => {
                     if (!this._isMounted || this.status !== 'Paused') return;
                     this.resumeLoading = false;
@@ -347,7 +359,6 @@ export default class MetaMapperProgress extends LightningElement {
 
     handleCancelClick() {
         this.showCancelModal = true;
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             const btn = this.template.querySelector('[data-id="keepRunningBtn"]');
             if (btn) btn.focus();
@@ -356,7 +367,6 @@ export default class MetaMapperProgress extends LightningElement {
 
     handleKeepRunning() {
         this.showCancelModal = false;
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             const btn = this.template.querySelector('.cancel-btn');
             if (btn) btn.focus();
@@ -371,7 +381,6 @@ export default class MetaMapperProgress extends LightningElement {
         try {
             await cancelJob({ jobId: this.jobId });
             this._cancelPhase = 'cancelling';
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             this._cancelTimeoutTimer = setTimeout(() => {
                 if (!this._isMounted || this._cancelPhase !== 'cancelling') return;
                 this.cancelDisabled = false;
@@ -411,7 +420,6 @@ export default class MetaMapperProgress extends LightningElement {
             await resumeJob({ jobId: this.jobId, overrideBatchSize });
             this._startPolling();
             // Initial timeout; _poll() resets this on each Paused-confirming poll.
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             this._resumeTimeoutTimer = setTimeout(() => {
                 if (!this._isMounted || this.status !== 'Paused') return;
                 this.resumeLoading = false;

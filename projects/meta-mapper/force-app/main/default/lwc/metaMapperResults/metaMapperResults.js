@@ -74,7 +74,10 @@ export default class MetaMapperResults extends LightningElement {
     async _checkCopilot() {
         try {
             this.copilotEnabled = await isCopilotEnabled();
-        } catch {
+        } catch (e) {
+            // Suppress silently in the UI (no button, no "not available" helper text) per spec -
+            // but still log to the console so the failure isn't entirely invisible.
+            console.error('MetaMapper: isCopilotEnabled() failed', e);
             this._copilotException = true;
         } finally {
             this._copilotChecked = true;
@@ -131,7 +134,6 @@ export default class MetaMapperResults extends LightningElement {
     }
 
     _scheduleStatsAnnouncement() {
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             if (!this._isMounted) return;
             const region = this.refs && this.refs.statsLiveRegion;
@@ -158,7 +160,6 @@ export default class MetaMapperResults extends LightningElement {
             this.summaryFailed = true;
             return;
         }
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._summaryPollTimer = setTimeout(async () => {
             try {
                 const result = await getJobStatus({ jobId: this.jobId });
@@ -269,7 +270,6 @@ export default class MetaMapperResults extends LightningElement {
         this.tabLoadFailed = false;
         this._updateTabInert(true);
         clearTimeout(this._tabReadyTimer);
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._tabReadyTimer = setTimeout(() => {
             if (!this._isMounted) return;
             this.isTransitioning = false;
@@ -281,7 +281,6 @@ export default class MetaMapperResults extends LightningElement {
 
     handleTabReady() {
         clearTimeout(this._tabReadyTimer);
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             if (!this._isMounted) return;
             this.isTransitioning = false;
@@ -337,7 +336,6 @@ export default class MetaMapperResults extends LightningElement {
             this.copyLabel = 'Copied!';
             const region = this.refs.copyLiveRegion;
             if (region) { region.textContent = 'Copied to clipboard.'; }
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => {
                 this.copyLabel = 'Copy';
                 if (region) { region.textContent = ''; }

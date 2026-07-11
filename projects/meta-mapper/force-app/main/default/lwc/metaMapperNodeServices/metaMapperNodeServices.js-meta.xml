@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Shared node processing service module. Provides applyFilters (filters a flat node list against the current filter state), buildTypeCounts (produces MetadataType-to-count map from a node list), buildNodeMap (produces an Id-to-node Map for O(1) lookup), and extractTypes (returns sorted unique type list from nodes). No Apex calls, no UI, no state. Used by metaMapperResults, metaMapperGraph, and metaMapperTree.</description>
+    <description>Shared node processing service module. Provides applyFilters (filters a flat node list against the current filter state), buildTypeCounts (produces MetadataType-to-count map from a node list), buildNodeMap (produces an Id-to-node Map for O(1) lookup), extractTypes (returns sorted unique type list from nodes), maxDepth (returns the deepest Dependency_Depth__c value in a node list), resolveSetupUrl (maps a node to its "Open in Setup" deep-link URL), and isNamespacePrefixed (detects managed-package namespace prefixes for package.xml export exclusion). No Apex calls, no UI, no state. Used by metaMapperResults, metaMapperGraph, metaMapperTree, and metaMapperExport.</description>
     <isExposed>false</isExposed>
 </LightningComponentBundle>

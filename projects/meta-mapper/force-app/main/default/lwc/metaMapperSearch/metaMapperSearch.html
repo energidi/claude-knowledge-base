@@ -22,10 +22,11 @@
                     name="apiName"
                     label="API Name"
                     required
+                    pattern="^[A-Za-z][A-Za-z0-9_.]*$"
                     placeholder={apiNamePlaceholder}
                     value={apiName}
                     message-when-value-missing="Enter the API name of the component you want to scan."
-                    message-when-bad-input="Use the exact API name as it appears in Salesforce Setup (e.g. Account.My_Field__c)."
+                    message-when-pattern-mismatch="Use the exact API name as it appears in Salesforce Setup (e.g. Account.My_Field__c)."
                     onblur={handleApiNameBlur}
                     onchange={handleApiNameChange}>
                 </lightning-input>
@@ -54,7 +55,7 @@
                             aria-controls="typeahead-listbox" aria-activedescendant={activeTypeaheadOptionId} />
                     </div>
                     <template lwc:if={typeaheadOpen}>
-                        <div id="typeahead-listbox" class="slds-dropdown slds-dropdown_length-5 slds-dropdown_fluid" role="listbox">
+                        <div id="typeahead-listbox" class="slds-dropdown slds-dropdown_length-5 slds-dropdown_fluid meta-mapper-typeahead-dropdown" role="listbox">
                             <ul class="slds-listbox slds-listbox_vertical" role="presentation">
                                 <template lwc:if={typeaheadResults.length}>
                                     <template for:each={typeaheadResults} for:item="result">
@@ -105,9 +106,17 @@
                 </p>
             </template>
 
-            <!-- Submission error banner (concurrency / storage rejection) -->
+            <!-- Submit button -->
+            <div class="slds-var-m-top_medium">
+                <lightning-button variant="brand" label={submitLabel}
+                    disabled={isSubmitDisabled} onclick={handleSubmit}>
+                </lightning-button>
+            </div>
+
+            <!-- Submission error banner (concurrency / storage rejection) - rendered below the
+                 Submit button per spec so it reads as a response to the submit action. -->
             <template lwc:if={submissionError}>
-                <div class="slds-notify slds-notify_alert slds-theme_error slds-var-m-bottom_small" role="alert">
+                <div class="slds-notify slds-notify_alert slds-theme_error slds-var-m-top_small" role="alert">
                     <span class="slds-assistive-text">Error</span>
                     <p>{submissionError}
                         <template lwc:if={isRunningScanError}>
@@ -128,13 +137,6 @@
                     </button>
                 </div>
             </template>
-
-            <!-- Submit button -->
-            <div class="slds-var-m-top_medium">
-                <lightning-button variant="brand" label={submitLabel}
-                    disabled={isSubmitDisabled} onclick={handleSubmit}>
-                </lightning-button>
-            </div>
         </div>
     </lightning-card>
 </template>

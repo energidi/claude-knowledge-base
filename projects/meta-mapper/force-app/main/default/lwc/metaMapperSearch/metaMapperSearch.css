@@ -1,5 +1,5 @@
 .typeahead-container { position: relative; }
-.slds-dropdown { position: absolute; z-index: 9000; width: 100%; }
-.slds-listbox__item { cursor: pointer; padding: 0.5rem 1rem; }
+.meta-mapper-typeahead-dropdown { position: absolute; z-index: 9000; width: 100%; }
+.slds-listbox__item { cursor: pointer; padding: var(--slds-g-spacing-2, 0.5rem) var(--slds-g-spacing-4, 1rem); }
 .slds-listbox__item:hover { background: #f3f3f3; }
 .slds-listbox__item[aria-selected="true"] { background: #e8f0fe; outline: 2px solid #0176d3; outline-offset: -2px; }

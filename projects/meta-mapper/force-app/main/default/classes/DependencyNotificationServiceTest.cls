@@ -11,12 +11,15 @@ private class DependencyNotificationServiceTest {
     @IsTest
     static void publishProgress_doesNotThrow() {
         // CMDT is read-only in tests so we cannot inject Disable_Platform_Events__c = true.
-        // Validates that the service handles any org PE state without throwing.
+        // Validates that the service handles any org PE state without throwing AND that no
+        // publish-failure notice is recorded, proving EventBus.publish() actually accepted
+        // the event under normal (non-suppressed) test conditions.
         DependencyNotificationService svc = new DependencyNotificationService();
         Test.startTest();
         svc.publishProgress('a001000000000001AAA', 'Processing', 5, 'Test message');
         Test.stopTest();
-        // No assertion needed - exception = test failure
+        Assert.isTrue(DependencyNotificationService.getAndClearPendingNotices().isEmpty(),
+            'publishProgress should not record a PE publish-failure notice under normal test conditions');
     }
 
     @IsTest
@@ -25,14 +28,38 @@ private class DependencyNotificationServiceTest {
         Test.startTest();
         svc.publishProgress('a001000000000001AAA', 'Completed', 10, null);
         Test.stopTest();
+        Assert.isTrue(DependencyNotificationService.getAndClearPendingNotices().isEmpty(),
+            'A null message must not cause publishProgress to record a failure notice');
     }
 
     @IsTest
     static void sendCompletion_doesNotThrow() {
+        // sendCompletion() is documented as a no-op (completion is signalled via Status__c
+        // on the job record). Assert it truly performs no DML on the job so a future
+        // regression that adds unintended side effects is caught.
+        Metadata_Scan_Job__c job = new Metadata_Scan_Job__c(
+            Target_Metadata_Type__c = 'ApexClass',
+            Target_API_Name__c      = 'MyClass',
+            Status__c               = 'Completed',
+            Components_Analyzed__c  = 3
+        );
+        insert job;
+        DateTime beforeModified = [
+            SELECT LastModifiedDate FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+        ].LastModifiedDate;
+
         DependencyNotificationService svc = new DependencyNotificationService();
         Test.startTest();
-        svc.sendCompletion('a001000000000001AAA', 'a002000000000001AAA');
+        svc.sendCompletion(job.Id, UserInfo.getUserId());
         Test.stopTest();
+
+        Metadata_Scan_Job__c refreshed = [
+            SELECT Status__c, LastModifiedDate FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+        ];
+        Assert.areEqual('Completed', refreshed.Status__c,
+            'sendCompletion is documented as a no-op and must not alter Status__c');
+        Assert.areEqual(beforeModified, refreshed.LastModifiedDate,
+            'sendCompletion must not perform any DML on the job record');
     }
 
     @IsTest

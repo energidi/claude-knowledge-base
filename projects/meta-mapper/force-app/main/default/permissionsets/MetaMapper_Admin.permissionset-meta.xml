@@ -79,7 +79,7 @@
     <!-- Metadata_Scan_Job__c field permissions -->
     <!-- Required for WITH USER_MODE queries, insert as user (createJob), and update as user (cancelJob, resumeJob). -->
     <fieldPermissions>
-        <editable>false</editable>
+        <editable>true</editable>
         <field>Metadata_Scan_Job__c.Job_Type__c</field>
         <readable>true</readable>
     </fieldPermissions>

@@ -122,6 +122,17 @@ public without sharing class ApexClassDependencyHandler implements IDependencyTy
                 break;
             }
             String entityName = entity.QualifiedApiName;
+            // Validate entityName before it is used in a dynamic SOQL FROM clause inside
+            // scanCmtEntity(). A QualifiedApiName from EntityDefinition should always be a safe
+            // identifier, but a malformed value containing non-word characters would produce
+            // invalid or unsafe SOQL. Same guard as CustomFieldDependencyHandler.findCmtRecordReferences().
+            if (String.isBlank(entityName) || !Pattern.matches('[a-zA-Z][a-zA-Z0-9_]*', entityName)) {
+                String validationMsg = 'ApexClassDependencyHandler: skipping entity with invalid API name: ['
+                    + entityName + '].';
+                System.debug(LoggingLevel.WARN, validationMsg);
+                result.addError(validationMsg);
+                continue;
+            }
             SupplementalScanResult entityResult = scanCmtEntity(jobId, entityName, nodeByClassName);
             result.addNodes(entityResult.nodes);
             // addAll merges pre-formatted strings directly - do not call addError() which

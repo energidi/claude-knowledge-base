@@ -74,10 +74,15 @@ public without sharing class DependencyCleanupBatch
             appendNoticeToJob(expiredJobIds[0], clampWarn);
         }
 
+        // "attempted" (not "submitted") gates the MAX_BATCH_SUBMISSIONS break: the platform's
+        // 5-executeBatch()-per-transaction ceiling counts every invocation attempt, whether it
+        // succeeds or throws (caught below). Gating on "submitted" (successes only) would let a
+        // caught executeBatch() failure silently push the real call count past the platform limit.
+        Integer attempted = 0;
         Integer submitted = 0;
         for (Id jobId : expiredJobIds) {
-            if (submitted >= MAX_BATCH_SUBMISSIONS) {
-                Integer backlogCount = expiredJobIds.size() - submitted;
+            if (attempted >= MAX_BATCH_SUBMISSIONS) {
+                Integer backlogCount = expiredJobIds.size() - attempted;
                 String backlogMsg = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] '
                     + 'Cleanup backlog: ' + backlogCount
                     + ' additional expired job(s) will be processed in subsequent nightly runs.';
@@ -86,6 +91,7 @@ public without sharing class DependencyCleanupBatch
                 appendNoticeToJob(jobId, backlogMsg);
                 break;
             }
+            attempted++;
             try {
                 Database.executeBatch(
                     new MetadataDependencyDeletionBatch(

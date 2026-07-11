@@ -175,29 +175,29 @@ private class ScanResultFileQueueableTest {
 
     @IsTest
     static void execute_errorMessageAppended_notOverwritten() {
-        // Finding #19: pre-existing Scan_Diagnostic_Log__c must be preserved when
-        // updateJobFailed appends the new error rather than overwriting it.
-        // Trigger via a job with prior diagnostic content.
-        Metadata_Scan_Job__c job = makeJob('Processing', 0);
+        // Finding #19 (verified): pre-existing Scan_Diagnostic_Log__c must be preserved
+        // when updateJobFailed() appends the new error rather than overwriting it.
+        // Force a real failure via the heap pre-check (3000 nodes exceeds the heap
+        // ceiling - same trigger as execute_heapPreCheckFails_transitionsToFailed) on a
+        // job that already carries a prior diagnostic message.
+        Metadata_Scan_Job__c job = makeJob('Processing', 3000);
         job.Scan_Diagnostic_Log__c = 'Prior diagnostic message';
         update job;
+        insertNodes(job.Id, 3000);
 
-        // Zero nodes -> heap check passes -> Completes normally.
-        // To trigger updateJobFailed, we need an actual failure path.
-        // The cleanest way is to test ScanResultFileQueueable's updateJobFailed directly
-        // by checking it does NOT wipe existing Scan_Diagnostic_Log__c on a non-Processing job.
-        // (The method exits early for non-Processing, so prior messages are untouched.)
         Test.startTest();
         System.enqueueJob(new ScanResultFileQueueable(job.Id));
         Test.stopTest();
 
-        // Job should be Completed (zero nodes - success path). Prior message is irrelevant
-        // on success path; this confirms the serializer runs without errors on pre-populated jobs.
         Metadata_Scan_Job__c refreshed = [
-            SELECT Status__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+            SELECT Status__c, Scan_Diagnostic_Log__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id
         ];
-        Assert.areEqual('Completed', refreshed.Status__c,
-            'Job with prior error message should still complete when nodes are zero');
+        Assert.areEqual('Failed', refreshed.Status__c,
+            'Job should transition to Failed when the heap check fails');
+        Assert.isTrue(refreshed.Scan_Diagnostic_Log__c.contains('Prior diagnostic message'),
+            'Prior diagnostic content must be preserved, not overwritten');
+        Assert.isTrue(refreshed.Scan_Diagnostic_Log__c.contains('too large'),
+            'New failure message must be appended alongside the prior message');
     }
 
     @IsTest
@@ -227,5 +227,40 @@ private class ScanResultFileQueueableTest {
         // Ring buffer default is 5; one old job should have been deleted, leaving 5 total.
         Assert.isTrue(remaining <= 5,
             'Ring buffer should keep at most Max_Stored_Jobs__c completed jobs');
+    }
+
+    @IsTest
+    static void getCompletedJobsOldestFirst_nullStatusClosedAt_sortsLast() {
+        // MetadataScanJobSelector.StatusClosedAtComparator treats a null Status_Closed_At__c
+        // (e.g. a legacy Completed record predating the field) as "most recent" so it is
+        // retained over newer, correctly-timestamped jobs rather than being incorrectly
+        // evicted first as the ring buffer's oldest record. Previously untested.
+        Metadata_Scan_Job__c legacyNullTimestamp = new Metadata_Scan_Job__c(
+            Target_Metadata_Type__c = 'ApexClass',
+            Target_API_Name__c      = 'LegacyClass',
+            Status__c               = 'Completed',
+            Status_Closed_At__c     = null
+        );
+        Metadata_Scan_Job__c oldest = new Metadata_Scan_Job__c(
+            Target_Metadata_Type__c = 'ApexClass',
+            Target_API_Name__c      = 'OldestClass',
+            Status__c               = 'Completed',
+            Status_Closed_At__c     = System.now().addHours(-5)
+        );
+        Metadata_Scan_Job__c newest = new Metadata_Scan_Job__c(
+            Target_Metadata_Type__c = 'ApexClass',
+            Target_API_Name__c      = 'NewestClass',
+            Status__c               = 'Completed',
+            Status_Closed_At__c     = System.now().addHours(-1)
+        );
+        insert new List<Metadata_Scan_Job__c>{ legacyNullTimestamp, oldest, newest };
+
+        List<Metadata_Scan_Job__c> result = new MetadataScanJobSelector().getCompletedJobsOldestFirst(10);
+
+        Assert.areEqual(3, result.size(), 'All 3 Completed jobs should be returned');
+        Assert.areEqual(oldest.Id, result[0].Id, 'The oldest timestamped job should sort first');
+        Assert.areEqual(newest.Id, result[1].Id, 'The newest timestamped job should sort second');
+        Assert.areEqual(legacyNullTimestamp.Id, result[2].Id,
+            'The null-timestamp job must sort last, not be treated as the oldest');
     }
 }

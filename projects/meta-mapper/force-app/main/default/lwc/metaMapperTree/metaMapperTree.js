@@ -122,7 +122,7 @@ export default class MetaMapperTree extends LightningElement {
             const term = this._searchTerm.toLowerCase();
             rows = filtered
                 .filter(n => (n.Metadata_Name__c || '').toLowerCase().includes(term))
-                .map(n => this._makeRow(n, filteredIds, true));
+                .map(n => this._makeRow(n, filteredIds));
         } else {
             rows = [];
             this._dfsFlatten(null, filteredIds, rows);
@@ -135,14 +135,14 @@ export default class MetaMapperTree extends LightningElement {
         const children = this._childrenMap.get(parentId) || [];
         const visible = children.filter(n => filteredIds.has(n.Metadata_Id__c));
         visible.forEach(n => {
-            rows.push(this._makeRow(n, filteredIds, false));
+            rows.push(this._makeRow(n, filteredIds));
             if (this._expandedIds.has(n.Metadata_Id__c)) {
                 this._dfsFlatten(n.Metadata_Id__c, filteredIds, rows);
             }
         });
     }
 
-    _makeRow(n, filteredIds, forSearch) {
+    _makeRow(n, filteredIds) {
         const depth = n.Dependency_Depth__c || 0;
         const childList = (this._childrenMap.get(n.Metadata_Id__c) || []).filter(c =>
             filteredIds.has(c.Metadata_Id__c)
@@ -239,7 +239,12 @@ export default class MetaMapperTree extends LightningElement {
         } catch {
             // unavailable
         }
-        this._rebuild();
+        // A search term change never alters parent/child relationships or node identity, so
+        // only the flat row list needs rebuilding - not the full node/children maps (which
+        // re-buckets and re-sorts every node by parent, an O(n log n) cost with no bearing
+        // on the search result).
+        this._rebuildFlatRows();
+        this._computeWindow();
     }
 
     handleClearSearch() {
@@ -249,7 +254,8 @@ export default class MetaMapperTree extends LightningElement {
         } catch {
             // unavailable
         }
-        this._rebuild();
+        this._rebuildFlatRows();
+        this._computeWindow();
     }
 
     handleScroll() {
@@ -290,7 +296,6 @@ export default class MetaMapperTree extends LightningElement {
         if (!row) return;
         this._contextMenu = { x: event.clientX, y: event.clientY, node: row };
         // Focus first menu item after render
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             const firstItem = this.template.querySelector('.context-menu [role="menuitem"]');
             if (firstItem) firstItem.focus();
@@ -351,7 +356,6 @@ export default class MetaMapperTree extends LightningElement {
                     y: rect ? rect.bottom : 0,
                     node: row
                 };
-                // eslint-disable-next-line @lwc/lwc/no-async-operation
                 setTimeout(() => {
                     const firstItem = this.template.querySelector('.context-menu [role="menuitem"]');
                     if (firstItem) firstItem.focus();
@@ -499,12 +503,38 @@ export default class MetaMapperTree extends LightningElement {
     // --- _scrollToNode ---
 
     _scrollToNode(nodeId) {
-        let timer = null;
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
-        timer = setTimeout(() => {
-            this._locatingNode = true;
-        }, 200);
+        // A setTimeout scheduled then cleared within the same synchronous call stack can never
+        // fire - JS does not yield to the timer queue mid-execution. To actually show "Locating
+        // node..." while ancestor branches expand, defer the (synchronous) expansion work to the
+        // next tick ONLY when there is real expansion work to do, so the browser gets a chance to
+        // paint the indicator first. When the node's ancestors are already expanded, skip the
+        // indicator and defer entirely - there is nothing slow to show it for.
+        if (!this._hasCollapsedAncestor(nodeId)) {
+            this._locateAndScrollToNode(nodeId);
+            return;
+        }
+        this._locatingNode = true;
+        setTimeout(() => {
+            if (!this._isMounted) return;
+            this._locateAndScrollToNode(nodeId);
+            this._locatingNode = false;
+        }, 0);
+    }
 
+    _hasCollapsedAncestor(nodeId) {
+        const node = this._nodeMap.get(nodeId);
+        if (!node) return false;
+        let current = node;
+        while (current && current.Parent_Dependency__c) {
+            if (!this._expandedIds.has(current.Parent_Dependency__c)) {
+                return true;
+            }
+            current = this._nodeMap.get(current.Parent_Dependency__c);
+        }
+        return false;
+    }
+
+    _locateAndScrollToNode(nodeId) {
         this._expandAncestors(nodeId);
         this._rebuildFlatRows();
 
@@ -517,9 +547,6 @@ export default class MetaMapperTree extends LightningElement {
             this._activeIndex = idx;
             this._computeWindow();
         }
-
-        clearTimeout(timer);
-        this._locatingNode = false;
     }
 
     _expandAncestors(nodeId) {

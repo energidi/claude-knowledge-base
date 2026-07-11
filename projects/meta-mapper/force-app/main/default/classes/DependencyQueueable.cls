@@ -120,7 +120,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             // Transition Initializing ? Processing BEFORE the savepoint so a rollback
             // cannot revert the status back to Initializing. Once the engine begins
             // execution the job is always either Processing or (on failure) Failed.
-            String initStatus = jobSelector.getStatusOnly(jobId);
+            String initStatus = new MetadataScanJobSelector().getStatusOnly(jobId);
             if ('Initializing'.equals(initStatus)) {
                 update new Metadata_Scan_Job__c(Id = jobId, Status__c = 'Processing');
             }

@@ -34,4 +34,67 @@ private class SupplementalScanResultTest {
         String result = SupplementalScanResult.appendNoticeSafe('Log', '');
         Assert.areEqual('Log', result);
     }
+
+    // ---- appendErrorsSafe (instance bulk-append path) ----
+
+    @IsTest
+    static void appendErrorsSafe_happyPath_joinsAllErrors() {
+        SupplementalScanResult result = new SupplementalScanResult();
+        result.addError('First supplemental error');
+        result.addError('Second supplemental error');
+        String log = result.appendErrorsSafe(null, 32768, 200);
+        Assert.isTrue(log.contains('First supplemental error'), 'Should contain first error');
+        Assert.isTrue(log.contains('Second supplemental error'), 'Should contain second error');
+    }
+
+    @IsTest
+    static void appendErrorsSafe_dedupsIdenticalBaseMessages() {
+        SupplementalScanResult result = new SupplementalScanResult();
+        result.addError('Duplicate error message');
+        result.addError('Duplicate error message');
+        String log = result.appendErrorsSafe(null, 32768, 200);
+        Integer occurrences = 0;
+        for (String line : log.split('\n')) {
+            if (line.contains('Duplicate error message')) {
+                occurrences++;
+            }
+        }
+        Assert.areEqual(1, occurrences,
+            'Identical base messages accumulated in the same call must be deduplicated');
+    }
+
+    @IsTest
+    static void appendErrorsSafe_truncatesWhenOverflowing() {
+        SupplementalScanResult result = new SupplementalScanResult();
+        result.addError('X'.repeat(80));
+        String log = result.appendErrorsSafe(null, 100, 40);
+        Assert.isTrue(log.endsWith('[TRUNCATED: MAX LOG SIZE REACHED]'),
+            'An error too large to fit the safe limit should produce the truncation suffix');
+    }
+
+    @IsTest
+    static void appendErrorsSafe_preTruncatesOversizedExistingLog() {
+        SupplementalScanResult result = new SupplementalScanResult();
+        result.addError('New error');
+        String existing = 'A'.repeat(90); // exceeds safeLimit (60) when maxLength=100/safeThreshold=40
+        String log = result.appendErrorsSafe(existing, 100, 40);
+        Assert.areEqual('A'.repeat(60) + '\n[PRE-TRUNCATED]', log,
+            'An existing log already beyond the safe limit must be hard-truncated with a PRE-TRUNCATED marker');
+    }
+
+    @IsTest
+    static void appendErrorsSafe_nullDefaults_doNotThrow() {
+        SupplementalScanResult result = new SupplementalScanResult();
+        result.addError('Defaults test error');
+        String log = result.appendErrorsSafe(null, null, null);
+        Assert.isTrue(log.contains('Defaults test error'),
+            'Null maxLength/safeThreshold must default to 32768/200 without throwing');
+    }
+
+    @IsTest
+    static void appendErrorsSafe_noErrors_returnsExistingUnchanged() {
+        SupplementalScanResult result = new SupplementalScanResult();
+        String log = result.appendErrorsSafe('Unchanged', 32768, 200);
+        Assert.areEqual('Unchanged', log, 'No accumulated errors should leave the existing log untouched');
+    }
 }

@@ -41,6 +41,19 @@ public without sharing class MetadataDependencyDeletionBatch
     }
 
     public void execute(Database.BatchableContext ctx, List<SObject> scope) {
+        // DML row budget guard - symmetric with the DML statement budget check further below.
+        // A chunk is bounded by Cleanup_Chunk_Size__c (max 2,000) today, well under the 10,000
+        // row limit, but this defends against a future change (or CMDT misconfiguration bypassing
+        // the existing clamp) that increases effective scope, and against DML rows already
+        // consumed elsewhere in this transaction.
+        if (Limits.getLimitDmlRows() - Limits.getDmlRows() < scope.size()) {
+            System.debug(LoggingLevel.WARN,
+                'MetadataDependencyDeletionBatch.execute: skipping this chunk for job ' + jobId
+                + ' - insufficient DML row budget (' + (Limits.getLimitDmlRows() - Limits.getDmlRows())
+                + ' remaining, ' + scope.size() + ' needed). This chunk is not deleted this run; '
+                + 'the next scheduled nightly cleanup will re-discover and retry it.');
+            return;
+        }
         // Partial-success delete: one corrupt or locked record must not abort the entire chunk.
         List<Database.DeleteResult> deleteResults = Database.delete(scope, false);
         List<SObject> deleted = new List<SObject>();

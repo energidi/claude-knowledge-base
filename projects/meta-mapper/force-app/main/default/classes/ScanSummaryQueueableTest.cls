@@ -83,7 +83,18 @@ private class ScanSummaryQueueableTest {
         Test.startTest();
         System.enqueueJob(new ScanSummaryQueueable('a000000000000001AAA'));
         Test.stopTest();
-        // No exception = pass
+
+        AsyncApexJob asyncJob = [
+            SELECT Status, NumberOfErrors
+            FROM AsyncApexJob
+            WHERE ApexClass.Name = 'ScanSummaryQueueable'
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+        Assert.areEqual('Completed', asyncJob.Status,
+            'Queueable must complete successfully (not fail) when the job record does not exist');
+        Assert.areEqual(0, asyncJob.NumberOfErrors,
+            'The null-job guard must return cleanly with zero errors');
     }
 
     @IsTest

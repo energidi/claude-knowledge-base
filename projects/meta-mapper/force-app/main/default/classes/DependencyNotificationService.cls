@@ -105,6 +105,11 @@ public without sharing class DependencyNotificationService implements IScanNotif
             return;
         }
 
+        // SECURITY: Dependency_Scan_Status__e has no row-level sharing - this event is delivered
+        // to every subscribed MetaMapper user regardless of the target job's Private OWD. Never
+        // put Target_API_Name__c, Metadata_Name__c, or any other metadata identifier into
+        // Progress_Message__c - only a generic status phrase is safe here. See CLAUDE.md
+        // Security Model, "Dependency_Scan_Status__e cross-user broadcast".
         Dependency_Scan_Status__e peEvent = new Dependency_Scan_Status__e(
             Scan_Job_Id__c         = jobId,
             Status__c              = status,

@@ -81,8 +81,13 @@ export default class MetaMapperSearch extends LightningElement {
         this._scheduleComplexityPreview();
     }
 
-    handleApiNameBlur() {
-        // Inline validation fires on blur — lightning-input required handles the message
+    handleApiNameBlur(event) {
+        // Explicitly trigger validity reporting on blur so the "value missing" and
+        // "pattern mismatch" messages (message-when-value-missing / message-when-pattern-mismatch)
+        // actually surface without requiring a submit attempt first.
+        if (event.target && event.target.reportValidity) {
+            event.target.reportValidity();
+        }
     }
 
     handleActiveFlowsChange(event) { this.activeFlowsOnly = event.detail.checked; }
@@ -93,12 +98,10 @@ export default class MetaMapperSearch extends LightningElement {
         this.typeaheadCalloutError = false;
         clearTimeout(this._typeaheadTimer);
         if (!this.targetObject.trim()) { this.typeaheadOpen = false; return; }
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._typeaheadTimer = setTimeout(() => this._runTypeahead(), 300);
     }
 
     handleTargetObjectBlur() {
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => { this.typeaheadOpen = false; this._resetTypeaheadFocus(); }, 150);
         if (this.showTargetObject && !this.targetObject.trim()) {
             this.targetObjectError = 'Enter the API name of the parent object (e.g. Account).';
@@ -169,7 +172,6 @@ export default class MetaMapperSearch extends LightningElement {
     _scheduleComplexityPreview() {
         clearTimeout(this._complexityTimer);
         if (!this.apiName.trim()) { this.complexityBucket = null; return; }
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._complexityTimer = setTimeout(() => this._fetchComplexity(), 300);
     }
 

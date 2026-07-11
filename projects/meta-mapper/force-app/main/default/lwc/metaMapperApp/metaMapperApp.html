@@ -46,7 +46,7 @@
             class="slds-modal slds-fade-in-open">
             <div class="slds-modal__container">
                 <header class="slds-modal__header">
-                    <button class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse"
+                    <button class="slds-button slds-button_icon slds-modal__close"
                         title="Close" onclick={closeLearnMore} aria-label="Close">
                         <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
                     </button>
@@ -75,9 +75,9 @@
         <section role="dialog" tabindex="-1" aria-label="MetaMapper first-time tour"
             aria-modal="true" class="slds-modal slds-fade-in-open tour-modal"
             onkeydown={handleTourKeyDown}>
-            <div class="slds-modal__container">
+            <div class="slds-modal__container meta-mapper-tour-container">
                 <header class="slds-modal__header">
-                    <button class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse"
+                    <button class="slds-button slds-button_icon slds-modal__close"
                         title="Close tour" aria-label="Close tour" onclick={closeTour}>
                         <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
                     </button>
@@ -94,6 +94,9 @@
                 <footer class="slds-modal__footer">
                     <lightning-input type="checkbox"
                         label="Don't show again. I understand MetaMapper basics."
+                        name="tour-dont-show"
+                        checked={tourDontShow}
+                        onchange={handleTourDontShowChange}
                         class="slds-var-m-bottom_small">
                     </lightning-input>
                     <template lwc:if={showTourPrev}>

@@ -54,6 +54,13 @@
             </div>
         </template>
 
+        <!-- Static target API name display (truncated at 50 chars, full name in tooltip) -->
+        <template lwc:if={showApiNameDisplay}>
+            <div class="api-name-display slds-text-body_small slds-text-color_weak" title={fullApiNameTitle}>
+                {displayApiName}
+            </div>
+        </template>
+
         <!-- Status label + elapsed time (flex row on desktop, flex column on mobile < 768px) -->
         <div class="status-elapsed-wrapper">
             <template lwc:if={showStatusLabel}>
@@ -132,7 +139,7 @@
                 aria-modal="true" class="slds-modal slds-fade-in-open">
                 <div class="slds-modal__container">
                     <header class="slds-modal__header">
-                        <button class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse"
+                        <button class="slds-button slds-button_icon slds-modal__close"
                             aria-label="Close" onclick={handleKeepRunning}>
                             <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
                         </button>

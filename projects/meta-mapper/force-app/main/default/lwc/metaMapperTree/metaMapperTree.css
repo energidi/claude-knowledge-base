@@ -9,7 +9,7 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--slds-g-spacing-2, 0.5rem);
 }
 
 .search-input {
@@ -21,10 +21,10 @@
 }
 
 .locating-indicator {
-    font-size: 0.75rem;
+    font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
     color: #706e6b;
     white-space: nowrap;
-    margin-left: 0.25rem;
+    margin-left: var(--slds-g-spacing-1, 0.25rem);
 }
 
 .tree-scroll-container {
@@ -32,7 +32,7 @@
     height: 450px;
     min-height: 400px;
     position: relative;
-    border: 1px solid #dddbda;
+    border: var(--slds-g-sizing-border-1, 1px) solid #dddbda;
     outline: none;
 }
 
@@ -45,7 +45,7 @@
     align-items: center;
     height: 40px;
     cursor: pointer;
-    padding-right: 0.5rem;
+    padding-right: var(--slds-g-spacing-2, 0.5rem);
     box-sizing: border-box;
     border-left: 3px solid transparent;
     user-select: none;
@@ -69,16 +69,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: var(--slds-g-sizing-6, 20px);
+    height: var(--slds-g-sizing-6, 20px);
     flex-shrink: 0;
     cursor: pointer;
 }
 
 .chevron-placeholder {
     display: inline-block;
-    width: 20px;
-    height: 20px;
+    width: var(--slds-g-sizing-6, 20px);
+    height: var(--slds-g-sizing-6, 20px);
     flex-shrink: 0;
 }
 
@@ -89,7 +89,7 @@
 .type-icon {
     flex-shrink: 0;
     margin-right: 0.375rem;
-    margin-left: 0.25rem;
+    margin-left: var(--slds-g-spacing-1, 0.25rem);
 }
 
 .node-label {
@@ -97,20 +97,20 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 0.8125rem;
+    font-size: var(--slds-g-font-scale-base, 0.8125rem);
 }
 
 .badge-icon {
     flex-shrink: 0;
-    margin-left: 0.25rem;
+    margin-left: var(--slds-g-spacing-1, 0.25rem);
 }
 
 .badge-circular {
-    --sds-c-icon-color-foreground-default: #0176d3;
+    --slds-c-icon-color-foreground-default: #0176d3;
 }
 
 .badge-dynamic {
-    --sds-c-icon-color-foreground-default: #dd7a01;
+    --slds-c-icon-color-foreground-default: #dd7a01;
 }
 
 mark {
@@ -129,18 +129,18 @@ mark {
 .context-menu {
     position: fixed;
     background: white;
-    border: 1px solid #dddbda;
+    border: var(--slds-g-sizing-border-1, 1px) solid #dddbda;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     z-index: 9000;
     min-width: 180px;
-    border-radius: 4px;
+    border-radius: var(--slds-g-radius-border-1, 4px);
     overflow: hidden;
 }
 
 .menu-item {
-    padding: 0.5rem 1rem;
+    padding: var(--slds-g-spacing-2, 0.5rem) var(--slds-g-spacing-4, 1rem);
     cursor: pointer;
-    font-size: 0.8125rem;
+    font-size: var(--slds-g-font-scale-base, 0.8125rem);
     outline: none;
 }
 

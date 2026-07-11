@@ -45,7 +45,7 @@ public class SupplementalScanResult {
      * Metadata_Scan_Job__c.Scan_Diagnostic_Log__c in a single DML update.
      */
     public void addError(String message) {
-        errors.add('[' + System.now().format() + '] [Supplemental] ' + message);
+        errors.add('[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] [Supplemental] ' + message);
     }
 
     public Boolean hasErrors() {

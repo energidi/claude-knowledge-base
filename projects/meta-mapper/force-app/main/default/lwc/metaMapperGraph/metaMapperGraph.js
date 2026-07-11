@@ -102,6 +102,8 @@ export default class MetaMapperGraph extends LightningElement {
     _ariaRebuildTimer = null;
     _ariaTableBusy = false;
     _graphAriaLiveText = '';
+    _searchDebounceTimer = null;
+    _lastOrderedSignature = null;
     _lastFocusBeforeMenu = null;
     // Virtual focus index — tracks keyboard focus position within the canvas (WCAG 2.1 SC 2.1.1).
     _activeNodeIndex = -1;
@@ -161,6 +163,7 @@ export default class MetaMapperGraph extends LightningElement {
         this._isMounted = false;
         clearTimeout(this._tabReadyTimeout);
         clearTimeout(this._ariaRebuildTimer);
+        clearTimeout(this._searchDebounceTimer);
         window.removeEventListener('resize', this._handleResize);
         if (this._handleCtrlK) {
             const wrapper = this.template.querySelector('.graph-canvas-wrapper');
@@ -180,7 +183,6 @@ export default class MetaMapperGraph extends LightningElement {
         if (!window.echarts) return;
         try {
             if (!this._themeRegistered) {
-                // eslint-disable-next-line no-undef
                 echarts.registerTheme('sfDark', {
                     backgroundColor: '#1B1B1B',
                     textStyle: { color: '#FFFFFF' },
@@ -190,7 +192,6 @@ export default class MetaMapperGraph extends LightningElement {
             const container = this.template.querySelector('.graph-canvas-wrapper');
             if (!container) return;
             const isDark = document.body.classList.contains('slds-theme_inverse');
-            // eslint-disable-next-line no-undef
             this._chart = echarts.init(container, isDark ? 'sfDark' : null);
             this._chartReady = true;
 
@@ -258,7 +259,6 @@ export default class MetaMapperGraph extends LightningElement {
                         nodeId: params.data.id,
                         node: this._nodeMap.get(params.data.id),
                     };
-                    // eslint-disable-next-line @lwc/lwc/no-async-operation
                     setTimeout(() => {
                         if (!this._isMounted) return;
                         const first = this.template.querySelector('.ctx-menu [role="menuitem"]');
@@ -276,7 +276,6 @@ export default class MetaMapperGraph extends LightningElement {
             });
 
             // Hard 3s timeout in case 'finished' never fires
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             this._tabReadyTimeout = setTimeout(() => {
                 if (!this._firstFinishedFired) {
                     this._firstFinishedFired = true;
@@ -320,14 +319,10 @@ export default class MetaMapperGraph extends LightningElement {
                 this._moveVirtualFocus(delta);
             } else if (e.key === 'Enter' && !this._contextMenu && !this._showShortcutLegend) {
                 this._activateVirtualFocusNode();
-            } else if (e.key === 'Escape') {
-                if (this._focusPath) {
-                    this._clearFocusPath();
-                } else if (this._graphSearchTerm) {
-                    this._graphSearchTerm = '';
-                    this._searchHighlights = null;
-                    this._renderGraph();
-                }
+            // Escape is intentionally NOT handled here - handleCanvasKeyDown (template-bound
+            // onkeydown on the same wrapper element) is the single source of truth for Escape,
+            // with correct priority (context menu -> focus path -> search). Handling it in both
+            // listeners let one Escape press clear two states at once.
             } else if (
                 ((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu') &&
                 !this._contextMenu && !this._showShortcutLegend
@@ -339,7 +334,8 @@ export default class MetaMapperGraph extends LightningElement {
                         ? this._orderedNodeIds[this._activeNodeIndex]
                         : null;
                 if (activeNodeId) {
-                    const wrapper = this.template.querySelector('.graph-canvas-wrapper');
+                    // Reuse the outer `wrapper` (already queried above) rather than re-querying
+                    // the DOM and shadowing the outer-scope variable of the same name.
                     const rect = wrapper ? wrapper.getBoundingClientRect() : { left: 0, top: 0, width: 200, height: 200 };
                     this._lastFocusBeforeMenu = document.activeElement;
                     if (this._focusPath) { this._clearFocusPath(); }
@@ -349,7 +345,6 @@ export default class MetaMapperGraph extends LightningElement {
                         nodeId: activeNodeId,
                         node: this._nodeMap.get(activeNodeId),
                     };
-                    // eslint-disable-next-line @lwc/lwc/no-async-operation
                     setTimeout(() => {
                         if (!this._isMounted) return;
                         const first = this.template.querySelector('.ctx-menu [role="menuitem"]');
@@ -389,15 +384,22 @@ export default class MetaMapperGraph extends LightningElement {
         const visible = this._getVisibleNodes();
         this._nodeMap = new Map(visible.map((n) => [n.Metadata_Id__c, n]));
         // Rebuild ordered node list for virtual focus traversal (depth ASC, then name ASC for
-        // deterministic arrow-key order regardless of force-layout position).
-        this._orderedNodeIds = visible
-            .slice()
-            .sort(
-                (a, b) =>
-                    (a.Dependency_Depth__c || 0) - (b.Dependency_Depth__c || 0) ||
-                    (a.Metadata_Name__c || '').localeCompare(b.Metadata_Name__c || '')
-            )
-            .map((n) => n.Metadata_Id__c);
+        // deterministic arrow-key order regardless of force-layout position) - but only when the
+        // visible node set actually changed. Arrow-key focus movement and search-highlight
+        // updates call _renderGraph() far more often than the visible set changes; re-sorting
+        // on every keystroke/arrow-key was a measurable cost on large graphs.
+        const signature = visible.map((n) => n.Metadata_Id__c).join(',');
+        if (signature !== this._lastOrderedSignature) {
+            this._orderedNodeIds = visible
+                .slice()
+                .sort(
+                    (a, b) =>
+                        (a.Dependency_Depth__c || 0) - (b.Dependency_Depth__c || 0) ||
+                        (a.Metadata_Name__c || '').localeCompare(b.Metadata_Name__c || '')
+                )
+                .map((n) => n.Metadata_Id__c);
+            this._lastOrderedSignature = signature;
+        }
         // Clamp active index when filters reduce the visible set so it never goes out of bounds.
         if (this._activeNodeIndex >= this._orderedNodeIds.length) {
             this._activeNodeIndex = Math.max(0, this._orderedNodeIds.length - 1);
@@ -410,7 +412,6 @@ export default class MetaMapperGraph extends LightningElement {
     _scheduleAriaTableRebuild(visible) {
         clearTimeout(this._ariaRebuildTimer);
         this._ariaTableBusy = true;
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._ariaRebuildTimer = setTimeout(() => {
             if (!this._isMounted) return;
             this._ariaTableRows = visible.map((n) => ({
@@ -558,7 +559,6 @@ export default class MetaMapperGraph extends LightningElement {
         this._showClearFocus = true;
         this._renderGraph();
         this._announceAriaLive(`Focus path activated: ${pathSet.size} nodes highlighted`);
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             if (!this._isMounted) return;
             const btn = this.template.querySelector('.clear-focus-btn');
@@ -649,7 +649,6 @@ export default class MetaMapperGraph extends LightningElement {
 
     _announceAriaLive(text) {
         this._graphAriaLiveText = text;
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => { this._graphAriaLiveText = ''; }, 3000);
     }
 
@@ -672,7 +671,14 @@ export default class MetaMapperGraph extends LightningElement {
     // ---- event handlers ----
 
     handleGraphSearch(e) {
-        this._handleSearchChange(e.target.value);
+        // Debounced: an undebounced per-keystroke call re-sorts the visible node list and
+        // forces a full ECharts re-layout on every character typed - expensive on large graphs.
+        const value = e.target.value;
+        clearTimeout(this._searchDebounceTimer);
+        this._searchDebounceTimer = setTimeout(() => {
+            if (!this._isMounted) return;
+            this._handleSearchChange(value);
+        }, 250);
     }
 
     handleClearFocus() {
@@ -694,7 +700,6 @@ export default class MetaMapperGraph extends LightningElement {
                 count: visible.length,
                 expandAriaLabel: `Confirm. Expand all ${visible.length} nodes now. This may slow your browser.`
             };
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => {
                 if (!this._isMounted) return;
                 const btn = this.template.querySelector('.modal-footer .slds-button_neutral');
@@ -728,7 +733,6 @@ export default class MetaMapperGraph extends LightningElement {
 
     handleShowShortcuts() {
         this._showShortcutLegend = true;
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         Promise.resolve().then(() => {
             if (!this._isMounted) return;
             const modal = this.template.querySelector('[aria-label="Keyboard shortcuts"]');
@@ -738,7 +742,6 @@ export default class MetaMapperGraph extends LightningElement {
 
     handleCloseShortcuts() {
         this._showShortcutLegend = false;
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             if (!this._isMounted) return;
             const btn = this.template.querySelector('.shortcut-legend-btn');
@@ -773,7 +776,6 @@ export default class MetaMapperGraph extends LightningElement {
         } catch {
             // storage unavailable
         }
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         setTimeout(() => {
             if (!this._isMounted) return;
             const wrapper = this.template.querySelector('.graph-canvas-wrapper');
@@ -810,7 +812,6 @@ export default class MetaMapperGraph extends LightningElement {
         this._contextMenu = null;
         this._lastFocusBeforeMenu = null;
         if (lastMenu) {
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => {
                 if (!this._isMounted) return;
                 // Restore pre-menu focus; fall back to canvas wrapper (finding #6).

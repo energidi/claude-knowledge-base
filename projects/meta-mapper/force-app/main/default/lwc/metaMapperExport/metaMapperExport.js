@@ -140,17 +140,20 @@ export default class MetaMapperExport extends LightningElement {
             typeMap.get(t).push(n.Metadata_Name__c || '');
         });
 
-        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n`;
+        // Accumulate into an array and join once rather than repeated += concatenation, which
+        // is O(n^2) heap/CPU as the string grows - same principle already applied on the Apex
+        // side (see DependencyQueueable.cls / SupplementalScanResult.cls).
+        const parts = ['<?xml version="1.0" encoding="UTF-8"?>\n<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n'];
         typeMap.forEach((names, type) => {
-            xml += `    <types>\n`;
+            parts.push('    <types>\n');
             names.sort().forEach(name => {
-                xml += `        <members>${this._escapeXml(name)}</members>\n`;
+                parts.push(`        <members>${this._escapeXml(name)}</members>\n`);
             });
-            xml += `        <name>${this._escapeXml(type)}</name>\n`;
-            xml += `    </types>\n`;
+            parts.push(`        <name>${this._escapeXml(type)}</name>\n`);
+            parts.push('    </types>\n');
         });
-        xml += `    <version>66.0</version>\n</Package>`;
-        return xml;
+        parts.push('    <version>66.0</version>\n</Package>');
+        return parts.join('');
     }
 
     _escapeXml(str) {

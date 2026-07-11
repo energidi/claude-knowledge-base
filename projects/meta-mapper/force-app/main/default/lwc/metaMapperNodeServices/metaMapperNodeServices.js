@@ -46,7 +46,7 @@ export function isNamespacePrefixed(apiName, metadataType) {
         const dot = apiName.lastIndexOf('.');
         name = dot >= 0 ? apiName.substring(dot + 1) : apiName;
     }
-    return /^[A-Za-z][A-Za-z0-9]+__/.test(name);
+    return /^[A-Za-z][A-Za-z0-9]*__/.test(name);
 }
 
 export function extractTypes(nodes) {

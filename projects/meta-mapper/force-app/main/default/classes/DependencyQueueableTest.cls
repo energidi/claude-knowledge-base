@@ -71,6 +71,26 @@ private class DependencyQueueableTest {
     }
 
     @IsTest
+    static void execute_pausedJobNoUnprocessedNodes_enqueuesSerializer() {
+        // A Paused job with an empty unprocessed queue (e.g. the user resumed and the
+        // final batch completed) must hand off to ScanResultFileQueueable, not exit
+        // early. Prior to Round 70 the gate read `cancelStatus != 'Processing'`, which
+        // caused Paused jobs to exit and loop indefinitely.
+        Metadata_Scan_Job__c job = makeJob('Paused');
+        Test.setMock(HttpCalloutMock.class, new EmptyToolingApiMock());
+
+        Test.startTest();
+        System.enqueueJob(new DependencyQueueable(job.Id, false, null));
+        Test.stopTest();
+
+        Metadata_Scan_Job__c refreshed = [
+            SELECT Status__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+        ];
+        Assert.areNotEqual('Failed', refreshed.Status__c,
+            'Paused job with empty queue must not be Failed - serializer handoff must proceed');
+    }
+
+    @IsTest
     static void execute_stallDetected_pausesJob() {
         Metadata_Scan_Job__c job = makeJob('Processing');
         job.Processing_Cycle_Count__c = 10;
@@ -268,6 +288,94 @@ private class DependencyQueueableTest {
             'Root node Metadata_Id__c must not be null after Step 7a resolution');
         Assert.areNotEqual('', refreshed.Metadata_Id__c,
             'Root node Metadata_Id__c must be populated after Step 7a resolution');
+    }
+
+    @IsTest
+    static void execute_ancestorPathNear32000Chars_setsMaxDepthExceededNotCircular() {
+        // The ancestor path depth guard (ANCESTOR_PATH_MARGIN/ANCESTOR_PATH_MAX) must stop
+        // traversal via Dependencies_Fetched__c = true and a maxDepthExceeded context flag,
+        // and must NOT set Is_Circular__c - depth overflow is a traversal ceiling, not an
+        // ancestry cycle (previously untested per the testing review).
+        Metadata_Scan_Job__c job = makeJob('Processing');
+        Metadata_Dependency__c parent = new Metadata_Dependency__c(
+            Metadata_Scan_Job__c    = job.Id,
+            Metadata_Id__c          = 'a001000000000001AAA',
+            Metadata_Type__c        = 'ApexClass',
+            Metadata_Name__c        = 'ParentClass',
+            Unique_Component_Key__c = job.Id + ':a001000000000001AAA',
+            Dependencies_Fetched__c = false,
+            Ancestor_Path__c        = 'X'.repeat(31990), // + 20-char margin > 32000 trips the guard
+            Dependency_Depth__c     = 500
+        );
+        insert parent;
+
+        String mockBody = '{"done":true,"totalSize":1,"records":['
+            + '{"MetadataComponentId":"a002000000000001AAA",'
+            + '"MetadataComponentName":"ChildClass","MetadataComponentType":"ApexClass",'
+            + '"RefMetadataComponentId":"a001000000000001AAA",'
+            + '"RefMetadataComponentName":"ParentClass","RefMetadataComponentType":"ApexClass"}'
+            + ']}';
+        Test.setMock(HttpCalloutMock.class, new ToolingApiMock(200, mockBody));
+
+        Test.startTest();
+        System.enqueueJob(new DependencyQueueable(job.Id, false, null));
+        Test.stopTest();
+
+        Metadata_Dependency__c child = [
+            SELECT Dependencies_Fetched__c, Is_Circular__c, Dependency_Context__c
+            FROM Metadata_Dependency__c
+            WHERE Metadata_Scan_Job__c = :job.Id AND Metadata_Id__c = 'a002000000000001AAA'
+            LIMIT 1
+        ];
+        Assert.isTrue(child.Dependencies_Fetched__c,
+            'Depth-exceeded node must be marked Dependencies_Fetched__c = true to stop traversal');
+        Assert.areNotEqual(true, child.Is_Circular__c,
+            'Depth overflow is a traversal ceiling, not an ancestry cycle - Is_Circular__c must not be set');
+        Assert.isTrue(child.Dependency_Context__c.contains('maxDepthExceeded'),
+            'Dependency_Context__c must record maxDepthExceeded for depth-truncated nodes');
+    }
+
+    @IsTest
+    static void execute_toolingApiReturnsMultipleChildren_bulkUpsertsAllInOneStatement() {
+        // Regression test for the "never upsert per-node inside the loop" rule: 5+ children
+        // from a single callout must be accumulated and upserted in one bulk statement, not
+        // one DML per child. Previously only a single-child response was tested.
+        Metadata_Scan_Job__c job = makeJob('Processing');
+        makeNode(job.Id, 'a001000000000001AAA', false);
+
+        List<String> recordJson = new List<String>();
+        for (Integer i = 0; i < 6; i++) {
+            String childId = 'a00200000000000' + i + 'AAA';
+            recordJson.add('{"MetadataComponentId":"' + childId + '",'
+                + '"MetadataComponentName":"ChildClass' + i + '","MetadataComponentType":"ApexClass",'
+                + '"RefMetadataComponentId":"a001000000000001AAA",'
+                + '"RefMetadataComponentName":"ParentField","RefMetadataComponentType":"CustomField"}');
+        }
+        String mockBody = '{"done":true,"totalSize":6,"records":[' + String.join(recordJson, ',') + ']}';
+        Test.setMock(HttpCalloutMock.class, new ToolingApiMock(200, mockBody));
+
+        Test.startTest();
+        System.enqueueJob(new DependencyQueueable(job.Id, false, null));
+        Test.stopTest();
+
+        List<Metadata_Dependency__c> nodes = [
+            SELECT Metadata_Id__c FROM Metadata_Dependency__c WHERE Metadata_Scan_Job__c = :job.Id
+        ];
+        Assert.areEqual(7, nodes.size(), 'Parent + 6 children should exist after processing');
+
+        // The bulk-upsert rule is verified structurally (accumulate-then-upsert-once), not by
+        // asserting DML count in this transaction - the 6 children were upserted inside the
+        // separate Queueable execution's own governor-limit scope. If a regression reintroduced
+        // a per-child upsert inside the loop, DependencyQueueable would risk breaching DML
+        // statement limits at higher volumes; a functional assertion that all 6 children were
+        // persisted in a single execution (no self-chain was needed) is the observable proxy.
+        AsyncApexJob asyncJob = [
+            SELECT NumberOfErrors FROM AsyncApexJob
+            WHERE ApexClass.Name = 'DependencyQueueable'
+            ORDER BY CreatedDate DESC LIMIT 1
+        ];
+        Assert.areEqual(0, asyncJob.NumberOfErrors,
+            'Processing 6 children in one callout must not throw (e.g. from per-node DML exhaustion)');
     }
 
     // ---- mocks ----

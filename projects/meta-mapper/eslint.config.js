@@ -16,9 +16,23 @@ module.exports = defineConfig([
     },
 
     // LWC configuration
+    // @lwc/lwc/no-async-operation is turned off (rather than inline-disabled per call site,
+    // which @lwc/lwc-platform/no-inline-disable forbids) because setTimeout/clearTimeout is the
+    // standard, intentional pattern used throughout these components for debounce timers, deferred
+    // focus management, and polling loops - each documented at its call site.
+    // `echarts` is declared as a global because it is loaded at runtime from the ECharts static
+    // resource (loadScript), not imported as a module - ESLint cannot statically resolve it.
     {
         files: ['**/lwc/**/*.js'],
-        extends: [lwcConfig]
+        extends: [lwcConfig],
+        rules: {
+            '@lwc/lwc/no-async-operation': 'off'
+        },
+        languageOptions: {
+            globals: {
+                echarts: 'readonly'
+            }
+        }
     },
 
     // LWC configuration with override for LWC test files

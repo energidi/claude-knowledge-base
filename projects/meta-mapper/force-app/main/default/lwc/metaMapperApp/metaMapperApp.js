@@ -129,7 +129,6 @@ export default class MetaMapperApp extends LightningElement {
                     const s = this.job && this.job.Status__c;
                     this.view = ['Initializing', 'Processing', 'Paused'].includes(s) ? 'progress' : 'results';
                     if (deepNodeId && this.view === 'results') {
-                        // eslint-disable-next-line @lwc/lwc/no-async-operation
                         setTimeout(() => {
                             const res = this.template.querySelector('c-meta-mapper-results');
                             if (res) res.setPendingNodeId(deepNodeId);
@@ -152,7 +151,6 @@ export default class MetaMapperApp extends LightningElement {
         if (!localStorage.getItem(TOUR_KEY) && this.view === 'search') {
             this._tourTriggerElement = document.activeElement;
             this.showTour = true;
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => {
                 const modal = this.template.querySelector('section[aria-label="MetaMapper first-time tour"]');
                 if (modal) modal.focus();
@@ -316,7 +314,6 @@ export default class MetaMapperApp extends LightningElement {
     handleTourNext() {
         if (this.tourSlide < 3) {
             this.tourSlide++;
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => {
                 const el = this.refs && this.refs.tourSlideBody;
                 if (el) el.focus();
@@ -329,7 +326,6 @@ export default class MetaMapperApp extends LightningElement {
     handleTourPrev() {
         if (this.tourSlide > 1) {
             this.tourSlide--;
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => {
                 const el = this.refs && this.refs.tourSlideBody;
                 if (el) el.focus();
@@ -344,13 +340,21 @@ export default class MetaMapperApp extends LightningElement {
             // On mobile there is no reliable keyboard focus to restore. Move focus to the
             // first focusable element in metaMapperSearch so screen readers have a landing
             // point without triggering a scroll jump to document.body.
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
             setTimeout(() => {
                 const search = this.template.querySelector('c-meta-mapper-search');
                 if (search) search.focusFirstInput();
             }, 0);
-        } else if (this._tourTriggerElement) {
+        } else if (this._tourTriggerElement && this._tourTriggerElement !== document.body) {
             this._tourTriggerElement.focus();
+        } else {
+            // No real triggering element was captured (e.g. the tour auto-triggered on first
+            // login with document.activeElement === document.body). Calling .focus() on
+            // document.body is a no-op, silently losing focus. Fall back to the first
+            // focusable element in metaMapperSearch, same as the mobile path above.
+            setTimeout(() => {
+                const search = this.template.querySelector('c-meta-mapper-search');
+                if (search) search.focusFirstInput();
+            }, 0);
         }
     }
 
@@ -379,7 +383,6 @@ export default class MetaMapperApp extends LightningElement {
         this.toastMessage = message;
         this.toastVariant = variant || 'info';
         clearTimeout(this._toastTimer);
-        // eslint-disable-next-line @lwc/lwc/no-async-operation
         this._toastTimer = setTimeout(() => { this.toastMessage = ''; }, 5000);
     }
 }
