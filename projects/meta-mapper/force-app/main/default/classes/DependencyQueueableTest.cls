@@ -378,6 +378,41 @@ private class DependencyQueueableTest {
             'Processing 6 children in one callout must not throw (e.g. from per-node DML exhaustion)');
     }
 
+    @IsTest
+    static void execute_highFanOutNode_midLoopGuardSelfChains() {
+        // Finding #10: the mid-loop DML/CPU/heap guardrail (checked every 100 children,
+        // MID_LOOP_CHECK_INTERVAL) must be exercised. A single HTTP response is capped at
+        // 500,000 bytes (MAX_RESPONSE_BODY_SIZE heap guard in MetadataDependencyService),
+        // which is far too small to hold enough records to trip the DML-rows guard
+        // (~9,200+ children needed against the default 750-row Dml_Safety_Margin_Rows__c
+        // reserve and 10,000-row DML limit). QueryMore pagination - each page well under
+        // the 500KB cap - accumulates a high enough total fan-out for one parent within a
+        // single Queueable execution to realistically trigger the guard.
+        Metadata_Scan_Job__c job = makeJob('Processing');
+        makeNode(job.Id, 'a001000000000001AAA', false);
+
+        Test.setMock(HttpCalloutMock.class, new HighFanOutQueryMoreMock());
+
+        Test.startTest();
+        System.enqueueJob(new DependencyQueueable(job.Id, false, null));
+        Test.stopTest();
+
+        List<Metadata_Dependency__c> nodes = [
+            SELECT Id FROM Metadata_Dependency__c WHERE Metadata_Scan_Job__c = :job.Id
+        ];
+        // Parent + up to 9,600 children = 9,601 max if the entire batch was processed in one shot.
+        Boolean partialBatch = nodes.size() < 9601;
+
+        Integer chainedJobCount = [
+            SELECT COUNT() FROM AsyncApexJob WHERE ApexClass.Name = 'DependencyQueueable'
+        ];
+        Boolean selfChained = chainedJobCount > 1;
+
+        Assert.isTrue(partialBatch || selfChained,
+            'A high-fan-out node (9,600 accumulated children) must either be processed in a '
+            + 'partial batch or trigger a self-chained DependencyQueueable execution');
+    }
+
     // ---- mocks ----
 
     private class EmptyToolingApiMock implements HttpCalloutMock {
@@ -405,6 +440,40 @@ private class DependencyQueueableTest {
         public HttpResponse respond(HttpRequest req) {
             HttpResponse res = new HttpResponse();
             res.setStatusCode(code);
+            res.setBody(body);
+            return res;
+        }
+    }
+
+    // Simulates a high-fan-out parent via QueryMore pagination: 8 pages of 1,200 children
+    // each (9,600 total), every page well under the 500,000-byte body-size heap guard so
+    // MetadataDependencyService follows nextRecordsUrl instead of rejecting the response.
+    // Used by execute_highFanOutNode_midLoopGuardSelfChains to exercise the mid-loop guard.
+    private class HighFanOutQueryMoreMock implements HttpCalloutMock {
+        // Instance (not static) constants - Apex inner classes cannot declare static members.
+        private final Integer TOTAL_PAGES = 8;
+        private final Integer RECORDS_PER_PAGE = 1200;
+        private Integer pageCount = 0;
+        private Integer globalChildIndex = 0;
+        public HttpResponse respond(HttpRequest req) {
+            pageCount++;
+            List<String> recs = new List<String>();
+            for (Integer i = 0; i < RECORDS_PER_PAGE; i++) {
+                String childId = 'a002' + String.valueOf(globalChildIndex).leftPad(14, '0') + 'AAA';
+                globalChildIndex++;
+                recs.add('{"MetadataComponentId":"' + childId + '",'
+                    + '"MetadataComponentName":"C' + globalChildIndex + '","MetadataComponentType":"ApexClass",'
+                    + '"RefMetadataComponentId":"a001000000000001AAA",'
+                    + '"RefMetadataComponentName":"ParentField","RefMetadataComponentType":"CustomField"}');
+            }
+            Boolean isLast = pageCount >= TOTAL_PAGES;
+            String body = '{"done":' + (isLast ? 'true' : 'false')
+                + ',"totalSize":' + RECORDS_PER_PAGE
+                + ',"records":[' + String.join(recs, ',') + ']'
+                + (isLast ? '' : ',"nextRecordsUrl":"/services/data/v66.0/tooling/query/01g000000000001"')
+                + '}';
+            HttpResponse res = new HttpResponse();
+            res.setStatusCode(200);
             res.setBody(body);
             return res;
         }

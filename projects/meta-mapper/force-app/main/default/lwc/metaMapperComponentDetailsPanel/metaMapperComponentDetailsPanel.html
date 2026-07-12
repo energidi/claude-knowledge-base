@@ -1,6 +1,12 @@
 <template>
     <template if:true={isOpen}>
-        <div class="panel-container">
+        <div
+            class="panel-container"
+            role={dialogRole}
+            aria-modal={panelAriaModal}
+            aria-label={panelAriaLabel}
+            onkeydown={handleKeydown}
+        >
             <!-- Header -->
             <div class="panel-header">
                 <h2 class="panel-title" title={selectedNode.Metadata_Name__c}>{selectedNode.Metadata_Name__c}</h2>
@@ -92,9 +98,9 @@
             <!-- Footer actions -->
             <div class="panel-footer">
                 <button
-                    class="slds-button slds-button_brand setup-btn"
+                    class={setupButtonClass}
                     onclick={handleOpenInSetup}
-                    disabled={setupButtonDisabled}
+                    aria-disabled={setupButtonAriaDisabled}
                     title={setupButtonTitle}
                     aria-label="Open in Setup"
                 >

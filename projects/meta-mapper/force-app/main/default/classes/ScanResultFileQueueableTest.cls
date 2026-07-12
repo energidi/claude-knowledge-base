@@ -224,9 +224,10 @@ private class ScanResultFileQueueableTest {
         Test.stopTest();
 
         Integer remaining = [SELECT COUNT() FROM Metadata_Scan_Job__c WHERE Status__c = 'Completed'];
-        // Ring buffer default is 5; one old job should have been deleted, leaving 5 total.
-        Assert.isTrue(remaining <= 5,
-            'Ring buffer should keep at most Max_Stored_Jobs__c completed jobs');
+        // Ring buffer default is 5; one old job should have been deleted, leaving exactly 5.
+        // Finding #26: an <= assertion would still pass on over-eviction; assert the exact count.
+        Assert.areEqual(5, remaining,
+            'Ring buffer should retain exactly Max_Stored_Jobs__c completed jobs after eviction');
     }
 
     @IsTest

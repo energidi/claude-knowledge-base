@@ -4,6 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Git & Sync
+
+- **GitHub repo:** `https://github.com/energidi/claude-knowledge-base` (monorepo). This project lives at the subfolder `projects/meta-mapper` on branch `main`: `https://github.com/energidi/claude-knowledge-base/tree/main/projects/meta-mapper`.
+- **Local clone path:** `C:\Users\GidiAbramovich\Documents\Claude\claude-knowledge-base` (existing clone; do not re-clone). Copy changed files from this working directory into `projects/meta-mapper/` inside that clone before committing.
+- This working directory (`c:\Users\GidiAbramovich\Documents\Visual Studio Code\MetaMapper`) is itself not a git repository - it is the local working copy edited directly; the clone above is the one connected to GitHub.
+- `git pull --rebase` before every push to avoid divergence, per the global Git & Sync rule.
+
+---
+
 ## Output Rules
 - After applying fixes (code review rounds, bug fixes, any edits): do not explain what was changed. Make the edits and stop. The user can read the diff.
 

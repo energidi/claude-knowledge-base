@@ -1,6 +1,6 @@
-.stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+.stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--slds-g-spacing-2, 0.5rem); }
 @media (max-width: 1024px) { .stats-grid { grid-template-columns: 1fr; } }
-.stat-cell { display: flex; align-items: center; padding: 0.25rem 0; }
+.stat-cell { display: flex; align-items: center; padding: var(--slds-g-spacing-1, 0.25rem) 0; }
 .tab-content { min-height: 400px; }
 .tab-content.is-transitioning { opacity: 0.5; pointer-events: none; }
 .summary-body { white-space: pre-line; user-select: text; }

@@ -228,7 +228,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             );
             update job;
             publishSafe('Paused', toIntValue(job.Components_Analyzed__c),
-                'Analysis of ' + job.Target_API_Name__c + ' paused - encountered a complex component.');
+                'Analysis paused - encountered a complex component.');
             return;
         }
 

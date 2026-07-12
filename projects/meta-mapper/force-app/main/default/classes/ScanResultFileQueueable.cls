@@ -43,6 +43,13 @@ public without sharing class ScanResultFileQueueable implements Queueable {
     // would silently undo the Failed status transition, leaving the job stuck in Processing.
     private class HeapCheckException extends Exception {}
 
+    // Thrown when the ContentDocumentLink visibility update fails. Reuses the
+    // HeapCheckException pattern: execute()'s catch block rolls back the savepoint
+    // (reverting the just-inserted ContentVersion/ContentDocument, since the insert
+    // happened after the savepoint) before calling updateJobFailed(). This ensures the
+    // file is never left in place with unconfirmed sharing visibility.
+    private class LinkVisibilityException extends Exception {}
+
     private final String jobId;
 
     // Set by runSerializerCore() on success so execute() can call runPostCompletionTasks()
@@ -177,11 +184,14 @@ public without sharing class ScanResultFileQueueable implements Queueable {
             links[0].Visibility = 'InternalUsers';
             List<Database.SaveResult> linkResults = Database.update(links, false);
             if (!linkResults[0].isSuccess()) {
-                String warn = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] ContentDocumentLink visibility update failed: '
-                    + linkResults[0].getErrors()[0].getMessage()
-                    + '. File may be visible to unintended users.';
-                job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
-                    job.Scan_Diagnostic_Log__c, warn);
+                // Do not leave the file in place with unconfirmed sharing visibility.
+                // Throwing here is caught by execute(), which rolls back the savepoint
+                // (removing the just-inserted ContentVersion/ContentDocument) and fails
+                // the job via the standard updateJobFailed() path.
+                throw new LinkVisibilityException(
+                    'Scan completed but the result file could not be saved - its sharing '
+                    + 'visibility could not be confirmed: '
+                    + linkResults[0].getErrors()[0].getMessage() + '. Run the scan again.');
             }
         } else {
             String warn = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] ContentDocumentLink not found for '

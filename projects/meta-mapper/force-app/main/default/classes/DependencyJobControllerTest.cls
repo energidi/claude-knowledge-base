@@ -114,6 +114,25 @@ private class DependencyJobControllerTest {
         Assert.areEqual(false, job.Active_Flows_Only__c);
     }
 
+    @IsTest
+    static void createJob_atConcurrencyLimit_throws() {
+        // Finding #11: the secondary soft-lock (countActiveJobRecords) rejects new scan
+        // submissions when active Metadata_Scan_Job__c records in Initializing/Processing
+        // status meet or exceed Max_Concurrent_Jobs__c (default CMDT value = 2). No
+        // AsyncApexJob rows exist in this test context, so the primary countActiveQueueables
+        // check passes and the secondary job-record check is the one that fires.
+        buildJob('Processing');
+        buildJob('Processing');
+
+        try {
+            DependencyJobController.createJob('ApexClass', 'MyClass', null, false);
+            Assert.fail('Expected DependencyJobException when at the concurrency limit');
+        } catch (DependencyJobController.DependencyJobException e) {
+            Assert.isTrue(e.getMessage().contains('already running'),
+                'Message should mention that a scan is already running');
+        }
+    }
+
     // -----------------------------------------------------------------------
     // getJobStatus
     // -----------------------------------------------------------------------
@@ -194,6 +213,30 @@ private class DependencyJobControllerTest {
         Assert.areEqual('Cancelled', updated.Status__c);
     }
 
+    @IsTest
+    static void cancelJob_completedJob_isNoop() {
+        // A Completed job must not be overwritten to Cancelled — the FOR UPDATE
+        // pre-check introduced in Round 70 guards this case.
+        Metadata_Scan_Job__c job = buildJob('Completed');
+        Test.startTest();
+        DependencyJobController.cancelJob(job.Id);
+        Test.stopTest();
+
+        Metadata_Scan_Job__c updated = [SELECT Status__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id];
+        Assert.areEqual('Completed', updated.Status__c, 'Completed job must not be overwritten to Cancelled');
+    }
+
+    @IsTest
+    static void cancelJob_failedJob_isNoop() {
+        Metadata_Scan_Job__c job = buildJob('Failed');
+        Test.startTest();
+        DependencyJobController.cancelJob(job.Id);
+        Test.stopTest();
+
+        Metadata_Scan_Job__c updated = [SELECT Status__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id];
+        Assert.areEqual('Failed', updated.Status__c, 'Failed job must not be overwritten to Cancelled');
+    }
+
     // -----------------------------------------------------------------------
     // resumeJob
     // -----------------------------------------------------------------------
@@ -201,16 +244,20 @@ private class DependencyJobControllerTest {
     @IsTest
     static void resumeJob_pausedJob_enqueues() {
         Metadata_Scan_Job__c job = buildJob('Paused');
+        job.Pause_Reason__c = 'StallDetected';
+        update job;
 
         Test.startTest();
         DependencyJobController.resumeJob(job.Id, 25);
         Test.stopTest();
 
         Metadata_Scan_Job__c updated = [
-            SELECT Status__c, Batch_Size_Override__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+            SELECT Status__c, Batch_Size_Override__c, Pause_Reason__c
+            FROM Metadata_Scan_Job__c WHERE Id = :job.Id
         ];
         Assert.areEqual('Processing', updated.Status__c);
         Assert.areEqual(25, (Integer) updated.Batch_Size_Override__c);
+        Assert.isNull(updated.Pause_Reason__c, 'Pause_Reason__c must be cleared on resume');
     }
 
     @IsTest

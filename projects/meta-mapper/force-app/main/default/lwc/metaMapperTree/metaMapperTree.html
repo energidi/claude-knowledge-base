@@ -106,9 +106,16 @@
                                 title={row.Metadata_Type__c}
                             ></lightning-icon>
 
-                            <!-- Label -->
+                            <!-- Label (segments computed in JS so search matches can be wrapped in <mark>) -->
                             <span class="node-label" title={row.Metadata_Name__c}>
-                                {row.Metadata_Name__c}
+                                <template for:each={row.nameSegments} for:item="seg">
+                                    <template if:true={seg.isMatch}>
+                                        <mark key={seg.key}>{seg.text}</mark>
+                                    </template>
+                                    <template if:false={seg.isMatch}>
+                                        <span key={seg.key}>{seg.text}</span>
+                                    </template>
+                                </template>
                             </span>
 
                             <!-- Badges -->

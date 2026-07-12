@@ -87,7 +87,11 @@ export default class MetaMapperExport extends LightningElement {
     _buildCsv(nodes) {
         const nodeMap = new Map(nodes.map(n => [n.Metadata_Id__c, n]));
         const escape = (val) => {
-            const s = String(val == null ? '' : val);
+            const s0 = String(val == null ? '' : val);
+            // Neutralize CSV/DDE formula injection: a value beginning with =, +, -, or @ is
+            // interpreted as a formula by Excel/Sheets. Prefix with a leading single-quote
+            // before applying the existing comma/quote/newline escaping.
+            const s = /^[=+\-@]/.test(s0) ? "'" + s0 : s0;
             return s.includes(',') || s.includes('"') || s.includes('\n')
                 ? `"${s.replace(/"/g, '""')}"` : s;
         };

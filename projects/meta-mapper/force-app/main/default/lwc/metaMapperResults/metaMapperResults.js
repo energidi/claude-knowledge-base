@@ -50,6 +50,9 @@ export default class MetaMapperResults extends LightningElement {
     _summaryPollTimer = null;
     _summaryPollCount = 0;
     _tabReadyTimer = null;
+    _statsAnnounceTimer = null;
+    _tabReadyMinTimer = null;
+    _copyLabelTimer = null;
     _isMounted = false;
     _filteredNodesCache = null;
     _nodeMapCache = null;
@@ -57,9 +60,20 @@ export default class MetaMapperResults extends LightningElement {
     _pendingFocusNodeId = null;
     _copilotChecked = false;
     _copilotException = false;
+    _isMobile = false;
+    _resizeTimer = null;
 
     connectedCallback() {
         this._isMounted = true;
+        this._isMobile = window.innerWidth < 1024;
+        this._handleResize = () => {
+            clearTimeout(this._resizeTimer);
+            this._resizeTimer = setTimeout(() => {
+                if (!this._isMounted) return;
+                this._isMobile = window.innerWidth < 1024;
+            }, 200);
+        };
+        window.addEventListener('resize', this._handleResize);
         this.filters = loadFilters();
         this._checkCopilot();
         this.loadResults();
@@ -67,8 +81,13 @@ export default class MetaMapperResults extends LightningElement {
 
     disconnectedCallback() {
         this._isMounted = false;
+        window.removeEventListener('resize', this._handleResize);
+        clearTimeout(this._resizeTimer);
         clearTimeout(this._summaryPollTimer);
         clearTimeout(this._tabReadyTimer);
+        clearTimeout(this._statsAnnounceTimer);
+        clearTimeout(this._tabReadyMinTimer);
+        clearTimeout(this._copyLabelTimer);
     }
 
     async _checkCopilot() {
@@ -84,7 +103,7 @@ export default class MetaMapperResults extends LightningElement {
         }
     }
 
-    get isMobile() { return window.innerWidth < 1024; }
+    get isMobile() { return this._isMobile; }
     get showCopilotButton() { return this.copilotEnabled && !this.isMobile; }
     get showCopilotNotAvailable() {
         return this._copilotChecked && !this.copilotEnabled && !this._copilotException && !this.isMobile;
@@ -134,7 +153,8 @@ export default class MetaMapperResults extends LightningElement {
     }
 
     _scheduleStatsAnnouncement() {
-        setTimeout(() => {
+        clearTimeout(this._statsAnnounceTimer);
+        this._statsAnnounceTimer = setTimeout(() => {
             if (!this._isMounted) return;
             const region = this.refs && this.refs.statsLiveRegion;
             if (!region || !this.typeCounts.length) return;
@@ -235,8 +255,11 @@ export default class MetaMapperResults extends LightningElement {
     }
 
     get showStatsTile() {
-        if (!this.isCompleted) return this.allNodes.length > 0;
-        return this.typeCounts.length > 0;
+        return this.isCompleted && this.typeCounts.length > 0;
+    }
+
+    get showStatsTileUnavailable() {
+        return this.hasResults && !this.isCompleted && this.allNodes.length > 0;
     }
 
     get showSummaryCard() {
@@ -281,7 +304,8 @@ export default class MetaMapperResults extends LightningElement {
 
     handleTabReady() {
         clearTimeout(this._tabReadyTimer);
-        setTimeout(() => {
+        clearTimeout(this._tabReadyMinTimer);
+        this._tabReadyMinTimer = setTimeout(() => {
             if (!this._isMounted) return;
             this.isTransitioning = false;
             this.tabLoadFailed = false;
@@ -336,7 +360,8 @@ export default class MetaMapperResults extends LightningElement {
             this.copyLabel = 'Copied!';
             const region = this.refs.copyLiveRegion;
             if (region) { region.textContent = 'Copied to clipboard.'; }
-            setTimeout(() => {
+            clearTimeout(this._copyLabelTimer);
+            this._copyLabelTimer = setTimeout(() => {
                 this.copyLabel = 'Copy';
                 if (region) { region.textContent = ''; }
             }, 2000);

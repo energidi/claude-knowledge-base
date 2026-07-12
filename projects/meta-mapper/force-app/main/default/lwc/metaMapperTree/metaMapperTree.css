@@ -22,7 +22,7 @@
 
 .locating-indicator {
     font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
-    color: #706e6b;
+    color: var(--slds-g-color-neutral-base-30, #706e6b);
     white-space: nowrap;
     margin-left: var(--slds-g-spacing-1, 0.25rem);
 }
@@ -32,12 +32,12 @@
     height: 450px;
     min-height: 400px;
     position: relative;
-    border: var(--slds-g-sizing-border-1, 1px) solid #dddbda;
+    border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     outline: none;
 }
 
 .tree-scroll-container:focus {
-    box-shadow: 0 0 0 2px #0176d3 inset;
+    box-shadow: 0 0 0 2px var(--slds-g-color-brand-base-60, #0176d3) inset;
 }
 
 .tree-row {
@@ -52,17 +52,17 @@
 }
 
 .tree-row:hover {
-    background-color: #f3f2f2;
+    background-color: var(--slds-g-color-neutral-base-95, #f3f2f2);
 }
 
 .tree-row:focus {
-    outline: 2px solid #0176d3;
+    outline: 2px solid var(--slds-g-color-brand-base-60, #0176d3);
     outline-offset: -2px;
 }
 
 .row-selected {
-    background-color: #f3f3f3;
-    border-left-color: #0176d3;
+    background-color: var(--slds-g-color-neutral-base-95, #f3f3f3);
+    border-left-color: var(--slds-g-color-brand-base-60, #0176d3);
 }
 
 .chevron-btn {
@@ -106,15 +106,15 @@
 }
 
 .badge-circular {
-    --slds-c-icon-color-foreground-default: #0176d3;
+    --slds-c-icon-color-foreground-default: var(--slds-g-color-brand-base-60, #0176d3);
 }
 
 .badge-dynamic {
-    --slds-c-icon-color-foreground-default: #dd7a01;
+    --slds-c-icon-color-foreground-default: var(--slds-g-color-palette-orange-40, #dd7a01);
 }
 
 mark {
-    background: #ffb81c;
+    background: var(--slds-g-color-palette-yellow-40, #ffb81c);
     padding: 0;
 }
 
@@ -129,8 +129,8 @@ mark {
 .context-menu {
     position: fixed;
     background: white;
-    border: var(--slds-g-sizing-border-1, 1px) solid #dddbda;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
+    box-shadow: 0 2px 8px var(--slds-g-color-shadow-1, rgba(0, 0, 0, 0.2));
     z-index: 9000;
     min-width: 180px;
     border-radius: var(--slds-g-radius-border-1, 4px);
@@ -146,5 +146,5 @@ mark {
 
 .menu-item:hover,
 .menu-item:focus {
-    background: #f3f3f3;
+    background: var(--slds-g-color-neutral-base-95, #f3f3f3);
 }

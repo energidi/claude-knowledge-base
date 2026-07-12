@@ -115,6 +115,15 @@
             </lightning-card>
         </template>
 
+        <!-- Stats tile unavailable (job not Completed) -->
+        <template lwc:if={showStatsTileUnavailable}>
+            <lightning-card class="slds-var-m-bottom_small">
+                <div class="slds-var-p-around_medium">
+                    <p class="slds-text-body_small slds-text-color_weak">No type counts available.</p>
+                </div>
+            </lightning-card>
+        </template>
+
         <!-- Stats tile -->
         <template lwc:if={showStatsTile}>
             <lightning-card class="slds-var-m-bottom_small">

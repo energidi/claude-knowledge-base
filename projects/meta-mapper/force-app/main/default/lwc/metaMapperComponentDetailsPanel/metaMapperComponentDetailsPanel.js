@@ -3,7 +3,6 @@ import { resolveSetupUrl } from 'c/metaMapperNodeServices';
 import { renderPills } from 'c/metaMapperFormatters';
 
 export default class MetaMapperComponentDetailsPanel extends LightningElement {
-    @api selectedNodeId = null;
     @api nodeMap = null;
     @api orgId = '';
     @api jobId = '';
@@ -11,10 +10,93 @@ export default class MetaMapperComponentDetailsPanel extends LightningElement {
     @track _copyLinkSuccess = false;
     @track _showAllAncestors = false;
 
+    _selectedNodeId = null;
+    _isMobile = false;
+    _mql = null;
+    _handleMqlChange = null;
+    _triggerElement = null;
+    _pendingMobileFocus = false;
+    _copyLinkTimeoutId = null;
+
+    // ── Public API ───────────────────────────────────────────────────────────
+
+    @api
+    get selectedNodeId() {
+        return this._selectedNodeId;
+    }
+
+    set selectedNodeId(value) {
+        const wasOpen = this._selectedNodeId !== null;
+        const willOpen = value !== null && value !== undefined;
+        // Capture the triggering element at the moment the panel is asked to open
+        // (mobile full-screen modal only) so focus can be restored on close.
+        if (!wasOpen && willOpen && this._isMobile) {
+            this._triggerElement = document.activeElement;
+            this._pendingMobileFocus = true;
+        }
+        this._selectedNodeId = value;
+    }
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    connectedCallback() {
+        this._mql = window.matchMedia('(max-width: 1023px)');
+        this._isMobile = this._mql.matches;
+        this._handleMqlChange = (e) => {
+            this._isMobile = e.matches;
+        };
+        if (this._mql.addEventListener) {
+            this._mql.addEventListener('change', this._handleMqlChange);
+        } else if (this._mql.addListener) {
+            this._mql.addListener(this._handleMqlChange);
+        }
+    }
+
+    disconnectedCallback() {
+        if (this._mql) {
+            if (this._mql.removeEventListener) {
+                this._mql.removeEventListener('change', this._handleMqlChange);
+            } else if (this._mql.removeListener) {
+                this._mql.removeListener(this._handleMqlChange);
+            }
+        }
+        if (this._copyLinkTimeoutId) {
+            clearTimeout(this._copyLinkTimeoutId);
+            this._copyLinkTimeoutId = null;
+        }
+    }
+
+    renderedCallback() {
+        // Mobile full-screen modal: move focus into the panel once it renders open.
+        if (this._pendingMobileFocus && this.isOpen) {
+            this._pendingMobileFocus = false;
+            const closeBtn = this.template.querySelector('.close-btn');
+            if (closeBtn) {
+                closeBtn.focus();
+            }
+        }
+    }
+
     // ── Panel visibility ──────────────────────────────────────────────────────
 
     get isOpen() {
         return this.selectedNodeId !== null;
+    }
+
+    // ── Mobile modal ARIA (scoped to <1024px full-screen presentation) ─────────
+
+    get dialogRole() {
+        return this._isMobile ? 'dialog' : undefined;
+    }
+
+    get panelAriaModal() {
+        return this._isMobile ? 'true' : undefined;
+    }
+
+    get panelAriaLabel() {
+        if (!this._isMobile) return undefined;
+        const node = this.selectedNode;
+        return node ? `${node.Metadata_Name__c} details` : 'Component details';
     }
 
     // ── Selected node ─────────────────────────────────────────────────────────
@@ -91,6 +173,16 @@ export default class MetaMapperComponentDetailsPanel extends LightningElement {
         return !this.setupUrl;
     }
 
+    get setupButtonAriaDisabled() {
+        return this.setupButtonDisabled ? 'true' : 'false';
+    }
+
+    get setupButtonClass() {
+        return this.setupButtonDisabled
+            ? 'slds-button slds-button_brand setup-btn is-disabled'
+            : 'slds-button slds-button_brand setup-btn';
+    }
+
     get setupButtonTitle() {
         return this.setupButtonDisabled
             ? 'Setup link not available for this component type. You can search for it manually in Salesforce Setup.'
@@ -128,10 +220,26 @@ export default class MetaMapperComponentDetailsPanel extends LightningElement {
     // ── Event handlers ────────────────────────────────────────────────────────
 
     handleClose() {
+        const restoreEl = this._isMobile ? this._triggerElement : null;
+        this._triggerElement = null;
         this.dispatchEvent(new CustomEvent('panelclosed'));
+        if (restoreEl && typeof restoreEl.focus === 'function') {
+            restoreEl.focus();
+        }
+    }
+
+    handleKeydown(event) {
+        // Escape-to-close is scoped to the mobile full-screen modal presentation.
+        if (this._isMobile && event.key === 'Escape') {
+            event.stopPropagation();
+            this.handleClose();
+        }
     }
 
     handleOpenInSetup() {
+        if (this.setupButtonDisabled) {
+            return;
+        }
         if (this.setupUrl) {
             window.open(this.setupUrl, '_blank');
         }
@@ -146,11 +254,11 @@ export default class MetaMapperComponentDetailsPanel extends LightningElement {
             this._copyLinkSuccess = true;
             const liveEl = this.template.querySelector('.copy-link-live');
             if (liveEl) liveEl.textContent = 'Link copied to clipboard.';
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
-            setTimeout(() => {
+            this._copyLinkTimeoutId = setTimeout(() => {
                 this._copyLinkSuccess = false;
                 const el = this.template.querySelector('.copy-link-live');
                 if (el) el.textContent = '';
+                this._copyLinkTimeoutId = null;
             }, 2000);
         }).catch(() => {
             this.dispatchEvent(new CustomEvent('showtoast', {

@@ -140,6 +140,30 @@ private class MetadataDependencyServiceTest {
             'Any failure path should populate failedParentMetaIds');
     }
 
+    @IsTest
+    static void fetchDependencies_400Ids_splitsAtUrlBudget() {
+        // Finding #9: the dynamic URL-budget chunking (URL_OVERHEAD=350, ID_CHAR_COST=21,
+        // URL_BUDGET=8000 -> max safe batch = 364 IDs) must actually split a batch of 400 IDs
+        // into more than one callout, and no single callout may exceed 364 IDs.
+        List<String> ids = new List<String>();
+        for (Integer i = 0; i < 400; i++) {
+            ids.add('a00' + String.valueOf(i).leftPad(15, '0'));
+        }
+        CountingUrlBudgetMock mock = new CountingUrlBudgetMock();
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        DependencyFetchContext opts = new DependencyFetchContext();
+        opts.jobId = 'a003000000000001AAA';
+        MetadataDependencyService svc = new MetadataDependencyService();
+        svc.fetchDependencies(ids, opts);
+
+        Assert.isTrue(mock.calloutCount > 1,
+            'A batch of 400 IDs must be split into more than one callout');
+        Assert.isTrue(mock.maxIdsInSingleCallout <= 364,
+            'No single callout may exceed the URL-budget-derived max safe batch of 364 IDs, got '
+            + mock.maxIdsInSingleCallout);
+    }
+
     // ---- buildContextData ----
 
     @IsTest
@@ -223,6 +247,30 @@ private class MetadataDependencyServiceTest {
                     + '"RefMetadataComponentName":"MyField","RefMetadataComponentType":"CustomField"}'
                     + ']}');
             }
+            return res;
+        }
+    }
+
+    private class CountingUrlBudgetMock implements HttpCalloutMock {
+        // Records the number of distinct callouts made and the max IN-clause ID count
+        // found in each request's decoded SOQL, so tests can verify the dynamic
+        // URL-budget chunking never exceeds the 364-ID max safe batch.
+        Integer calloutCount = 0;
+        Integer maxIdsInSingleCallout = 0;
+        public HttpResponse respond(HttpRequest req) {
+            calloutCount++;
+            String decoded = EncodingUtil.urlDecode(req.getEndpoint(), 'UTF-8');
+            Integer inStart = decoded.indexOf('IN (') + 4;
+            Integer inEnd = decoded.lastIndexOf(')');
+            Integer idCount = 0;
+            if (inStart >= 4 && inEnd > inStart) {
+                idCount = decoded.substring(inStart, inEnd).split(',').size();
+            }
+            maxIdsInSingleCallout = Math.max(maxIdsInSingleCallout, idCount);
+
+            HttpResponse res = new HttpResponse();
+            res.setStatusCode(200);
+            res.setBody('{"done":true,"totalSize":0,"records":[]}');
             return res;
         }
     }

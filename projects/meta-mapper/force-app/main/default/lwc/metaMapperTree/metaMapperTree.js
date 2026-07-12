@@ -21,8 +21,8 @@ function getIcon(type) {
 }
 
 export default class MetaMapperTree extends LightningElement {
-    @api nodes = [];
-    @api filters = {};
+    _nodesValue = [];
+    _filtersValue = {};
 
     @track _flatRows = [];
     @track _startIndex = 0;
@@ -38,6 +38,28 @@ export default class MetaMapperTree extends LightningElement {
     _childrenMap = new Map();
     _hasRendered = false;
     _isMounted = false;
+    _searchDebounceTimer = null;
+
+    // Reactive setters (finding #8): the Tree/Graph sync spec requires the tree to react to
+    // parent/node and filter changes after initial mount, not just at connectedCallback time.
+    // Mirrors the pattern used by metaMapperGraph.js for its equivalent @api props.
+    @api
+    get nodes() {
+        return this._nodesValue;
+    }
+    set nodes(val) {
+        this._nodesValue = val || [];
+        this._rebuild();
+    }
+
+    @api
+    get filters() {
+        return this._filtersValue;
+    }
+    set filters(val) {
+        this._filtersValue = val || {};
+        this._rebuild();
+    }
 
     @api
     get selectedNodeId() {
@@ -64,6 +86,7 @@ export default class MetaMapperTree extends LightningElement {
     disconnectedCallback() {
         this._isMounted = false;
         this._contextMenu = null;
+        clearTimeout(this._searchDebounceTimer);
     }
 
     renderedCallback() {
@@ -76,8 +99,6 @@ export default class MetaMapperTree extends LightningElement {
             this.dispatchEvent(new CustomEvent('tabready'));
         }
     }
-
-    // --- @api nodes setter path via reactive getters ---
 
     get _effectiveNodes() {
         return this.nodes || [];
@@ -149,7 +170,6 @@ export default class MetaMapperTree extends LightningElement {
         );
         const hasChildren = childList.length > 0;
         const isExpanded = this._expandedIds.has(n.Metadata_Id__c);
-        const isSelected = n.Metadata_Id__c === this._selectedNodeId;
 
         let ariaExpanded;
         if (hasChildren) {
@@ -157,26 +177,52 @@ export default class MetaMapperTree extends LightningElement {
         }
 
         const indentPx = depth * 20;
+        const label = n.Metadata_Name__c || '';
 
+        // Selection (isSelected/ariaSelected/rowClass) is intentionally NOT baked in here -
+        // see visibleRows getter (finding #22). Baking selection into every row would require
+        // a full _rebuildFlatRows() on every click, an O(n) cost over up to 10,000+ nodes for
+        // what is just a flag flip on the currently visible slice.
         return {
             Id: n.Metadata_Id__c,
             Metadata_Id__c: n.Metadata_Id__c,
-            Metadata_Name__c: n.Metadata_Name__c,
+            Metadata_Name__c: label,
+            nameSegments: this._buildNameSegments(label),
             Metadata_Type__c: n.Metadata_Type__c,
             Dependency_Depth__c: depth,
             Is_Circular__c: n.Is_Circular__c,
             Is_Dynamic_Reference__c: n.Is_Dynamic_Reference__c,
             ariaLevel: depth + 1,
             ariaExpanded,
-            ariaSelected: isSelected ? 'true' : 'false',
-            isSelected,
             hasChildren,
             isExpanded,
             icon: getIcon(n.Metadata_Type__c),
             indentStyle: `padding-left: ${indentPx}px`,
-            rowClass: `tree-row${isSelected ? ' row-selected' : ''}`,
             _raw: n
         };
+    }
+
+    // Splits a node label into {key, text, isMatch} segments around the current search term
+    // (case-insensitive) so the template can wrap the matched segment in <mark>. Finding #4:
+    // the search box was spec'd to visually highlight matches but never actually rendered any.
+    _buildNameSegments(label) {
+        const term = this._searchTerm;
+        if (!term) {
+            return [{ key: 'seg-0', text: label, isMatch: false }];
+        }
+        const idx = label.toLowerCase().indexOf(term.toLowerCase());
+        if (idx === -1) {
+            return [{ key: 'seg-0', text: label, isMatch: false }];
+        }
+        const segments = [];
+        if (idx > 0) {
+            segments.push({ key: 'seg-pre', text: label.slice(0, idx), isMatch: false });
+        }
+        segments.push({ key: 'seg-match', text: label.slice(idx, idx + term.length), isMatch: true });
+        if (idx + term.length < label.length) {
+            segments.push({ key: 'seg-post', text: label.slice(idx + term.length), isMatch: false });
+        }
+        return segments;
     }
 
     _computeWindow() {
@@ -201,10 +247,16 @@ export default class MetaMapperTree extends LightningElement {
     }
 
     get visibleRows() {
-        return this._flatRows.slice(this._startIndex, this._endIndex).map((row, i) => ({
-            ...row,
-            tabIndex: (this._startIndex + i) === this._activeIndex ? '0' : '-1'
-        }));
+        return this._flatRows.slice(this._startIndex, this._endIndex).map((row, i) => {
+            const isSelected = row.Metadata_Id__c === this._selectedNodeId;
+            return {
+                ...row,
+                tabIndex: (this._startIndex + i) === this._activeIndex ? '0' : '-1',
+                isSelected,
+                ariaSelected: isSelected ? 'true' : 'false',
+                rowClass: `tree-row${isSelected ? ' row-selected' : ''}`
+            };
+        });
     }
 
     get hasSearchTerm() {
@@ -233,21 +285,30 @@ export default class MetaMapperTree extends LightningElement {
     // --- Event handlers ---
 
     handleSearch(event) {
-        this._searchTerm = event.target.value || '';
-        try {
-            sessionStorage.setItem(SEARCH_SESSION_KEY, this._searchTerm);
-        } catch {
-            // unavailable
-        }
-        // A search term change never alters parent/child relationships or node identity, so
-        // only the flat row list needs rebuilding - not the full node/children maps (which
-        // re-buckets and re-sorts every node by parent, an O(n log n) cost with no bearing
-        // on the search result).
-        this._rebuildFlatRows();
-        this._computeWindow();
+        // Debounced 250ms, mirroring metaMapperGraph.js's handleGraphSearch: an undebounced
+        // per-keystroke call re-filters and re-flattens the tree on every character typed -
+        // expensive on large trees (finding #21).
+        const value = event.target.value || '';
+        clearTimeout(this._searchDebounceTimer);
+        this._searchDebounceTimer = setTimeout(() => {
+            if (!this._isMounted) return;
+            this._searchTerm = value;
+            try {
+                sessionStorage.setItem(SEARCH_SESSION_KEY, this._searchTerm);
+            } catch {
+                // unavailable
+            }
+            // A search term change never alters parent/child relationships or node identity, so
+            // only the flat row list needs rebuilding - not the full node/children maps (which
+            // re-buckets and re-sorts every node by parent, an O(n log n) cost with no bearing
+            // on the search result).
+            this._rebuildFlatRows();
+            this._computeWindow();
+        }, 250);
     }
 
     handleClearSearch() {
+        clearTimeout(this._searchDebounceTimer);
         this._searchTerm = '';
         try {
             sessionStorage.setItem(SEARCH_SESSION_KEY, '');
@@ -266,8 +327,10 @@ export default class MetaMapperTree extends LightningElement {
         const nodeId = event.currentTarget.dataset.nodeId;
         const row = this._flatRows.find(r => r.Metadata_Id__c === nodeId);
         if (!row) return;
+        // Selection is a plain reactive field, not baked into _flatRows (finding #22) -
+        // visibleRows derives isSelected/ariaSelected/rowClass for the visible slice only,
+        // so no full O(n) rebuild is needed here.
         this._selectedNodeId = nodeId;
-        this._rebuildFlatRows();
         this.dispatchEvent(new CustomEvent('nodeselected', {
             detail: { nodeId, node: row._raw }
         }));
@@ -411,8 +474,9 @@ export default class MetaMapperTree extends LightningElement {
             event.preventDefault();
             const row = this._flatRows[this._activeIndex];
             if (row) {
+                // See handleRowClick: selection is a plain reactive field, not baked into
+                // _flatRows - no full rebuild needed (finding #22).
                 this._selectedNodeId = row.Metadata_Id__c;
-                this._rebuildFlatRows();
                 this.dispatchEvent(new CustomEvent('nodeselected', {
                     detail: { nodeId: row.Metadata_Id__c, node: row._raw }
                 }));
@@ -561,9 +625,9 @@ export default class MetaMapperTree extends LightningElement {
         ancestors.forEach(id => this._expandedIds.add(id));
     }
 
-    // Watch for external prop changes - LWC does not have computed setters for @api arrays
-    // so we use a getter-based approach: rebuild when visibleRows is accessed if dirty.
-    // For simplicity we expose a public method the parent can call.
+    // Public escape hatch retained for callers that want to force a rebuild without a prop
+    // reassignment. Not required for reactivity - the `nodes`/`filters` setters above (finding
+    // #8) already rebuild automatically on every prop change.
     @api
     refresh() {
         this._rebuild();

@@ -10,7 +10,9 @@ const TYPE_COLORS = {
     Flow: '#1b5297',
     CustomField: '#2e844a',
     ValidationRule: '#ba0517',
-    WorkflowRule: '#dd7a01',
+    // Darkened from #dd7a01 to #b35a00 for WCAG AA 4.5:1 label-text contrast on
+    // #FFFFFF (light theme) - see setup/CONTRAST_MATRIX.md "Light Background" fixes.
+    WorkflowRule: '#b35a00',
     Report: '#444444',
 };
 const DEFAULT_COLOR = '#3e3e3c';
@@ -108,6 +110,10 @@ export default class MetaMapperGraph extends LightningElement {
     // Virtual focus index — tracks keyboard focus position within the canvas (WCAG 2.1 SC 2.1.1).
     _activeNodeIndex = -1;
     _orderedNodeIds = [];
+    // Maps Metadata_Id__c -> ECharts series dataIndex for the currently rendered option.
+    // Rebuilt on every full _renderGraph() so _moveVirtualFocus() can move the focus ring
+    // via dispatchAction without triggering a full rebuild on every arrow-key press.
+    _nodeIdToDataIndex = new Map();
 
     // ---- lifecycle ----
 
@@ -303,6 +309,7 @@ export default class MetaMapperGraph extends LightningElement {
                 const searchInput = this.template.querySelector('.graph-search-input');
                 if (searchInput) {
                     searchInput.focus();
+                    searchInput.select();
                 }
             } else if (e.shiftKey && e.key === '?') {
                 e.preventDefault();
@@ -383,6 +390,9 @@ export default class MetaMapperGraph extends LightningElement {
         if (!this._chart) return;
         const visible = this._getVisibleNodes();
         this._nodeMap = new Map(visible.map((n) => [n.Metadata_Id__c, n]));
+        // dataIndex order mirrors _buildOption()'s visibleNodes.map() below - used by
+        // _moveVirtualFocus() to move the focus ring via dispatchAction without a full rebuild.
+        this._nodeIdToDataIndex = new Map(visible.map((n, i) => [n.Metadata_Id__c, i]));
         // Rebuild ordered node list for virtual focus traversal (depth ASC, then name ASC for
         // deterministic arrow-key order regardless of force-layout position) - but only when the
         // visible node set actually changed. Arrow-key focus movement and search-highlight
@@ -438,6 +448,10 @@ export default class MetaMapperGraph extends LightningElement {
             this._activeNodeIndex >= 0 && this._activeNodeIndex < this._orderedNodeIds.length
                 ? this._orderedNodeIds[this._activeNodeIndex]
                 : null;
+        // Dark theme requires white label text for WCAG AA 4.5:1 - see setup/CONTRAST_MATRIX.md
+        // "Recommended approach for dark mode". Light theme keeps the per-type color as the
+        // label color (already passes 4.5:1 for every type once WorkflowRule was darkened).
+        const isDarkTheme = document.body.classList.contains('slds-theme_inverse');
 
         const echartsNodes = visibleNodes.map((n) => {
             const baseColor = TYPE_COLORS[n.Metadata_Type__c] || DEFAULT_COLOR;
@@ -460,7 +474,10 @@ export default class MetaMapperGraph extends LightningElement {
                 borderWidth = 4;
             } else if (isSelected || isHighlighted) {
                 borderColor = '#FFB81C';
-                borderWidth = isSelected ? 3 : 2;
+                // Search-highlight border width per CLAUDE.md Accessibility spec:
+                // "borderWidth: 3 ... On mobile, borderWidth: 2." Selection border stays 3
+                // regardless of viewport - only the search-match-only highlight is mobile-scaled.
+                borderWidth = isSelected ? 3 : (this.isMobile ? 2 : 3);
             } else {
                 borderColor = baseColor;
                 borderWidth = n.Is_Circular__c ? 2 : 1;
@@ -478,7 +495,7 @@ export default class MetaMapperGraph extends LightningElement {
             return {
                 id: n.Metadata_Id__c,
                 name: n.Metadata_Name__c || '',
-                label: { show: true },
+                label: { show: true, color: isDarkTheme ? '#FFFFFF' : baseColor },
                 itemStyle: {
                     color: baseColor,
                     opacity,
@@ -912,6 +929,8 @@ export default class MetaMapperGraph extends LightningElement {
 
     _moveVirtualFocus(delta) {
         if (!this._orderedNodeIds.length) return;
+        const prevNodeId =
+            this._activeNodeIndex >= 0 ? this._orderedNodeIds[this._activeNodeIndex] : null;
         if (this._activeNodeIndex < 0) {
             // First arrow key press: always start at the root (index 0) regardless of direction.
             this._activeNodeIndex = 0;
@@ -921,8 +940,23 @@ export default class MetaMapperGraph extends LightningElement {
                 Math.min(this._orderedNodeIds.length - 1, this._activeNodeIndex + delta)
             );
         }
-        this._renderGraph();
         const nodeId = this._orderedNodeIds[this._activeNodeIndex];
+        // Perf: move only the visual focus ring via dispatchAction instead of a full
+        // _renderGraph() rebuild - a full rebuild on every arrow-key press caused visible lag
+        // on large graphs (near the 8,000-node threshold). The ARIA table does not need to
+        // change on a focus-only move (its content reflects the visible node set, not which
+        // node has keyboard focus), so skipping _renderGraph() also correctly skips its debounced
+        // rebuild. The aria-live announcement below still fires so screen readers hear the move.
+        if (this._chart) {
+            const prevDataIndex = prevNodeId != null ? this._nodeIdToDataIndex.get(prevNodeId) : undefined;
+            const nextDataIndex = this._nodeIdToDataIndex.get(nodeId);
+            if (prevDataIndex !== undefined && prevDataIndex !== nextDataIndex) {
+                this._chart.dispatchAction({ type: 'downplay', seriesIndex: 0, dataIndex: prevDataIndex });
+            }
+            if (nextDataIndex !== undefined) {
+                this._chart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: nextDataIndex });
+            }
+        }
         const node = this._nodeMap.get(nodeId);
         if (node) {
             const flags = [];

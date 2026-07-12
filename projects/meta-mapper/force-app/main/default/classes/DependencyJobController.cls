@@ -453,15 +453,15 @@ public with sharing class DependencyJobController {
                 FROM Metadata_Scan_Job__c
                 WHERE Id = :jobId
                 WITH USER_MODE
-                FOR UPDATE
                 LIMIT 1
+                FOR UPDATE
             ];
             if (jobs.isEmpty()) {
                 throw new DependencyJobException('Job not found or you do not have access to it.');
             }
             String currentStatus = jobs[0].Status__c;
             if (currentStatus == 'Completed' || currentStatus == 'Failed' || currentStatus == 'Cancelled') {
-                return; // Already terminal — nothing to cancel.
+                return; // Already terminal - nothing to cancel.
             }
             Metadata_Scan_Job__c job = new Metadata_Scan_Job__c(
                 Id        = jobId,
@@ -509,16 +509,18 @@ public with sharing class DependencyJobController {
             Schema.sObjectType.Metadata_Scan_Job__c.fields.getMap();
         if (!fieldMap.get('Status__c').getDescribe().isUpdateable()
             || !fieldMap.get('Batch_Size_Override__c').getDescribe().isUpdateable()
-            || !fieldMap.get('Last_Progress_Cycle__c').getDescribe().isUpdateable()) {
+            || !fieldMap.get('Last_Progress_Cycle__c').getDescribe().isUpdateable()
+            || !fieldMap.get('Pause_Reason__c').getDescribe().isUpdateable()) {
             throw new DependencyJobException(
                 'Unable to resume: your permission set lacks field-level edit access to '
-                + 'Status__c, Batch_Size_Override__c, or Last_Progress_Cycle__c. '
+                + 'Status__c, Batch_Size_Override__c, Last_Progress_Cycle__c, or Pause_Reason__c. '
                 + 'Ask your admin to verify these fields are editable in the MetaMapper_Admin permission set.'
             );
         }
 
         job.Status__c              = 'Processing';
         job.Batch_Size_Override__c = overrideBatchSize;
+        job.Pause_Reason__c        = null;
         // Reset the stall counter so the first post-resume execution does not
         // immediately re-trigger stall detection. Without this reset, a job paused
         // by stall detection has (Total - LastSuccess) >= threshold already; the

@@ -44,7 +44,14 @@ export default class MetaMapperSearch extends LightningElement {
 
     _typeaheadTimer = null;
     _complexityTimer = null;
+    _blurCloseTimer = null;
     _focusedTypeaheadIdx = -1;
+
+    disconnectedCallback() {
+        clearTimeout(this._typeaheadTimer);
+        clearTimeout(this._complexityTimer);
+        clearTimeout(this._blurCloseTimer);
+    }
 
     get showTargetObject() { return this.selectedType === 'CustomField'; }
 
@@ -102,7 +109,8 @@ export default class MetaMapperSearch extends LightningElement {
     }
 
     handleTargetObjectBlur() {
-        setTimeout(() => { this.typeaheadOpen = false; this._resetTypeaheadFocus(); }, 150);
+        clearTimeout(this._blurCloseTimer);
+        this._blurCloseTimer = setTimeout(() => { this.typeaheadOpen = false; this._resetTypeaheadFocus(); }, 150);
         if (this.showTargetObject && !this.targetObject.trim()) {
             this.targetObjectError = 'Enter the API name of the parent object (e.g. Account).';
         }

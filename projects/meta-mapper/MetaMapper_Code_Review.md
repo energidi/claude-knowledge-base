@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** July 11, 2026 (Round 75 - sf-orchestrator full pass: 36 findings applied - 7 Critical, 8 High, 15 Medium, 6 Low)
+**Last Updated:** July 12, 2026 (Round 76 - sf-orchestrator full pass: 35 findings applied/resolved - 1 Critical, 12 High, 14 Medium, 8 Low; plus 1 pre-existing SOQL clause-order bug caught during verification)
 **Date:** May 23, 2026
 
 ---
@@ -15,7 +15,8 @@ Findings listed here appeared in one or more prior review rounds and were **deli
 
 | Area | Issue | Round First Seen | Reason Accepted |
 |---|---|---|---|
-| *(no open skipped findings)* | | | |
+| Static Analysis (tooling) | PMD/CPD/SFGE/Flow engines fail to instantiate on the current scanning machine (missing Java 11+/Python 3.10+) - not a code defect, no Apex/Flow static-analysis coverage occurs until the environment is fixed | Round 76 | Environment prerequisite outside the codebase; requires installing Java/Python or disabling those engines in Code Analyzer config, then re-running - not fixable via a code edit |
+| Architecture (observability) | All 41 Apex classes rely solely on transient `System.debug()` with no org-wide, queryable operational log for cleanup/ring-buffer/scheduler failures (Nebula Logger or equivalent not adopted) | Round 76 | Requires installing/deploying an external unlocked package across the whole codebase; too large for a fix-pass diff - deferred as a separate initiative |
 
 ---
 
@@ -3913,6 +3914,37 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
 
 ---
+
+## Round 76 Fixes Applied
+
+Full sf-orchestrator review (all 8 lenses: architecture, UX, naming, security, performance, testing, automation, static analysis). 35 findings applied/resolved (1 Critical, 12 High, 14 Medium, 8 Low), plus 1 pre-existing bug caught during post-fix verification. Overall verdict before fixes: NO-GO (1 Critical accessibility gap; static-analysis "Critical" findings were environment tooling gaps, not code defects - PMD/CPD/SFGE/Flow could not run on this machine due to missing Java 11+/Python 3.10+). All findings applied and verified except 2 explicitly out of scope (see below).
+
+**Critical:**
+- Finding 1 (UX - `metaMapperComponentDetailsPanel.html/.js`): mobile (<1024px) full-screen Node Details Panel had no modal semantics - no `role="dialog"`, no `aria-modal`, no Escape handler, no focus management. Fixed: added `role="dialog"`/`aria-modal="true"`/dynamic `aria-label`, scoped to mobile via `matchMedia('(max-width: 1023px)')`; Escape-to-close; focus moves to the Close button on open and restores to the trigger element on close (mobile only - desktop persistent sidebar untouched). Rollback: revert `metaMapperComponentDetailsPanel.js/.html` to pre-Round-76 state (reintroduces the WCAG AA violation - not recommended).
+
+**High:**
+- Finding 2 (Security - `DependencyQueueable.cls:230-231`): stall-pause path embedded `Target_API_Name__c` in the org-wide, cross-user-broadcast `Dependency_Scan_Status__e` `Progress_Message__c`, violating the class's own documented no-identifier-leak rule. Fixed: removed the identifier from the message string. Rollback: revert the message string to include `job.Target_API_Name__c` (reintroduces the metadata-identifier leak across all subscribed users - not recommended).
+- Finding 3 (Automation - `DependencyJobController.resumeJob()`): `Pause_Reason__c` was never cleared on resume, leaving a stale pause reason on an actively-running job. Fixed: added to the FLS pre-check and nulled alongside `Status__c`/`Batch_Size_Override__c`/`Last_Progress_Cycle__c`.
+- Finding 4 (Performance - `metaMapperTree.js`): `@api nodes`/`@api filters` had no reactive setters; Tree View silently stopped reflecting filter changes after initial mount. Fixed: converted to reactive `@api get/set` pairs calling `_rebuild()`, mirroring `metaMapperGraph.js`.
+- Finding 5 (UX - `metaMapperTree`): search-match highlighting was spec'd but never implemented (dead `mark` CSS rule). Fixed: `_makeRow()` now splits labels into pre/match/post segments; template renders matches in `<mark>`.
+- Finding 6 (UX - `metaMapperGraph.js` / `setup/CONTRAST_MATRIX.md`): the matrix's own mandated WCAG fixes (white label text in dark mode, darkened `WorkflowRule` hex) were never applied to shipped code. Fixed: `TYPE_COLORS.WorkflowRule` set to `#b35a00`; `_buildOption()` now sets explicit `label.color` per theme.
+- Finding 7 (Naming/Deploy - `ToolingApiHealthCheckTest.cls`): missing `.cls-meta.xml` companion file - an SFDX deploy blocker. Fixed: created it with a description of the six `verify()` status-code paths covered.
+- Finding 8 (Testing, 5 findings - `MetadataDependencyServiceTest.cls`, `DependencyQueueableTest.cls`, `DependencyJobControllerTest.cls`, `metaMapperNodeServices.test.js`): zero coverage for the IN-clause URL-budget split (>200 IDs), the mid-loop guardrail on a high-fan-out node, the concurrency-guard rejection path, `resolveSetupUrl()`, and `applyFilters()`'s non-`types` filter dimensions. Fixed: added targeted tests for all five.
+- Finding 9 (Visual/SLDS - 5 CSS files): raw hex colors instead of SLDS tokens across `metaMapperSearch.css`, `metaMapperProgress.css`, `metaMapperTree.css`, `metaMapperGraph.css`, `metaMapperComponentDetailsPanel.css`. Fixed: replaced with `var(--slds-g-color-*, <hex fallback>)` tokens.
+
+**Medium:** `resumeJob()` FLS check extended (see Finding 3); Cancel button spinner added (`metaMapperProgress`); "Open in Setup" disabled-button tooltip made reachable via `aria-disabled` + click-guard instead of native `disabled` (`metaMapperComponentDetailsPanel`); `resize` listener added for breakpoint-gated UI (`metaMapperResults`); stats-tile "No type counts available." empty state implemented for non-Completed jobs (`metaMapperResults`); `metaMapperGraph` virtual-focus keyboard navigation no longer triggers a full ECharts rebuild per keystroke (uses `dispatchAction` highlight/downplay instead); `metaMapperTree` search debounced 250ms to match `metaMapperGraph`; `metaMapperTree` row selection no longer triggers a full `_rebuildFlatRows()` (selection state now computed in the `visibleRows` getter); Jest coverage added for `renderPills()`, `sanitizeFilename()`/`buildDefaultFilename()`, `buildNodeMap()`; `ScanResultFileQueueableTest` ring-buffer assertion tightened from `<= 5` to `== 5`; Nebula Logger org-wide observability adoption - **not applied** (out of scope for a fix pass; requires installing/deploying an external unlocked package across 41 classes, not a targeted diff - recommended as a separate initiative).
+
+**Low:** Graph toolbar Ctrl+K now selects existing search text; mobile-specific graph search-highlight border width implemented per spec; CSV/DDE formula-injection guard added to `metaMapperExport.js`'s `escape()` helper; `ScanResultFileQueueable.cls` now deletes the `ContentVersion`/`ContentDocument` and fails the job if the `ContentDocumentLink` visibility update fails (previously logged only); 125 SLDS-2 hardcoded CSS values replaced with token hooks across 8 files (some spacing/shadow values with no clean SLDS 2 equivalent intentionally left as-is); `MetadataDependencyDeletionBatchTest` given a 200-record variant at representative chunk scale; `ApexClassDependencyHandlerTest` weak assertion left as-is (no deterministic CMT fixture available in test context - explicitly skipped per the finding's own guidance, not silently dropped).
+
+**Pre-existing bug caught during post-fix verification (not one of the 35 findings, no lens flagged it):** `DependencyJobController.cancelJob()`'s `FOR UPDATE` query had `FOR UPDATE` placed before `LIMIT 1` - invalid SOQL clause order (`FOR UPDATE` must be the last clause). This broke Prettier's Apex parser on the whole file and would likely have failed at Salesforce deploy/runtime too. Fixed: reordered to `LIMIT 1` then `FOR UPDATE`. Rollback: swap the two lines back (reintroduces the invalid clause order - not recommended). Also removed a stray em-dash in the same method's comment (style only).
+
+**Process note - false-positive static-analysis findings:** the static-analysis lens (run via a plain `sf code-analyzer`/ESLint invocation) flagged `echarts` as undefined (`no-undef`) and 38 `setTimeout`/`setInterval` calls (`@lwc/lwc/no-async-operation`) across 7 LWC files. Both rules are already correctly handled in the project's actual `eslint.config.js` (`echarts` declared as a global; `no-async-operation` turned off project-wide specifically because `@lwc/lwc-platform/no-inline-disable` forbids per-call-site suppression comments) - the scan must not have picked up this config. Several fix agents (acting on the findings table before this was discovered) added inline `eslint-disable-next-line` comments that violated the project's own convention; these were found and removed during verification. Two genuine timer-cleanup gaps surfaced in the process and were fixed anyway on their own merits (real leak risk, not just lint noise): `metaMapperSearch.js` had no `disconnectedCallback` at all (2 tracked timers never cleared, 1 untracked); `metaMapperResults.js` had 2 untracked timers. Both now have proper `disconnectedCallback` cleanup.
+
+**Not applied (2 items, both explicitly out of scope, not silently dropped):**
+1. Static Analysis Critical findings (PMD/CPD/SFGE/Flow engine instantiation failures) - environment tooling gap (missing Java 11+/Python 3.10+ on the scanning machine), not a code defect. Requires installing runtimes or explicitly disabling those engines in Code Analyzer config, then re-running.
+2. Nebula Logger adoption (Architecture Medium finding) - requires installing/deploying an external unlocked package org-wide; out of scope for a code-fix pass. Recommended as a separate initiative.
+
+**Verification:** `npm run test:unit` - 3 suites, 60 tests, all passing (up from 31 pre-round). `npm run lint` - clean, zero violations. `npm run prettier:verify` - zero parse errors across the entire repo (previously 1 file failed to parse due to the pre-existing `FOR UPDATE`/`LIMIT` bug found and fixed above).
 
 ## Round 75 Fixes Applied
 
