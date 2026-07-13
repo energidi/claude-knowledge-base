@@ -191,7 +191,7 @@ export default class MetaMapperGraph extends LightningElement {
         if (!window.echarts) return;
         try {
             if (!this._themeRegistered) {
-                echarts.registerTheme('sfDark', {
+                window.echarts.registerTheme('sfDark', {
                     backgroundColor: '#1B1B1B',
                     textStyle: { color: '#FFFFFF' },
                 });
@@ -200,7 +200,7 @@ export default class MetaMapperGraph extends LightningElement {
             const container = this.template.querySelector('.graph-canvas-wrapper');
             if (!container) return;
             const isDark = document.body.classList.contains('slds-theme_inverse');
-            this._chart = echarts.init(container, isDark ? 'sfDark' : null);
+            this._chart = window.echarts.init(container, isDark ? 'sfDark' : null);
             this._chartReady = true;
 
             this._chart.on('click', (params) => {
@@ -375,17 +375,39 @@ export default class MetaMapperGraph extends LightningElement {
         if (this._collapsedNodes.size === 0 && this._maxVisibleDepth >= 9999) {
             return filtered;
         }
-        const nm = new Map(filtered.map((n) => [n.Metadata_Id__c, n]));
+        if (this._collapsedNodes.size === 0) {
+            return filtered.filter((n) => (n.Dependency_Depth__c || 0) <= this._maxVisibleDepth);
+        }
+        // Memoized bottom-up collapse-visibility, replacing the prior per-node ancestor walk
+        // (O(n) instead of O(n x depth)); invalidated only when the filtered set or collapsed
+        // set actually changes (finding #6).
+        const currentSignature =
+            filtered.map((n) => n.Metadata_Id__c).join(',') +
+            '|' +
+            Array.from(this._collapsedNodes).sort().join(',');
+        if (currentSignature !== this._collapseHiddenSignature) {
+            this._collapseHiddenCache = this._computeCollapseHiddenSet(filtered);
+            this._collapseHiddenSignature = currentSignature;
+        }
+        const hiddenByCollapse = this._collapseHiddenCache;
         return filtered.filter((n) => {
             if ((n.Dependency_Depth__c || 0) > this._maxVisibleDepth) return false;
-            if (this._collapsedNodes.size === 0) return true;
-            let cur = n;
-            while (cur && cur.Parent_Dependency__c) {
-                if (this._collapsedNodes.has(cur.Parent_Dependency__c)) return false;
-                cur = nm.get(cur.Parent_Dependency__c);
-            }
-            return true;
+            return !hiddenByCollapse.has(n.Metadata_Id__c);
         });
+    }
+
+    _computeCollapseHiddenSet(filtered) {
+        const hidden = new Set();
+        const sorted = filtered
+            .slice()
+            .sort((a, b) => (a.Dependency_Depth__c || 0) - (b.Dependency_Depth__c || 0));
+        sorted.forEach((n) => {
+            const parentId = n.Parent_Dependency__c;
+            if (parentId && (this._collapsedNodes.has(parentId) || hidden.has(parentId))) {
+                hidden.add(n.Metadata_Id__c);
+            }
+        });
+        return hidden;
     }
 
     // ---- render ----
@@ -672,7 +694,9 @@ export default class MetaMapperGraph extends LightningElement {
             this._searchHighlights = null;
         } else {
             const lower = term.toLowerCase();
-            const visible = this._getVisibleNodes();
+            // Reuse the cache from the last _renderGraph() pass instead of recomputing
+            // (search term doesn't change which nodes are visible, only highlighting) (finding #15).
+            const visible = this._lastVisibleNodes || this._getVisibleNodes();
             this._searchHighlights = new Set(
                 visible
                     .filter((n) => (n.Metadata_Name__c || '').toLowerCase().includes(lower))
@@ -779,7 +803,9 @@ export default class MetaMapperGraph extends LightningElement {
     handleExpandAll() {
         this._expandAllTriggerEl = this.template.activeElement
             || this.template.querySelector('[data-id="expand-all-btn"]');
-        const visible = this._getVisibleNodes();
+        // Reuse the cache from the last _renderGraph() pass - it already reflects current
+        // filters/collapsed-state since _renderGraph() is the sole invalidation point (finding #15).
+        const visible = this._lastVisibleNodes || this._getVisibleNodes();
         if (visible.length > 1000) {
             this._expandAllModal = {
                 count: visible.length,

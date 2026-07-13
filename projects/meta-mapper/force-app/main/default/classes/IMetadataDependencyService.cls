@@ -43,11 +43,11 @@ public interface IMetadataDependencyService {
     Integer computeScore(String handlerType, String matchBasis);
 
     /**
-     * When fetchContext.activeFlowsOnly is true, removes Flow nodes from results whose
+     * When fetchContext.isActiveFlowsOnly is true, removes Flow nodes from results whose
      * DeveloperName has no active version in the org (ActiveVersionId = null on FlowDefinition).
      * Makes one Tooling API callout for all Flow names in the result map.
      * Fail-open: on any callout failure all Flow nodes are retained and an error is recorded.
-     * No-op when fetchContext.activeFlowsOnly is false.
+     * No-op when fetchContext.isActiveFlowsOnly is false.
      */
     void filterInactiveFlows(
         Map<String, List<Metadata_Dependency__c>> results, DependencyFetchContext fetchContext);

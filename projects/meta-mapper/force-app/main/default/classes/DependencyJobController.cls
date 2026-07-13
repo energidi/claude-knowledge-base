@@ -245,7 +245,7 @@ public with sharing class DependencyJobController {
                 SELECT COUNT()
                 FROM MetadataComponentDependency
                 WHERE RefMetadataComponentId IN (
-                    SELECT Id
+                    SELECT MetadataComponentId
                     FROM MetadataComponentDependency
                     WHERE MetadataComponentId.Name = :apiName // bind variable prevents SOQL injection on user-supplied input
                 )

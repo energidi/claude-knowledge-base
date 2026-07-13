@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Pause_Reason__c</fullName>
-    <description>Machine-readable reason the scan was paused. Allows the LWC to display the correct banner message without parsing Scan_Diagnostic_Log__c. NodeCapReached = scan hit Max_Components__c limit. StallDetected = engine detected repeated cycles with no new nodes found. Set by the engine only when transitioning Status to Paused. Null for non-Paused jobs. Do not edit manually.</description>
+    <description>Machine-readable reason the scan was paused. Allows the LWC to display the correct banner message without parsing Scan_Diagnostic_Log__c. ComponentLimitReached = scan hit Max_Components__c limit. StallDetected = engine detected repeated cycles with no new nodes found. Set by the engine only when transitioning Status to Paused. Null for non-Paused jobs. Do not edit manually.</description>
     <externalId>false</externalId>
     <label>Pause Reason</label>
     <required>false</required>
@@ -12,9 +12,9 @@
         <valueSetDefinition>
             <sorted>false</sorted>
             <value>
-                <fullName>NodeCapReached</fullName>
+                <fullName>ComponentLimitReached</fullName>
                 <default>false</default>
-                <label>Node Cap Reached</label>
+                <label>Component Limit Reached</label>
             </value>
             <value>
                 <fullName>StallDetected</fullName>

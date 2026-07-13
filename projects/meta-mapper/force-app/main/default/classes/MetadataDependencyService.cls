@@ -190,7 +190,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
     /**
      * Parses one page of Tooling API results and follows QueryMore links iteratively.
      * queryMoreDepth tracks how many follow-up pages have been fetched so far;
-     * exceeding MAX_QUERY_MORE_PAGES sets fetchContext.queryMoreFailed = true and stops.
+     * exceeding MAX_QUERY_MORE_PAGES sets fetchContext.hasQueryMoreFailed = true and stops.
      */
     private Map<String, List<Metadata_Dependency__c>> parseAndFollowQueryMore(
         String responseBody, DependencyFetchContext fetchContext, Boolean isFirstPage, Integer queryMoreDepth
@@ -208,18 +208,18 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         } catch (Exception e) {
             // Page 2+ failure: page-1 results are already in the map, so fetchWithRetry's
             // result.isEmpty() check will not fire and failedParentMetaIds will not be populated.
-            // Setting queryMoreFailed prevents Step 15 from marking the parent as fully fetched,
+            // Setting hasQueryMoreFailed prevents Step 15 from marking the parent as fully fetched,
             // ensuring it is re-queried next execution rather than silently dropping page 2+ deps.
             // Page 1 failure: result is empty; fetchWithRetry's error-count delta check fires
-            // and populates failedParentMetaIds directly, so queryMoreFailed is not needed.
+            // and populates failedParentMetaIds directly, so hasQueryMoreFailed is not needed.
             if (!isFirstPage) {
-                // queryMoreFailed = true prevents Step 15 from marking ANY parent as fully fetched
+                // hasQueryMoreFailed = true prevents Step 15 from marking ANY parent as fully fetched
                 // (Has_Fetched_Dependencies__c = true) for this execution. The parent will be re-queried
                 // from scratch on the next execution. Page-1 children already inserted will be
                 // deduplicated via Unique_Component_Key__c External ID upsert - no data loss.
                 // failedParentMetaIds is not populated here because ids is not in scope; the
-                // queryMoreFailed flag is the authoritative re-queue signal for page-2+ failures.
-                fetchContext.queryMoreFailed = true;
+                // hasQueryMoreFailed flag is the authoritative re-queue signal for page-2+ failures.
+                fetchContext.hasQueryMoreFailed = true;
             }
             fetchContext.addError('MetadataDependencyService: JSON parse failure - ' + e.getMessage());
             return results;
@@ -270,7 +270,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
     ) {
         // Page cap: one high-fan-out parent must not consume the entire callout budget
         // across recursive pages. Accept partial results and mark the parent as fetched;
-        // setting queryMoreFailed here would prevent the parent from ever being marked
+        // setting hasQueryMoreFailed here would prevent the parent from ever being marked
         // Has_Fetched_Dependencies__c = true, causing an infinite re-queue loop.
         if (depth >= MAX_QUERY_MORE_PAGES) {
             fetchContext.addError('MetadataDependencyService: QueryMore page cap ('
@@ -279,9 +279,9 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         }
 
         // Callout budget guard: reserve 2 for this call + safety buffer.
-        // Setting queryMoreFailed prevents the parent from being marked as fully fetched.
+        // Setting hasQueryMoreFailed prevents the parent from being marked as fully fetched.
         if ((Limits.getLimitCallouts() - Limits.getCallouts()) < 2) {
-            fetchContext.queryMoreFailed = true;
+            fetchContext.hasQueryMoreFailed = true;
             fetchContext.addError('MetadataDependencyService: QueryMore skipped - callout budget below 2. '
                 + 'Some dependencies may be missing from this batch.');
             return new Map<String, List<Metadata_Dependency__c>>();
@@ -320,19 +320,19 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
                 return parseAndFollowQueryMore(body, fetchContext, false, depth + 1);
             }
             // Any non-200 QueryMore response means the child list is incomplete.
-            // Set queryMoreFailed so the engine does not mark the parent as fully fetched.
+            // Set hasQueryMoreFailed so the engine does not mark the parent as fully fetched.
             if (res.getStatusCode() == 400 && body.containsIgnoreCase('INVALID_QUERY_LOCATOR')) {
-                fetchContext.queryMoreFailed = true;
+                fetchContext.hasQueryMoreFailed = true;
                 fetchContext.addError('MetadataDependencyService: QueryMore cursor expired. '
                     + 'Batch will be re-queried on next execution.');
             } else {
-                fetchContext.queryMoreFailed = true;
+                fetchContext.hasQueryMoreFailed = true;
                 fetchContext.addError('MetadataDependencyService: QueryMore HTTP '
                     + res.getStatusCode() + '. Some dependencies may be missing.');
             }
         } catch (Exception e) {
             // Network or parse failure: child list is incomplete; prevent silent full-fetch mark.
-            fetchContext.queryMoreFailed = true;
+            fetchContext.hasQueryMoreFailed = true;
             fetchContext.addError('MetadataDependencyService: QueryMore exception - ' + e.getMessage());
         }
         return new Map<String, List<Metadata_Dependency__c>>();
@@ -404,7 +404,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
     public void filterInactiveFlows(
         Map<String, List<Metadata_Dependency__c>> results, DependencyFetchContext fetchContext
     ) {
-        if (!fetchContext.activeFlowsOnly) { return; }
+        if (!fetchContext.isActiveFlowsOnly) { return; }
 
         // Collect all Flow DeveloperNames (stored in Metadata_Name__c) from the result map.
         Set<String> flowNames = new Set<String>();

@@ -98,6 +98,16 @@ describe('c-meta-mapper-formatters', () => {
             expect(renderPills(null)).toBe('');
             expect(renderPills('')).toBe('');
         });
+
+        it('falls back to a generic label for an unsupported schema version', () => {
+            expect(renderPills(JSON.stringify({ v: 2, isWrite: true }))).toBe(
+                'Additional context available (unsupported format) - view raw data for details'
+            );
+        });
+
+        it('renders an unrecognized key as plain text "key: value" fallback', () => {
+            expect(renderPills(JSON.stringify({ v: 1, someNewKey: 'X' }))).toBe('someNewKey: X');
+        });
     });
 
     describe('sanitizeFilename', () => {

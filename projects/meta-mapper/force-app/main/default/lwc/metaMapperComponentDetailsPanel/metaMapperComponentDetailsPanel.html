@@ -51,14 +51,14 @@
                 <template if:true={selectedNode.Is_Circular__c}>
                     <div class="flag-row">
                         <lightning-icon icon-name="utility:rotate" size="x-small" aria-hidden="true"></lightning-icon>
-                        <span>Circular dependency — these components depend on each other in a loop.</span>
+                        <span>Circular dependency - these components depend on each other in a loop.</span>
                     </div>
                 </template>
 
                 <template if:true={selectedNode.Is_Dynamic_Reference__c}>
                     <div class="flag-row">
                         <lightning-icon icon-name="utility:warning" size="x-small" aria-hidden="true" class="icon-dynamic"></lightning-icon>
-                        <span>Dynamic reference — cannot be statically resolved. Verify manually.</span>
+                        <span>Dynamic reference - cannot be statically resolved. Verify manually.</span>
                     </div>
                 </template>
 

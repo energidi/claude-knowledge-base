@@ -501,6 +501,17 @@ export default class MetaMapperTree extends LightningElement {
             container.scrollTop = rowBottom - container.clientHeight;
         }
         this._computeWindow();
+        this._focusActiveRow();
+    }
+
+    // Deferred one microtask so the re-render with the updated tabIndex completes first (finding #3).
+    _focusActiveRow() {
+        const row = this._flatRows[this._activeIndex];
+        if (!row) return;
+        Promise.resolve().then(() => {
+            const el = this.template && this.template.querySelector(`[data-node-id="${row.Metadata_Id__c}"]`);
+            if (el) el.focus();
+        });
     }
 
     // --- Context menu actions ---

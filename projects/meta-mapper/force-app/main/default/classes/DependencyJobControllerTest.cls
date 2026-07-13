@@ -36,7 +36,7 @@ private class DependencyJobControllerTest {
         try {
             DependencyJobController.createJob('', 'MyClass', null, false);
             Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobController.DependencyJobException e) {
+        } catch (DependencyJobException e) {
             Assert.isTrue(e.getMessage().contains('required'), 'Message should mention required');
         }
     }
@@ -46,7 +46,7 @@ private class DependencyJobControllerTest {
         try {
             DependencyJobController.createJob('ApexClass', '', null, false);
             Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobController.DependencyJobException e) {
+        } catch (DependencyJobException e) {
             Assert.isTrue(e.getMessage().contains('required'), 'Message should mention required');
         }
     }
@@ -56,7 +56,7 @@ private class DependencyJobControllerTest {
         try {
             DependencyJobController.createJob('UnknownType', 'MyClass', null, false);
             Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobController.DependencyJobException e) {
+        } catch (DependencyJobException e) {
             Assert.isTrue(e.getMessage().contains('Unsupported'), 'Message should mention unsupported');
         }
     }
@@ -66,7 +66,7 @@ private class DependencyJobControllerTest {
         try {
             DependencyJobController.createJob('CustomField', 'My_Field__c', null, false);
             Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobController.DependencyJobException e) {
+        } catch (DependencyJobException e) {
             Assert.isTrue(e.getMessage().contains('Target Object'), 'Message should mention Target Object');
         }
     }
@@ -127,7 +127,7 @@ private class DependencyJobControllerTest {
         try {
             DependencyJobController.createJob('ApexClass', 'MyClass', null, false);
             Assert.fail('Expected DependencyJobException when at the concurrency limit');
-        } catch (DependencyJobController.DependencyJobException e) {
+        } catch (DependencyJobException e) {
             Assert.isTrue(e.getMessage().contains('already running'),
                 'Message should mention that a scan is already running');
         }
@@ -210,9 +210,31 @@ private class DependencyJobControllerTest {
         try {
             DependencyJobController.getNodeHierarchy('001000000000002AAA');
             Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobController.DependencyJobException e) {
+        } catch (DependencyJobException e) {
             Assert.isTrue(e.getMessage().contains('not found'));
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // getObjectList
+    // -----------------------------------------------------------------------
+
+    @IsTest
+    static void getObjectList_shortSearchTerm_returnsEmptyList() {
+        Test.startTest();
+        List<EntityDefinition> result = DependencyJobController.getObjectList('a');
+        Test.stopTest();
+
+        Assert.isTrue(result.isEmpty(), 'Search terms under 2 characters should return an empty list without querying');
+    }
+
+    @IsTest
+    static void getObjectList_validTerm_returnsList() {
+        Test.startTest();
+        List<EntityDefinition> result = DependencyJobController.getObjectList('Acc');
+        Test.stopTest();
+
+        Assert.isNotNull(result, 'A search term of 2+ characters should return a (possibly empty) list, not null');
     }
 
     // -----------------------------------------------------------------------
@@ -283,7 +305,7 @@ private class DependencyJobControllerTest {
         try {
             DependencyJobController.resumeJob(job.Id, null);
             Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobController.DependencyJobException e) {
+        } catch (DependencyJobException e) {
             Assert.isTrue(e.getMessage().contains('Paused'), 'Message should mention Paused');
         }
     }
@@ -293,7 +315,7 @@ private class DependencyJobControllerTest {
         try {
             DependencyJobController.resumeJob('001000000000003AAA', null);
             Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobController.DependencyJobException e) {
+        } catch (DependencyJobException e) {
             Assert.isTrue(e.getMessage().contains('not found'));
         }
     }

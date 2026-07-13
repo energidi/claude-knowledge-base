@@ -326,7 +326,7 @@ private class MetadataDependencyServiceTest {
 
         DependencyFetchContext opts = new DependencyFetchContext();
         opts.jobId = 'a003000000000001AAA';
-        opts.activeFlowsOnly = true;
+        opts.isActiveFlowsOnly = true;
         Map<String, List<Metadata_Dependency__c>> results =
             new Map<String, List<Metadata_Dependency__c>>{
                 'a001000000000001AAA' => new List<Metadata_Dependency__c>{
@@ -360,7 +360,7 @@ private class MetadataDependencyServiceTest {
 
         DependencyFetchContext opts = new DependencyFetchContext();
         opts.jobId = 'a003000000000001AAA';
-        opts.activeFlowsOnly = true;
+        opts.isActiveFlowsOnly = true;
         Map<String, List<Metadata_Dependency__c>> results =
             new Map<String, List<Metadata_Dependency__c>>{
                 'a001000000000001AAA' => new List<Metadata_Dependency__c>{
@@ -388,7 +388,7 @@ private class MetadataDependencyServiceTest {
         // No mock is set so any callout would throw UnexpectedCalloutException.
         DependencyFetchContext opts = new DependencyFetchContext();
         opts.jobId = 'a003000000000001AAA';
-        opts.activeFlowsOnly = false;
+        opts.isActiveFlowsOnly = false;
         Map<String, List<Metadata_Dependency__c>> results =
             new Map<String, List<Metadata_Dependency__c>>{
                 'a001000000000001AAA' => new List<Metadata_Dependency__c>{

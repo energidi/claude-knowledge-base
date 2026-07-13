@@ -291,7 +291,7 @@ if (calloutsRemaining < headroom
     || queryRowsRemaining < 1000
     || queriesRemaining < 10
     || dmlStmtsRemaining < 40) {          // 40 - supplemental handlers consume 8+ DML stmts each
-    System.enqueueJob(new DependencyQueueable(jobId, activeFlowsOnly, null));
+    System.enqueueJob(new DependencyQueueable(jobId, isActiveFlowsOnly, null));
     return;
 }
 ```

@@ -413,7 +413,9 @@ export default class MetaMapperResults extends LightningElement {
 
     @api
     notifyStatusChange(newJob) {
-        if (!this._isMounted) return;
+        // Platform Events received during a tab transition are discarded, not queued -
+        // the polling fallback/reconciliation call captures any missed status change (finding #7).
+        if (!this._isMounted || this.isTransitioning) return;
         const wasCompleted = this.isCompleted;
         if (!wasCompleted && newJob && newJob.Status__c === 'Completed') {
             this.showReloadBanner = true;

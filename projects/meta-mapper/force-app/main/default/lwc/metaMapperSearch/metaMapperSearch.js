@@ -237,7 +237,7 @@ export default class MetaMapperSearch extends LightningElement {
                 this.isRunningScanError = false;
                 this.dispatchEvent(new CustomEvent('showtoast', {
                     detail: {
-                        message: "The running scan isn’t visible to your account. It may belong to another user or have just completed. Try starting a new scan — if one is still running you will see this message again.",
+                        message: "The running scan isn't visible to your account. It may belong to another user or have just completed. Try starting a new scan - if one is still running you will see this message again.",
                         variant: 'info'
                     },
                     bubbles: true, composed: true

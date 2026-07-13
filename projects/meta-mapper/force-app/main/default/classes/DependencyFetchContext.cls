@@ -18,7 +18,7 @@ public class DependencyFetchContext {
      * When true, the service validates Flow version status via a secondary callout
      * and drops inactive versions from results.
      */
-    public Boolean activeFlowsOnly;
+    public Boolean isActiveFlowsOnly;
 
     /**
      * Number of records returned by the most recent first-page Tooling API callout.
@@ -37,7 +37,7 @@ public class DependencyFetchContext {
      * DependencyQueueable checks this flag before marking a parent batch as
      * Has_Fetched_Dependencies__c = true to prevent premature completion.
      */
-    public Boolean queryMoreFailed;
+    public Boolean hasQueryMoreFailed;
 
     /**
      * Parent Metadata_Id__c values whose Tooling API fetch failed (HTTP non-200,
@@ -48,10 +48,10 @@ public class DependencyFetchContext {
     public Set<String> failedParentMetaIds;
 
     public DependencyFetchContext() {
-        this.activeFlowsOnly      = false;
+        this.isActiveFlowsOnly    = false;
         this.maxResultCount      = 0;
         this.errors               = new List<String>();
-        this.queryMoreFailed      = false;
+        this.hasQueryMoreFailed   = false;
         this.failedParentMetaIds  = new Set<String>();
     }
 

@@ -180,7 +180,7 @@ export default class MetaMapperProgress extends LightningElement {
 
     get pauseBannerText() {
         const reason = this.job && this.job.Pause_Reason__c;
-        if (reason === 'NodeCapReached') {
+        if (reason === 'ComponentLimitReached') {
             return 'Analysis paused - the component limit was reached. Raise Max_Components__c in MetaMapper Settings to continue.';
         }
         const apiName = (this.job && this.job.Target_API_Name__c) ? this.job.Target_API_Name__c : 'the component';

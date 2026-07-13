@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** July 13, 2026 (Round 77 - sf-orchestrator full pass: 15 findings applied - 1 Critical, 2 High, 5 Medium, 7 Low)
+**Last Updated:** July 13, 2026 (Round 78 - sf-orchestrator full pass: 16 findings applied - 1 Critical, 3 High, 6 Medium, 6 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3914,6 +3914,35 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
 
 ---
+
+## Round 78 Fixes Applied
+
+Full sf-orchestrator review (all 8 lenses: architecture, UX, naming, security, performance, testing, automation, static analysis). 16 findings applied (1 Critical, 3 High, 6 Medium, 6 Low). Overall verdict before fixes: NO-GO (1 Critical compile-blocking test defect; static analysis also returned NO-GO on 2 High findings later determined non-blocking against the project's real eslint config - see Static Analysis note below). Security lens returned zero findings (clean pass - FLS/CRUD boundary discipline, Named-Credential-only callouts, no SOQL injection, no innerHTML/XSS). Automation lens: not applicable (no triggers/Flows in this metadata-scanning tool); both spot-checked mechanisms (Round 77's `resumeJob()` row-lock fix, hot-loop stall detection) verified correct in source.
+
+**Critical:**
+- Finding 1 (Architecture/Testing - `DependencyJobControllerTest.cls`): 8 `catch` blocks referenced the invalid nested type `DependencyJobController.DependencyJobException` - `DependencyJobException` is a standalone top-level class, not nested inside the controller. This is an invalid Apex type reference and fails to compile, blocking deployment entirely. Fixed: all 8 occurrences changed to `catch (DependencyJobException e)`, matching the one already-correct usage in the same file. Rollback: revert `DependencyJobControllerTest.cls` to pre-Round-78 state (reintroduces the compile failure - not recommended).
+
+**High:**
+- Finding 2 (Architecture/Security - `MetaMapper_Admin.permissionset-meta.xml`): `resumeJob()` requires `Pause_Reason__c` to be FLS-editable before its `update as user` DML, but the shipped permission set granted `editable=false` on that field - Resume permanently failed for every non-System-Administrator `MetaMapper_Admin` assignee. Fixed: set `editable=true` on the `Pause_Reason__c` fieldPermissions entry, consistent with CLAUDE.md's own rule that every field assigned under USER_MODE must be granted editable=true. Rollback: revert the fieldPermissions entry to `editable=false` (reintroduces the Resume failure for non-admins - not recommended).
+- Finding 3 (UX/Accessibility - `metaMapperTree.js`): the roving-tabindex keyboard pattern computed `tabIndex` correctly but arrow-key/Enter handlers never called `.focus()` on the newly active row, so keyboard focus never became visible (WCAG 2.4.7 regression) even though the tree remained functionally operable via `nodeselected` dispatch. Fixed: added `_focusActiveRow()`, called from `_ensureActiveVisible()` after every `_activeIndex` change, deferred one microtask so the re-rendered `tabIndex`/DOM settles first.
+- Finding 4 (Static Analysis - `metaMapperGraph.js:194,203`): bare `echarts` global references, inconsistent with the `window.echarts` guard 2-3 lines above. Fixed for consistency: both changed to `window.echarts.registerTheme(...)`/`window.echarts.init(...)`. Note: confirmed via `npm run lint` (clean, zero violations) that this was not actually failing the project's real `eslint.config.js`, which already declares `echarts` as a global - same class of code-analyzer/project-config mismatch documented in Round 76's static-analysis process note.
+
+**Medium:**
+- Finding 5 (Architecture/Performance - `DependencyJobController.getComponentCount()`): inner subquery selected `Id` (junction-row Id) instead of `MetadataComponentId`, so the outer `COUNT()` never matched anything and the "Estimated scan scope" preview always reported "Small" regardless of actual complexity. Fixed: subquery now selects `MetadataComponentId`.
+- Finding 6 (Performance - `metaMapperGraph._getVisibleNodes()`): walked the ancestor chain to root for every node on every render whenever any node was collapsed - O(n x depth), repeated on search/filter/select/focus/collapse. Fixed: replaced with a memoized bottom-up O(n) pass (`_computeCollapseHiddenSet()`), cached and invalidated only when the filtered node set or collapsed set actually changes.
+- Finding 7 (UX/Component Sync - `metaMapperResults.notifyStatusChange()`): not gated on `isTransitioning`, unlike the correctly-gated `handleNodeSelected` - Platform Event payloads could be applied mid-tab-transition, violating the documented discard-during-transition rule. Fixed: added the same `isTransitioning` guard.
+- Finding 8 (Testing - `metaMapperFormatters.renderPills()`): Round 77's unknown-key plain-text fallback and schema-version gate were untested. Fixed: added 2 Jest cases (unsupported version, unrecognized key).
+- Finding 9 (Testing - `DependencyJobControllerTest.cls`): class-header comment claimed `getObjectList()` coverage but no test actually called it. Fixed: added `getObjectList_shortSearchTerm_returnsEmptyList()` and `getObjectList_validTerm_returnsList()`.
+- Finding 10 (Static Analysis - `metaMapperGraph.js`, 13 `setTimeout` sites): flagged by `@lwc/lwc/no-async-operation`. Verified via `npm run lint` (clean) that this rule is turned off project-wide in the real `eslint.config.js` (per Round 76's documented rationale: `@lwc/lwc-platform/no-inline-disable` forbids per-call-site suppression) - same false-positive class as Round 76, not a new/actionable issue. No code change.
+
+**Low:**
+- Findings 11 (Naming, 2 booleans + cascade): `DependencyFetchContext.activeFlowsOnly`/`queryMoreFailed` lacked Is/Has prefixes. Renamed to `isActiveFlowsOnly`/`hasQueryMoreFailed` and cascaded through every usage site in `DependencyQueueable.cls`, `MetadataDependencyService.cls`, `MetadataDependencyServiceTest.cls`, `IMetadataDependencyService.cls`, and `DependencyFetchContext.cls-meta.xml`. `DependencyJobController.createJob()`'s own separate `activeFlowsOnly` parameter (a distinct declaration, not a `DependencyFetchContext`/`DependencyQueueable` reference) was intentionally left unchanged - out of the approved finding's scope.
+- Finding 12 (Naming - `Pause_Reason__c` picklist value `NodeCapReached`): leaked internal "Node" engine jargon to admins in Setup/reports. Renamed to `ComponentLimitReached` (label "Component Limit Reached"); updated the 2 literal references in `DependencyQueueable.cls` and `metaMapperProgress.js`.
+- Findings 13-14 (UX/Copy fidelity): em-dash/curly-apostrophe used instead of the literal hyphen/straight-apostrophe spec text and the project's own "hyphens only" convention, in `metaMapperSearch.js`/`.html`, `metaMapperProgress.html`, and `metaMapperComponentDetailsPanel.html`. Fixed: all replaced.
+- Finding 15 (Performance - `metaMapperGraph.js`): `_getVisibleNodes()` called redundantly within the same tick in `_handleSearchChange()` and `handleExpandAll()`, ahead of the call already made inside `_renderGraph()`. Fixed: both now reuse the cached `_lastVisibleNodes`.
+- Finding 16 (Static Analysis - `metaMapperGraph.css`, 35 hardcoded values): confirmed non-actionable - the flagged values are either already using `var(--slds-g-*, fallback)` tokens correctly (the fallback literal itself is expected SLDS2 syntax) or are canvas/drawer/tooltip dimensions with no SLDS2 hook equivalent, same accepted precedent as Round 76's CSS token pass. No code change.
+
+**Verification:** `npm run lint` - clean, zero violations. `npm run test:unit` - 3 suites, 62 tests, all passing (up from 60 pre-round). `npm run prettier:verify` - shows the same pre-existing repo-wide formatting-drift condition accepted since Round 75 (199 files, including files this round never touched - not new). Apex-side changes (Findings 1, 2, 5, 9, 11, 12) are not yet compile/test-verified against a live org - that requires the Phase 5 deploy, gated on explicit user approval.
 
 ## Round 77 Fixes Applied
 

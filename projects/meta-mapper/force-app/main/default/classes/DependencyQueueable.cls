@@ -69,7 +69,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
     };
 
     private final String jobId;
-    private final Boolean activeFlowsOnly;
+    private final Boolean isActiveFlowsOnly;
     private final Integer overrideBatchSize;
 
     // Database.rollback() throws CalloutException if called after a callout in the same
@@ -84,12 +84,12 @@ public without sharing class DependencyQueueable implements Queueable, Database.
 
     /**
      * @param jobId              ID of the Metadata_Scan_Job__c being processed
-     * @param activeFlowsOnly    When true, Flow nodes require one extra validation callout each
+     * @param isActiveFlowsOnly    When true, Flow nodes require one extra validation callout each
      * @param overrideBatchSize  null for normal execution; set when resuming at a slower speed
      */
-    public DependencyQueueable(String jobId, Boolean activeFlowsOnly, Integer overrideBatchSize) {
+    public DependencyQueueable(String jobId, Boolean isActiveFlowsOnly, Integer overrideBatchSize) {
         this.jobId             = jobId;
-        this.activeFlowsOnly   = activeFlowsOnly == true;
+        this.isActiveFlowsOnly   = isActiveFlowsOnly == true;
         this.overrideBatchSize = overrideBatchSize;
     }
 
@@ -244,7 +244,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                 return;
             }
             job.Status__c = 'Paused';
-            job.Pause_Reason__c = 'NodeCapReached';
+            job.Pause_Reason__c = 'ComponentLimitReached';
             job.Scan_Diagnostic_Log__c = appendToLog(
                 job.Scan_Diagnostic_Log__c,
                 'Scan paused: node limit of ' + maxComponents + ' reached. This protects '
@@ -263,7 +263,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         // Flow headroom: use batchSize as a conservative ceiling instead of counting
         // actual Flow nodes in the batch. filterInactiveFlows() issues one callout per
         // Flow node in the worst case; batchSize bounds that regardless of actual Flow count.
-        Integer flowHeadroom = activeFlowsOnly ? batchSize : 0;
+        Integer flowHeadroom = isActiveFlowsOnly ? batchSize : 0;
 
         Integer calloutsRemaining = Limits.getLimitCallouts() - Limits.getCallouts();
         // Headroom: +1 for this batch's dependency query, +1 if QueryMore is likely,
@@ -291,7 +291,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             Metadata_Scan_Job__c cycleUpdate = new Metadata_Scan_Job__c(Id = job.Id);
             cycleUpdate.Processing_Cycle_Count__c = job.Processing_Cycle_Count__c;
             update cycleUpdate;
-            System.enqueueJob(new DependencyQueueable(jobId, activeFlowsOnly, overrideBatchSize));
+            System.enqueueJob(new DependencyQueueable(jobId, isActiveFlowsOnly, overrideBatchSize));
             return;
         }
 
@@ -310,7 +310,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
 
         DependencyFetchContext fetchContext = new DependencyFetchContext();
         fetchContext.jobId           = jobId;
-        fetchContext.activeFlowsOnly = activeFlowsOnly;
+        fetchContext.isActiveFlowsOnly = isActiveFlowsOnly;
         fetchContext.maxResultCount = 0;
 
         IMetadataDependencyService service = new MetadataDependencyService();
@@ -318,7 +318,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             service.fetchDependencies(parentIds, fetchContext);
         // Filter inactive Flow versions before any dedup or insertion.
         // One extra callout per execution (already headroom-reserved via Flow_Scan_Batch_Size__c).
-        if (activeFlowsOnly) {
+        if (isActiveFlowsOnly) {
             service.filterInactiveFlows(resultsByParent, fetchContext);
         }
         // Step 11 - scoped dedup (Tier 1)
@@ -583,7 +583,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         // Skip parents where the mid-loop guard fired: their child list was not fully consumed.
         // Skip parents that failed the API fetch: they are tracked in fetchContext.failedParentMetaIds
         // and excluded from fullyProcessedParentMetaIds above.
-        if (!fetchContext.queryMoreFailed) {
+        if (!fetchContext.hasQueryMoreFailed) {
             List<Metadata_Dependency__c> parentsToMark = new List<Metadata_Dependency__c>();
             for (Metadata_Dependency__c parent : batch) {
                 // Blank Metadata_Id__c nodes cannot be queried via Tooling API and are never
@@ -860,13 +860,13 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         }
 
         // Step 20 - self-chain to process the next batch
-        System.enqueueJob(new DependencyQueueable(jobId, activeFlowsOnly, overrideBatchSize));
+        System.enqueueJob(new DependencyQueueable(jobId, isActiveFlowsOnly, overrideBatchSize));
     }
 
     /**
      * Resolves the effective batch size. Job-level Batch_Size_Override__c (set by
      * resumeJob at a slower speed) wins over the constructor override and CMDT.
-     * When activeFlowsOnly is true, the Flow-specific CMDT setting applies.
+     * When isActiveFlowsOnly is true, the Flow-specific CMDT setting applies.
      */
     private Integer resolveBatchSize(MetaMapper_Settings__mdt settings, Metadata_Scan_Job__c job) {
         if (job.Batch_Size_Override__c != null && job.Batch_Size_Override__c > 0) {
@@ -875,7 +875,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         if (overrideBatchSize != null && overrideBatchSize > 0) {
             return overrideBatchSize;
         }
-        if (activeFlowsOnly && settings.Flow_Scan_Batch_Size__c != null
+        if (isActiveFlowsOnly && settings.Flow_Scan_Batch_Size__c != null
             && settings.Flow_Scan_Batch_Size__c > 0) {
             return ((Decimal) settings.Flow_Scan_Batch_Size__c).intValue();
         }
