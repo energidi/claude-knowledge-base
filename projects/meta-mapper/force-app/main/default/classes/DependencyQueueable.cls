@@ -428,10 +428,10 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     // Is_Circular__c is intentionally NOT set: depth overflow is a traversal
                     // ceiling, not an ancestry cycle. Setting it would cause the UI to render
                     // these nodes with dashed "circular dependency" styling, which is incorrect.
-                    // Dependencies_Fetched__c = true stops further traversal from this node.
+                    // Has_Fetched_Dependencies__c = true stops further traversal from this node.
                     // The maxDepthExceeded flag in Dependency_Context__c is the authoritative
                     // signal for distinguishing depth-truncated nodes from genuine cycles.
-                    child.Dependencies_Fetched__c   = true;
+                    child.Has_Fetched_Dependencies__c   = true;
                     child.Dependency_Context__c   = '{"v":1,"maxDepthExceeded":true}';
                     depthExceededCount++;
                     if (depthErrors.size() < 10) {
@@ -473,7 +473,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     if (authoritativePath.contains('|' + childId + '|')) {
                         // Confirmed true ancestry cycle - insert with flags, do not traverse.
                         child.Is_Circular__c          = true;
-                        child.Dependencies_Fetched__c = true;
+                        child.Has_Fetched_Dependencies__c = true;
                         child.Dependency_Context__c = mergeCycleAttribute(
                             child.Dependency_Context__c, parent.Metadata_Id__c);
                     }
@@ -588,18 +588,18 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             for (Metadata_Dependency__c parent : batch) {
                 // Blank Metadata_Id__c nodes cannot be queried via Tooling API and are never
                 // added to parentIds, so they never enter fullyProcessedParentMetaIds. Without
-                // the explicit blank check they stay at Dependencies_Fetched__c = false and are
+                // the explicit blank check they stay at Has_Fetched_Dependencies__c = false and are
                 // re-queried every execution until stall detection pauses the job permanently.
                 if (String.isBlank(parent.Metadata_Id__c)
                     || fullyProcessedParentMetaIds.contains(parent.Metadata_Id__c)) {
-                    parent.Dependencies_Fetched__c = true;
+                    parent.Has_Fetched_Dependencies__c = true;
                     parentsToMark.add(parent);
                 }
             }
             if (!parentsToMark.isEmpty()) {
                 // Partial-success: a locked or validation-failed parent must not abort the
                 // entire batch and crash the job. A failed mark leaves the parent with
-                // Dependencies_Fetched__c = false so it is re-queried next execution.
+                // Has_Fetched_Dependencies__c = false so it is re-queried next execution.
                 List<Database.SaveResult> markResults = Database.update(parentsToMark, false);
                 List<String> markErrors = new List<String>();
                 for (Integer i = 0; i < markResults.size(); i++) {
@@ -631,7 +631,7 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         // successfulMarks > 0: parents were committed as fetched (leaf-batch case).
         // Using fullyProcessedParentMetaIds.isEmpty() here would be wrong: those parents
         // are in-memory candidates; some may have failed the Step 15 DB update (e.g. row lock).
-        // A failed parent mark means the DB still shows Dependencies_Fetched__c = false, so
+        // A failed parent mark means the DB still shows Has_Fetched_Dependencies__c = false, so
         // the next execution re-queries the same parent - no real progress was made. Resetting
         // the stall counter on a failed mark defeats stall detection entirely.
         if (successfulUpserts > 0 || successfulMarks > 0) {
@@ -815,8 +815,8 @@ public without sharing class DependencyQueueable implements Queueable, Database.
                     // DML row budget too low to upsert supplemental nodes safely.
                     // Supplemental data loss in the DML-low path is acknowledged; the engine
                     // will re-process these batch nodes on the next self-chain execution only
-                    // if their Dependencies_Fetched__c remains false. Step 15 marks batch parent
-                    // nodes as Dependencies_Fetched__c = true AFTER this block, so supplemental
+                    // if their Has_Fetched_Dependencies__c remains false. Step 15 marks batch parent
+                    // nodes as Has_Fetched_Dependencies__c = true AFTER this block, so supplemental
                     // nodes dropped here will not be retried. This is an accepted trade-off
                     // for the DML-low path - the diagnostic log captures the drop.
                     job.Scan_Diagnostic_Log__c = appendToLog(

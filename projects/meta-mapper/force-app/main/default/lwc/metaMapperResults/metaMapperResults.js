@@ -218,7 +218,7 @@ export default class MetaMapperResults extends LightningElement {
             && this.job.Status__c === 'Failed'
             && this.job.Components_Analyzed__c > 0
             && !this.job.Result_File_Id__c
-            && this.job.Result_Save_Attempted__c === true;
+            && this.job.Has_Attempted_Result_Save__c === true;
     }
 
     get hasPartialNodes() { return this.allNodes && this.allNodes.length > 0; }

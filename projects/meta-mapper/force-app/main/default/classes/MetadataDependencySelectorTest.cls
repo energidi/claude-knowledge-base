@@ -28,7 +28,7 @@ private class MetadataDependencySelectorTest {
             Metadata_Type__c        = 'ApexClass',
             Metadata_Name__c        = 'ClassA',
             Unique_Component_Key__c = jobA.Id + ':a',
-            Dependencies_Fetched__c = false
+            Has_Fetched_Dependencies__c = false
         );
         Metadata_Dependency__c fetchedA = new Metadata_Dependency__c(
             Metadata_Scan_Job__c    = jobA.Id,
@@ -36,7 +36,7 @@ private class MetadataDependencySelectorTest {
             Metadata_Type__c        = 'ApexClass',
             Metadata_Name__c        = 'ClassB',
             Unique_Component_Key__c = jobA.Id + ':b',
-            Dependencies_Fetched__c = true
+            Has_Fetched_Dependencies__c = true
         );
         Metadata_Dependency__c unfetchedB = new Metadata_Dependency__c(
             Metadata_Scan_Job__c    = jobB.Id,
@@ -44,7 +44,7 @@ private class MetadataDependencySelectorTest {
             Metadata_Type__c        = 'ApexClass',
             Metadata_Name__c        = 'ClassC',
             Unique_Component_Key__c = jobB.Id + ':c',
-            Dependencies_Fetched__c = false
+            Has_Fetched_Dependencies__c = false
         );
         insert new List<Metadata_Dependency__c>{ unfetchedA, fetchedA, unfetchedB };
 
@@ -66,7 +66,7 @@ private class MetadataDependencySelectorTest {
                 Metadata_Type__c        = 'ApexClass',
                 Metadata_Name__c        = 'Class' + i,
                 Unique_Component_Key__c = job.Id + ':' + i,
-                Dependencies_Fetched__c = false
+                Has_Fetched_Dependencies__c = false
             ));
         }
         insert nodes;
@@ -84,7 +84,7 @@ private class MetadataDependencySelectorTest {
             Metadata_Type__c        = 'ApexClass',
             Metadata_Name__c        = 'ExistingClass',
             Unique_Component_Key__c = job.Id + ':existing',
-            Dependencies_Fetched__c = true
+            Has_Fetched_Dependencies__c = true
         );
         insert existing;
 

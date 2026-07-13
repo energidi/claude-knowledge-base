@@ -50,7 +50,7 @@ private class ApexClassDependencyHandlerTest {
             Metadata_Type__c        = 'ApexClass',
             Metadata_Name__c        = 'MyTestClass',
             Unique_Component_Key__c = job.Id + ':class',
-            Dependencies_Fetched__c = true
+            Has_Fetched_Dependencies__c = true
         );
         insert classNode;
 

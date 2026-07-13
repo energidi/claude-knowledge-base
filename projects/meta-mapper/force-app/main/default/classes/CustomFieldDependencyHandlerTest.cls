@@ -60,7 +60,7 @@ private class CustomFieldDependencyHandlerTest {
             Metadata_Type__c        = 'CustomField',
             Metadata_Name__c        = 'Account.My_Field__c',
             Unique_Component_Key__c = job.Id + ':field',
-            Dependencies_Fetched__c = true,
+            Has_Fetched_Dependencies__c = true,
             Ancestor_Path__c        = '',
             Dependency_Depth__c     = 0
         );

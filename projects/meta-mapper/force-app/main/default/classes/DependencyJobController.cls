@@ -27,7 +27,7 @@ public with sharing class DependencyJobController {
 
     /**
      * Returned by getJobStatus() so the LWC receives both the job record and the
-     * Disable_Platform_Events__c settings flag in a single callout. The flag tells
+     * Should_Disable_Platform_Events__c settings flag in a single callout. The flag tells
      * the LWC whether to activate polling fallback instead of waiting for PE events.
      */
     public class JobStatusResult {
@@ -111,12 +111,12 @@ public with sharing class DependencyJobController {
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
 
         // ---- Sandbox detection: apply conservative first-install defaults when no admin
-        //      has explicitly saved settings (Admin_Customized__c = false). ----
+        //      has explicitly saved settings (Has_Admin_Customized__c = false). ----
         // Developer Sandbox has a 200MB hard Data Storage limit. Concurrent active scans
         // can simultaneously peak storage; one at a time keeps the peak bounded.
         // These overrides apply only in memory for this job submission - CMDT is not mutated.
         Boolean sandboxOverrideActive = false;
-        if (settings.Admin_Customized__c != true) {
+        if (settings.Has_Admin_Customized__c != true) {
             try {
                 if (isSandboxCached == null) {
                     Organization org = [SELECT IsSandbox FROM Organization LIMIT 1];
@@ -175,7 +175,7 @@ public with sharing class DependencyJobController {
             Target_Metadata_Type__c = metadataType,
             Target_API_Name__c      = apiName,
             Target_Parent_Object__c        = targetObject,
-            Active_Flows_Only__c    = activeFlowsOnly == true,
+            Only_Include_Active_Flows__c    = activeFlowsOnly == true,
             Status__c               = STATUS_INITIALIZING,
             Job_Type__c             = 'Dependency_Map',
             Components_Analyzed__c  = 0,
@@ -201,7 +201,7 @@ public with sharing class DependencyJobController {
             Metadata_Type__c            = metadataType,
             Metadata_Name__c            = fullApiName,
             Dependency_Depth__c         = 0,
-            Dependencies_Fetched__c   = false,
+            Has_Fetched_Dependencies__c   = false,
             Is_Circular__c              = false,
             Is_Dynamic_Reference__c     = false,
             Discovery_Source__c         = 'ToolingAPI',
@@ -294,8 +294,8 @@ public with sharing class DependencyJobController {
             return null;
         }
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
-        Boolean platformEventsDisabled = settings.Disable_Platform_Events__c == true
-            || statusJob.Platform_Events_Auto_Suppressed__c == true;
+        Boolean platformEventsDisabled = settings.Should_Disable_Platform_Events__c == true
+            || statusJob.Is_Platform_Events_Auto_Suppressed__c == true;
         Integer batchSizeInUse = statusJob.Batch_Size_Override__c != null
             ? ((Decimal) statusJob.Batch_Size_Override__c).intValue()
             : (settings.Scan_Batch_Size__c != null ? ((Decimal) settings.Scan_Batch_Size__c).intValue() : 50);
@@ -493,16 +493,6 @@ public with sharing class DependencyJobController {
      */
     @AuraEnabled
     public static void resumeJob(Id jobId, Integer overrideBatchSize) {
-        Metadata_Scan_Job__c job = new MetadataScanJobSelector().getByIdForResume(jobId);
-        if (job == null) {
-            throw new DependencyJobException('Scan job not found: ' + jobId);
-        }
-        if (job.Status__c != 'Paused') {
-            throw new DependencyJobException(
-                'Only Paused jobs can be resumed. Current status: ' + job.Status__c
-            );
-        }
-
         // Explicit FLS pre-check: 'update as user' raises a generic exception when any
         // field lacks FLS edit. Pre-checking gives a precise diagnostic message.
         Map<String, Schema.SObjectField> fieldMap =
@@ -515,6 +505,20 @@ public with sharing class DependencyJobController {
                 'Unable to resume: your permission set lacks field-level edit access to '
                 + 'Status__c, Batch_Size_Override__c, Last_Progress_Cycle__c, or Pause_Reason__c. '
                 + 'Ask your admin to verify these fields are editable in the MetaMapper_Admin permission set.'
+            );
+        }
+
+        // Row-locked read + in-lock re-verification prevents two concurrent resumeJob() calls
+        // (double-click, two tabs) from both passing the Paused check and each spawning an
+        // independent DependencyQueueable self-chain for the same job - mirrors the FOR UPDATE
+        // guard already used by cancelJob().
+        Metadata_Scan_Job__c job = new MetadataScanJobSelector().getByIdForResumeLocked(jobId);
+        if (job == null) {
+            throw new DependencyJobException('Scan job not found: ' + jobId);
+        }
+        if (job.Status__c != 'Paused') {
+            throw new DependencyJobException(
+                'Only Paused jobs can be resumed. Current status: ' + job.Status__c
             );
         }
 
@@ -531,7 +535,7 @@ public with sharing class DependencyJobController {
 
         System.enqueueJob(new DependencyQueueable(
             jobId,
-            job.Active_Flows_Only__c,
+            job.Only_Include_Active_Flows__c,
             overrideBatchSize
         ));
     }

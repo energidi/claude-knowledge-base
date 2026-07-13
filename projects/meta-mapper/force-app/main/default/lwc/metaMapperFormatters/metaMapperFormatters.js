@@ -20,10 +20,30 @@ export function truncateAt(str, maxLen) {
     return (lastSpace > 0 ? cut.substring(0, lastSpace) : cut) + '...';
 }
 
+// Keys with a known plain-English rendering. 'v' is the schema version marker, not a pill.
+const KNOWN_CONTEXT_KEYS = new Set([
+    'v', 'isWrite', 'activeVersions', 'isActive', 'triggerType', 'parentObject',
+    'filterUsage', 'cycleClosesAt', 'maxDepthExceeded',
+]);
+
+// CLAUDE.md: "'v' is the only compatibility contract" - handlers increment it on schema change.
+// This function only understands v1. A future v:2 payload with restructured fields would render
+// silently wrong under per-key matching, so gate on it and fall back to a generic label instead.
+const KNOWN_SCHEMA_VERSION = 1;
+
+function renderUnknownKey(key, value) {
+    if (value == null) return null;
+    const rendered = Array.isArray(value) ? value.join(', ') : String(value);
+    return `${key}: ${rendered}`;
+}
+
 export function renderPills(contextJson) {
     if (!contextJson) return '';
     let ctx;
     try { ctx = JSON.parse(contextJson); } catch { return ''; }
+    if (ctx.v != null && ctx.v !== KNOWN_SCHEMA_VERSION) {
+        return 'Additional context available (unsupported format) - view raw data for details';
+    }
     const parts = [];
     if (ctx.isWrite === true)  parts.push('Writes to this field');
     if (ctx.isWrite === false) parts.push('Reads this field');
@@ -35,6 +55,14 @@ export function renderPills(contextJson) {
     if (ctx.filterUsage && Array.isArray(ctx.filterUsage)) parts.push(`Used as: ${ctx.filterUsage.join(', ')}`);
     if (ctx.cycleClosesAt) parts.push(`Cycle closes at ${ctx.cycleClosesAt}`);
     if (ctx.maxDepthExceeded) parts.push('Max depth exceeded — traversal stopped');
+    // Fallback: render any key this function doesn't recognize as plain text rather than
+    // silently dropping it (CLAUDE.md: "unknown keys render as plain text with a fallback label").
+    Object.keys(ctx)
+        .filter((key) => !KNOWN_CONTEXT_KEYS.has(key))
+        .forEach((key) => {
+            const fallback = renderUnknownKey(key, ctx[key]);
+            if (fallback) parts.push(fallback);
+        });
     return parts.join(' | ');
 }
 

@@ -110,8 +110,8 @@ private class DependencyJobControllerTest {
         Id jobId = DependencyJobController.createJob('ApexClass', 'MyClass', null, null);
         Test.stopTest();
 
-        Metadata_Scan_Job__c job = [SELECT Active_Flows_Only__c FROM Metadata_Scan_Job__c WHERE Id = :jobId];
-        Assert.areEqual(false, job.Active_Flows_Only__c);
+        Metadata_Scan_Job__c job = [SELECT Only_Include_Active_Flows__c FROM Metadata_Scan_Job__c WHERE Id = :jobId];
+        Assert.areEqual(false, job.Only_Include_Active_Flows__c);
     }
 
     @IsTest
@@ -143,6 +143,23 @@ private class DependencyJobControllerTest {
         DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(job.Id);
         Assert.isNotNull(result);
         Assert.areEqual('Processing', result.job.Status__c);
+        // batchSizeInUse/peSuppressionActive drive the Paused-banner batch-size display and the
+        // LWC's PE-suppressed polling fallback - both must be populated, not just Status__c.
+        Assert.areEqual(false, result.peSuppressionActive,
+            'Platform Events should not be suppressed with default CMDT settings');
+        Assert.areEqual(50, result.batchSizeInUse,
+            'batchSizeInUse should default to the CMDT Scan_Batch_Size__c value when no override is set');
+    }
+
+    @IsTest
+    static void getJobStatus_withBatchSizeOverride_reflectsOverride() {
+        Metadata_Scan_Job__c job = buildJob('Paused');
+        job.Batch_Size_Override__c = 25;
+        update job;
+        DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(job.Id);
+        Assert.isNotNull(result);
+        Assert.areEqual(25, result.batchSizeInUse,
+            'batchSizeInUse should reflect a non-null Batch_Size_Override__c on the job record');
     }
 
     @IsTest
@@ -164,7 +181,7 @@ private class DependencyJobControllerTest {
             Metadata_Type__c            = 'ApexClass',
             Metadata_Name__c            = 'TestClass',
             Dependency_Depth__c         = 0,
-            Dependencies_Fetched__c     = false,
+            Has_Fetched_Dependencies__c     = false,
             Is_Circular__c              = false,
             Is_Dynamic_Reference__c     = false,
             Discovery_Source__c         = 'ToolingAPI',

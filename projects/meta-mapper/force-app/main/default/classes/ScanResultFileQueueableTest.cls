@@ -28,7 +28,7 @@ private class ScanResultFileQueueableTest {
                 Metadata_Type__c            = 'ApexClass',
                 Metadata_Name__c            = 'Class' + i,
                 Unique_Component_Key__c = jobId + ':class' + i,
-                Dependencies_Fetched__c     = true
+                Has_Fetched_Dependencies__c     = true
             ));
         }
         insert nodes;
@@ -46,7 +46,7 @@ private class ScanResultFileQueueableTest {
                 Metadata_Type__c            = 'ApexClass',
                 Metadata_Name__c            = 'ClassA',
                 Unique_Component_Key__c = job.Id + ':classA',
-                Dependencies_Fetched__c     = true
+                Has_Fetched_Dependencies__c     = true
             ),
             new Metadata_Dependency__c(
                 Metadata_Scan_Job__c        = job.Id,
@@ -54,7 +54,7 @@ private class ScanResultFileQueueableTest {
                 Metadata_Type__c            = 'CustomField',
                 Metadata_Name__c            = 'Account.Status__c',
                 Unique_Component_Key__c = job.Id + ':field',
-                Dependencies_Fetched__c     = true
+                Has_Fetched_Dependencies__c     = true
             )
         };
 
@@ -145,7 +145,7 @@ private class ScanResultFileQueueableTest {
                 Metadata_Type__c            = 'ApexClass',
                 Metadata_Name__c            = 'ClassA',
                 Unique_Component_Key__c = job.Id + ':classA',
-                Dependencies_Fetched__c     = true
+                Has_Fetched_Dependencies__c     = true
             ),
             new Metadata_Dependency__c(
                 Metadata_Scan_Job__c        = job.Id,
@@ -153,7 +153,7 @@ private class ScanResultFileQueueableTest {
                 Metadata_Type__c            = 'CustomField',
                 Metadata_Name__c            = 'Account.Field__c',
                 Unique_Component_Key__c = job.Id + ':field',
-                Dependencies_Fetched__c     = true
+                Has_Fetched_Dependencies__c     = true
             )
         };
 

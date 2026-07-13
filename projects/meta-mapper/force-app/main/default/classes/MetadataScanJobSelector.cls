@@ -21,7 +21,7 @@ public without sharing class MetadataScanJobSelector {
         List<Metadata_Scan_Job__c> results = [
             SELECT Id,
                    Status__c,
-                   Active_Flows_Only__c,
+                   Only_Include_Active_Flows__c,
                    Components_Analyzed__c,
                    Processing_Cycle_Count__c,
                    Last_Progress_Cycle__c,
@@ -318,8 +318,8 @@ public without sharing class MetadataScanJobSelector {
                    Status_Closed_At__c,
                    Batch_Size_Override__c,
                    Pause_Reason__c,
-                   Result_Save_Attempted__c,
-                   Platform_Events_Auto_Suppressed__c,
+                   Has_Attempted_Result_Save__c,
+                   Is_Platform_Events_Auto_Suppressed__c,
                    CreatedDate
             FROM Metadata_Scan_Job__c
             WHERE Id = :jobId
@@ -330,20 +330,23 @@ public without sharing class MetadataScanJobSelector {
     }
 
     /**
-     * Returns the fields needed by DependencyJobController.resumeJob() to validate
-     * the job state and enqueue a new DependencyQueueable instance.
-     * Enforces WITH USER_MODE at the controller boundary.
+     * Returns the job record WITH FOR UPDATE lock for resumeJob()'s race-condition guard -
+     * prevents two concurrent resumeJob() calls from both passing the Paused check and each
+     * spawning an independent DependencyQueueable self-chain for the same job.
+     * Mirrors cancelJob()'s proven WITH USER_MODE + FOR UPDATE combination (both are supported
+     * together as of the org's API version).
      *
      * @param jobId  ID of the Metadata_Scan_Job__c record
-     * @return       The job record, or null if not found or inaccessible to the running user
+     * @return       The job record locked FOR UPDATE, or null if not found or inaccessible
      */
-    public Metadata_Scan_Job__c getByIdForResume(String jobId) {
+    public Metadata_Scan_Job__c getByIdForResumeLocked(String jobId) {
         List<Metadata_Scan_Job__c> rows = [
-            SELECT Id, Status__c, Active_Flows_Only__c, Processing_Cycle_Count__c
+            SELECT Id, Status__c, Only_Include_Active_Flows__c, Processing_Cycle_Count__c
             FROM Metadata_Scan_Job__c
             WHERE Id = :jobId
             WITH USER_MODE
             LIMIT 1
+            FOR UPDATE
         ];
         return rows.isEmpty() ? null : rows[0];
     }

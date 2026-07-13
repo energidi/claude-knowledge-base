@@ -31,7 +31,7 @@
  *   custom field appearing at multiple depths in the tree receives supplemental results
  *   for all its occurrences in the current batch.
  *
- * Dependencies_Fetched__c = false on all supplemental nodes: the engine continues
+ * Has_Fetched_Dependencies__c = false on all supplemental nodes: the engine continues
  *   traversal of their own transitive dependencies via the Tooling API main path.
  *
  * CPU safety: ValidationRule and CMT scans check Limits.getCpuTime() before and during
@@ -781,7 +781,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
                                             ? parent.Dependency_Depth__c + 1 : 1),
             // false: supplemental nodes are queued for Tooling API traversal so the engine
             // continues fetching their own transitive dependencies in subsequent executions.
-            Dependencies_Fetched__c     = false,
+            Has_Fetched_Dependencies__c     = false,
             Is_Dynamic_Reference__c     = isDynamicReference,
             Discovery_Source__c         = 'Supplemental',
             Supplemental_Confidence__c  = confidence,

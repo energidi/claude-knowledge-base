@@ -10,7 +10,7 @@ private class DependencyNotificationServiceTest {
 
     @IsTest
     static void publishProgress_doesNotThrow() {
-        // CMDT is read-only in tests so we cannot inject Disable_Platform_Events__c = true.
+        // CMDT is read-only in tests so we cannot inject Should_Disable_Platform_Events__c = true.
         // Validates that the service handles any org PE state without throwing AND that no
         // publish-failure notice is recorded, proving EventBus.publish() actually accepted
         // the event under normal (non-suppressed) test conditions.
@@ -83,9 +83,10 @@ private class DependencyNotificationServiceTest {
         svc.publishProgress(job.Id, 'Processing', 2, 'Cycle 2');
         svc.publishProgress(job.Id, 'Processing', 3, 'Cycle 3');
         Test.stopTest();
-        // No exception = static flag did not corrupt state across repeated calls.
         // The OrgLimits-driven suppress path is exercised implicitly on any
         // execution where the org has consumed >80% of its daily PE allocation.
+        Assert.isTrue(DependencyNotificationService.getAndClearPendingNotices().isEmpty(),
+            'Repeated calls in one transaction must not accumulate publish-failure notices');
     }
 
     @IsTest

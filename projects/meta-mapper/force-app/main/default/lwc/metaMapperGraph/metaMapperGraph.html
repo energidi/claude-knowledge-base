@@ -32,7 +32,7 @@
         <div class="graph-legend" aria-label="Graph legend">
             <!-- Spanning tree notice -->
             <template if:true={showSpanningNotice}>
-                <div role="status" aria-live="polite" class="spanning-notice">
+                <div role="status" class="spanning-notice">
                     <span class="spanning-notice-text"
                         >Showing the first-discovered path to each component. A node reachable via
                         multiple paths appears once.</span
@@ -225,6 +225,26 @@
             >
                 {ctxCollapseLabel}
             </div>
+        </div>
+    </template>
+
+    <!-- Badge explanation popover (confidence / dynamic-reference / supplemental) -->
+    <template if:true={_badgePopover}>
+        <div class="ctx-backdrop" onclick={closeBadgePopover}></div>
+        <div
+            class="badge-popover"
+            style={badgePopoverStyle}
+            role="dialog"
+            aria-label="Component reliability warning"
+            aria-modal="false"
+            onkeydown={handleBadgePopoverKeyDown}
+        >
+            <template for:each={badgePopoverEntries} for:item="badge">
+                <p key={badge.key} class="badge-popover-entry">{badge.text}</p>
+            </template>
+            <button class="badge-popover-close slds-button slds-button_neutral" onclick={closeBadgePopover}>
+                Close
+            </button>
         </div>
     </template>
 

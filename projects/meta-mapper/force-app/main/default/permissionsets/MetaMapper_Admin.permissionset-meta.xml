@@ -85,7 +85,7 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
-        <field>Metadata_Scan_Job__c.Active_Flows_Only__c</field>
+        <field>Metadata_Scan_Job__c.Only_Include_Active_Flows__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
@@ -135,12 +135,12 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>false</editable>
-        <field>Metadata_Scan_Job__c.Result_Save_Attempted__c</field>
+        <field>Metadata_Scan_Job__c.Has_Attempted_Result_Save__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
         <editable>false</editable>
-        <field>Metadata_Scan_Job__c.Platform_Events_Auto_Suppressed__c</field>
+        <field>Metadata_Scan_Job__c.Is_Platform_Events_Auto_Suppressed__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
@@ -201,7 +201,7 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
-        <field>Metadata_Dependency__c.Dependencies_Fetched__c</field>
+        <field>Metadata_Dependency__c.Has_Fetched_Dependencies__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>

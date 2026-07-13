@@ -14,7 +14,7 @@
  *   callouts. Any DML before a callout triggers "uncommitted work pending".
  *
  * Phase 2 - publishProgress (called at step 19, AFTER all callouts and final DML):
- *   Re-checks OrgLimits (or short-circuits via Disable_Platform_Events__c).
+ *   Re-checks OrgLimits (or short-circuits via Should_Disable_Platform_Events__c).
  *   If still >80%: calls autoSuppressAndLog() which writes the suppression notice (plus
  *   any deferred CMDT failure message) to the job record via appendNoticeToJob, then
  *   returns without publishing the Platform Event.
@@ -79,7 +79,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
     public void checkAndSuppressIfNeeded(String jobId) {
         if (suppressionDeploymentQueued) { return; }
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
-        if (settings.Disable_Platform_Events__c) { return; }
+        if (settings.Should_Disable_Platform_Events__c) { return; }
         if (shouldAutoSuppress()) {
             deploySuppressionFlag();
             // Notice is written by autoSuppressAndLog() when publishProgress() fires at
@@ -89,14 +89,14 @@ public without sharing class DependencyNotificationService implements IScanNotif
 
     /**
      * Publishes one Dependency_Scan_Status__e event for the current Queueable execution.
-     * Skips publish if Disable_Platform_Events__c = true, or auto-suppresses if the org
+     * Skips publish if Should_Disable_Platform_Events__c = true, or auto-suppresses if the org
      * daily PE allocation is > 80% consumed.
      */
     public void publishProgress(String jobId, String status, Integer componentsAnalyzed, String message) {
         MetaMapper_Settings__mdt settings =
             new MetaMapperSettingsProvider().getSettings();
 
-        if (settings.Disable_Platform_Events__c) {
+        if (settings.Should_Disable_Platform_Events__c) {
             return;
         }
 
@@ -132,7 +132,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
                 String notice = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] '
                     + 'WARNING: Platform Event publish failed - ' + errMsg
                     + '. Progress event may not have reached the UI; consider enabling '
-                    + 'Disable_Platform_Events__c to switch to polling mode.';
+                    + 'Should_Disable_Platform_Events__c to switch to polling mode.';
                 pendingPublishFailureNotices.add(notice);
             }
         }
@@ -148,7 +148,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
     }
 
     /**
-     * Queues the CMDT deployment that flips Disable_Platform_Events__c = true.
+     * Queues the CMDT deployment that flips Should_Disable_Platform_Events__c = true.
      * Called from checkAndSuppressIfNeeded() (before any DML) to stay clear of the
      * "callout with uncommitted DML" platform restriction. Must NOT be called after DML.
      * Stores failure details in deferredDeploymentError for later write by autoSuppressAndLog().
@@ -160,7 +160,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
             mdRecord.fullName = 'MetaMapper_Settings__mdt.Default';
             mdRecord.label    = 'Default';
             Metadata.CustomMetadataValue fieldValue = new Metadata.CustomMetadataValue();
-            fieldValue.field   = 'Disable_Platform_Events__c';
+            fieldValue.field   = 'Should_Disable_Platform_Events__c';
             fieldValue.value   = true;
             mdRecord.values   = new List<Metadata.CustomMetadataValue>{ fieldValue };
             Metadata.DeployContainer container = new Metadata.DeployContainer();
@@ -175,7 +175,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
             deferredDeploymentError =
                 '[' + timestamp + '] WARNING: Auto-suppress CMDT write failed - '
                 + e.getMessage()
-                + '. Disable_Platform_Events__c was NOT set. The OrgLimits check will re-run on the next execution.';
+                + '. Should_Disable_Platform_Events__c was NOT set. The OrgLimits check will re-run on the next execution.';
             System.debug(LoggingLevel.WARN,
                 'DependencyNotificationService.deploySuppressionFlag: CMDT write failed - '
                 + e.getMessage());
@@ -223,7 +223,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
             if (job != null) {
                 job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
                         job.Scan_Diagnostic_Log__c, notice);
-                job.Platform_Events_Auto_Suppressed__c = true;
+                job.Is_Platform_Events_Auto_Suppressed__c = true;
                 update job;
             }
         } catch (Exception e) {

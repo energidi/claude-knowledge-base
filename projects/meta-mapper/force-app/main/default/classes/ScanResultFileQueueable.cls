@@ -63,15 +63,15 @@ public without sharing class ScanResultFileQueueable implements Queueable {
     }
 
     public void execute(QueueableContext ctx) {
-        // Commit Result_Save_Attempted__c BEFORE the savepoint so a rollback cannot
+        // Commit Has_Attempted_Result_Save__c BEFORE the savepoint so a rollback cannot
         // revert this flag. The flag distinguishes serializer failures (traversal
         // completed but file creation failed) from mid-traversal engine failures in the
         // LWC error state decision tree, enabling the "Download Partial Results" button.
         try {
-            update new Metadata_Scan_Job__c(Id = jobId, Result_Save_Attempted__c = true);
+            update new Metadata_Scan_Job__c(Id = jobId, Has_Attempted_Result_Save__c = true);
         } catch (Exception serAttemptEx) {
             System.debug(LoggingLevel.WARN,
-                'ScanResultFileQueueable: could not set Result_Save_Attempted__c for job '
+                'ScanResultFileQueueable: could not set Has_Attempted_Result_Save__c for job '
                 + jobId + ': ' + serAttemptEx.getMessage());
         }
         Savepoint sp = Database.setSavepoint();

@@ -19,7 +19,7 @@ MetaMapper is an open-source, 100% native Salesforce application that maps reach
 The core challenge: enterprise org metadata trees are too large for synchronous Apex (10s CPU, 6MB synchronous heap). Async Queueable context provides 12MB heap and no CPU hard timeout - but governor limits still apply per execution. The solution is a Queueable chain + Custom Object state machine:
 
 1. User submits a search via LWC. An `@AuraEnabled` controller creates a `Metadata_Scan_Job__c` record, inserts the root `Metadata_Dependency__c`, and enqueues `DependencyQueueable`.
-2. Each `DependencyQueueable` execution queries a batch of unprocessed nodes (`Dependencies_Fetched__c = false`), calls the Tooling API via Named Credential, inserts new child nodes, marks current nodes processed, and checks limit proximity.
+2. Each `DependencyQueueable` execution queries a batch of unprocessed nodes (`Has_Fetched_Dependencies__c = false`), calls the Tooling API via Named Credential, inserts new child nodes, marks current nodes processed, and checks limit proximity.
 3. When the remaining callout budget drops below a safe threshold, it self-enqueues a fresh instance and exits. The guardrail uses a remaining-callout budget model (not percentage alone): reserve explicit headroom for QueryMore follow-ups, Flow status validation, and retry splits. Chain when `remaining < headroom`.
 4. When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFileQueueable` and exits. The serializer serializes all node records to a Salesforce File, deletes the node records to free Data Storage, enforces the ring buffer, transitions the job to `Completed`, and fires notifications.
 
@@ -49,7 +49,7 @@ Each `Metadata_Dependency__c` stores a pipe-delimited `Ancestor_Path__c` chain. 
 
 - **Root node:** `Ancestor_Path__c = ''` (empty string).
 - **Path building:** `child.Ancestor_Path__c = (String.isBlank(parent.Ancestor_Path__c) ? '' : parent.Ancestor_Path__c + '|') + parent.Metadata_Id__c`
-- **Circular node:** keep full `Ancestor_Path__c`, set `Is_Circular__c = true`, `Dependencies_Fetched__c = true`. Append `{"cycleClosesAt": "<parentMetadataId>"}` to `Dependency_Context__c`.
+- **Circular node:** keep full `Ancestor_Path__c`, set `Is_Circular__c = true`, `Has_Fetched_Dependencies__c = true`. Append `{"cycleClosesAt": "<parentMetadataId>"}` to `Dependency_Context__c`.
 - **Depth guard:** before building path for any child, check if `(parent.Ancestor_Path__c?.length() ?? 0) + 20 > 32000`. If true, mark child as circular and log to `Scan_Diagnostic_Log__c`.
 
 ### Cancellation
@@ -78,7 +78,7 @@ Rejects with user-facing message if count >= `Max_Concurrent_Jobs__c` (default 2
 `DependencyQueueable` publishes exactly one `Dependency_Scan_Status__e` event per execution - after the final DML commit, not after each inner loop iteration. The `metaMapperProgress` LWC subscribes via `lightning/empApi` on mount and unsubscribes on destroy.
 
 **Dynamic Platform Event degradation:**  
-`DependencyNotificationService.publishProgress()` checks `OrgLimits.getMap().get('DailyStandardVolumePlatformEvents')` before each publish. If >80% consumed, suppresses the event and flips `Disable_Platform_Events__c = true` on the CMDT Default record via `Metadata.Operations.enqueueDeployment()`.
+`DependencyNotificationService.publishProgress()` checks `OrgLimits.getMap().get('DailyStandardVolumePlatformEvents')` before each publish. If >80% consumed, suppresses the event and flips `Should_Disable_Platform_Events__c = true` on the CMDT Default record via `Metadata.Operations.enqueueDeployment()`.
 
 ### Graph Visualization
 
@@ -132,7 +132,7 @@ When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFile
 | `Target_Metadata_Type__c` | Picklist | CustomField, ValidationRule, Flow, ApexClass, ApexTrigger, WorkflowRule, etc. |
 | `Target_API_Name__c` | Text 255 | Developer Name of the target metadata |
 | `Target_Parent_Object__c` | Text 255 | Optional - required when type = CustomField |
-| `Active_Flows_Only__c` | Checkbox | Default true - drops inactive Flow versions |
+| `Only_Include_Active_Flows__c` | Checkbox | Default true - drops inactive Flow versions |
 | `Status__c` | Picklist | Initializing, Processing, Completed, Failed, Cancelled, Paused |
 | `Scan_Diagnostic_Log__c` | Long Text 32768 | Full exception on failure + all engine diagnostic notices (PE suppression warnings, retry logs, HTTP 414 restarts). Populated by engine only. |
 | `Components_Analyzed__c` | Number | Running counter for progress bar |
@@ -272,7 +272,7 @@ Follow `nextRecordsUrl` iteratively until `done = true`. Wrap each `nextRecordsU
 
 ### Reactive HTTP 414 Handling
 
-Split batch in half, retry both halves. Track `splitDepth` through retries. Maximum depth: 5 levels. At depth 5, if still 414: mark affected nodes `Dependencies_Fetched__c = true`, log, continue. Do not fail the job.
+Split batch in half, retry both halves. Track `splitDepth` through retries. Maximum depth: 5 levels. At depth 5, if still 414: mark affected nodes `Has_Fetched_Dependencies__c = true`, log, continue. Do not fail the job.
 
 ### Limit Guardrails (Remaining-Budget Model)
 
@@ -348,7 +348,7 @@ Apply `WITH USER_MODE` / `AccessLevel.USER_MODE` only at the `@AuraEnabled` cont
 | `Flow_Scan_Batch_Size__c` | 15 | Flow batch size. Each Flow node = 1 extra validation callout. |
 | `Retention_Hours__c` | 72 | Hours before Failed/Cancelled job hard-delete. Min 1. |
 | `Dml_Safety_Margin_Rows__c` | 750 | DML rows to reserve in guardrail before self-chain |
-| `Disable_Platform_Events__c` | false | Suppresses PE publish; LWC falls back to polling |
+| `Should_Disable_Platform_Events__c` | false | Suppresses PE publish; LWC falls back to polling |
 | `Stall_Pause_Threshold__c` | 5 | Consecutive zero-progress cycles before auto-pause |
 | `Max_Concurrent_Jobs__c` | 2 | Max active MetaMapper Queueables. Rejects above threshold. |
 | `Cleanup_Chunk_Size__c` | 2000 | DML chunk size for node deletion batch |

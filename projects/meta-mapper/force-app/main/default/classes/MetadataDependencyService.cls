@@ -166,7 +166,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
             // Do NOT add to failedParentMetaIds - that causes an infinite re-queue loop
             // since the same single-node query will always return the same oversized response.
             // Instead, return empty so the parent is treated as having no children and is
-            // marked Dependencies_Fetched__c = true. Children are dropped with an error log.
+            // marked Has_Fetched_Dependencies__c = true. Children are dropped with an error log.
             fetchContext.addError('MetadataDependencyService: response body ' + bodySize
                 + ' bytes exceeds ' + MAX_RESPONSE_BODY_SIZE + ' byte heap guard for node '
                 + ids[0] + '. Children skipped (cannot split single-node batch further).');
@@ -214,7 +214,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
             // and populates failedParentMetaIds directly, so queryMoreFailed is not needed.
             if (!isFirstPage) {
                 // queryMoreFailed = true prevents Step 15 from marking ANY parent as fully fetched
-                // (Dependencies_Fetched__c = true) for this execution. The parent will be re-queried
+                // (Has_Fetched_Dependencies__c = true) for this execution. The parent will be re-queried
                 // from scratch on the next execution. Page-1 children already inserted will be
                 // deduplicated via Unique_Component_Key__c External ID upsert - no data loss.
                 // failedParentMetaIds is not populated here because ids is not in scope; the
@@ -271,7 +271,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         // Page cap: one high-fan-out parent must not consume the entire callout budget
         // across recursive pages. Accept partial results and mark the parent as fetched;
         // setting queryMoreFailed here would prevent the parent from ever being marked
-        // Dependencies_Fetched__c = true, causing an infinite re-queue loop.
+        // Has_Fetched_Dependencies__c = true, causing an infinite re-queue loop.
         if (depth >= MAX_QUERY_MORE_PAGES) {
             fetchContext.addError('MetadataDependencyService: QueryMore page cap ('
                 + MAX_QUERY_MORE_PAGES + ') reached. Remaining pages accepted as partial results.');
@@ -351,7 +351,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         node.Metadata_Name__c        = (String) rawRecord.get('MetadataComponentName');
         node.Metadata_Type__c        = (String) rawRecord.get('MetadataComponentType');
         node.Discovery_Source__c     = 'ToolingAPI';
-        node.Dependencies_Fetched__c = false;
+        node.Has_Fetched_Dependencies__c = false;
         node.Metadata_Scan_Job__c    = fetchContext.jobId;
         return node;
     }
@@ -603,10 +603,15 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
         if (res.getStatusCode() != 200) {
             return null;
         }
-        String body = res.getBodyAsBlob().toString();
-        if (String.isBlank(body) || body.length() > 500000) {
+        // Heap guard: check the raw Blob size BEFORE materializing it as a String - checking
+        // body.length() after toString() has already paid the heap-expensive conversion cost.
+        // Mirrors the guard pattern used by fetchWithRetry/followQueryMore/filterInactiveFlows.
+        Blob bodyBlob = res.getBodyAsBlob();
+        Integer bodySize = bodyBlob != null ? bodyBlob.size() : 0;
+        if (bodySize == 0 || bodySize > 500000) {
             return null;
         }
+        String body = bodyBlob.toString();
         try {
             Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(body);
             List<Object> records = (List<Object>) result.get('records');

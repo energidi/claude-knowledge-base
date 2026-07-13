@@ -82,6 +82,8 @@ export default class MetaMapperGraph extends LightningElement {
     _collapsedNodes = new Set();
     _maxVisibleDepth = 9999;
     _contextMenu = null;
+    _badgePopover = null;
+    _lastVisibleNodes = [];
     _graphSearchTerm = '';
     _searchHighlights = null;
     _showShortcutLegend = false;
@@ -224,6 +226,7 @@ export default class MetaMapperGraph extends LightningElement {
                                 this.dispatchEvent(
                                     new CustomEvent('nodeselected', { detail: { nodeId, node } })
                                 );
+                                this._openBadgePopoverIfApplicable(node, params.event.event);
                             }
                         } else {
                             // First tap — record for double-tap detection, no selection
@@ -245,6 +248,7 @@ export default class MetaMapperGraph extends LightningElement {
                         this.dispatchEvent(
                             new CustomEvent('nodeselected', { detail: { nodeId, node } })
                         );
+                        this._openBadgePopoverIfApplicable(node, params.event.event);
                     }
                 }
             });
@@ -417,6 +421,10 @@ export default class MetaMapperGraph extends LightningElement {
         const option = this._buildOption(visible);
         this._chart.setOption(option, true);
         this._scheduleAriaTableRebuild(visible);
+        // Cache so showFilterEmpty (and any other getter needing the current visible set) can
+        // read it without re-running applyFilters() - _renderGraph() is the sole invalidation
+        // point since it's called whenever _nodes/_filters/_collapsedNodes/_maxVisibleDepth change.
+        this._lastVisibleNodes = visible;
     }
 
     _scheduleAriaTableRebuild(visible) {
@@ -434,6 +442,56 @@ export default class MetaMapperGraph extends LightningElement {
             }));
             this._ariaTableBusy = false;
         }, 400);
+    }
+
+    // Plain-English confidence popover copy, keyed by the deterministic per-handler score
+    // (CustomFieldDependencyHandler/ApexClassDependencyHandler emit fixed scores: 95, 85, 65, 60).
+    // Only scores below 70 are ever shown (see CLAUDE.md "Confidence badge popover" section).
+    static _confidencePopoverText(score) {
+        if (score === 65) {
+            return 'This dependency was found by scanning Validation Rule formulas for field names. The match may be from comments or cross-object references. Verify manually before making changes.';
+        }
+        if (score === 60) {
+            return 'This dependency was found by parsing Lightning page XML. Version-sensitive: if the page was saved in a different API version, this reference may no longer exist. Verify in Lightning App Builder.';
+        }
+        return 'This dependency was found through supplemental analysis. The match confidence is below 70%. Verify manually before making changes.';
+    }
+
+    static _dynamicReferencePopoverText() {
+        return 'This dependency was detected as a dynamic Apex string reference. The actual dependency target is determined at runtime and cannot be statically resolved. Verify manually before making changes to referenced types.';
+    }
+
+    // Returns the badge entries applicable to a node - a node can carry more than one
+    // simultaneously (e.g. low-confidence AND dynamic-reference), in which case both are shown.
+    static _getBadgeEntries(node) {
+        const entries = [];
+        const lowConfidence =
+            node.Supplemental_Confidence__c != null && node.Supplemental_Confidence__c < 70;
+        if (lowConfidence) {
+            entries.push({
+                key: 'confidence',
+                glyph: '[?]',
+                label: `Warning: low confidence supplemental match, ${node.Supplemental_Confidence__c}% confidence`,
+                text: MetaMapperGraph._confidencePopoverText(node.Supplemental_Confidence__c),
+            });
+        }
+        if (node.Is_Dynamic_Reference__c) {
+            entries.push({
+                key: 'dynamic',
+                glyph: '[!]',
+                label: 'Warning: dynamic Apex string reference, cannot be statically resolved',
+                text: MetaMapperGraph._dynamicReferencePopoverText(),
+            });
+        }
+        if (node.Discovery_Source__c === 'Supplemental' && !lowConfidence) {
+            entries.push({
+                key: 'supplemental',
+                glyph: '[S]',
+                label: 'Supplemental match: found through secondary analysis, not the standard Tooling API',
+                text: 'This dependency was found through secondary analysis (not the standard Salesforce metadata API). It may include false positives.',
+            });
+        }
+        return entries;
     }
 
     _buildOption(visibleNodes) {
@@ -492,10 +550,19 @@ export default class MetaMapperGraph extends LightningElement {
                 flags.push(`${n.Supplemental_Confidence__c}% confidence - verify manually`);
             }
 
+            // Badge entries drive both the on-canvas glyph prefix (shape/text signal, not
+            // color-only) and the click popover copy (CLAUDE.md "Confidence badge popover").
+            const badges = MetaMapperGraph._getBadgeEntries(n);
+            const badgeGlyph = badges.length ? badges.map((b) => b.glyph).join(' ') + ' ' : '';
+
             return {
                 id: n.Metadata_Id__c,
                 name: n.Metadata_Name__c || '',
-                label: { show: true, color: isDarkTheme ? '#FFFFFF' : baseColor },
+                label: {
+                    show: true,
+                    color: isDarkTheme ? '#FFFFFF' : baseColor,
+                    formatter: () => `${badgeGlyph}${n.Metadata_Name__c || ''}`,
+                },
                 itemStyle: {
                     color: baseColor,
                     opacity,
@@ -508,6 +575,7 @@ export default class MetaMapperGraph extends LightningElement {
                 },
                 _node: n,
                 _flags: flags,
+                _badges: badges,
             };
         });
 
@@ -637,7 +705,7 @@ export default class MetaMapperGraph extends LightningElement {
     get showFilterEmpty() {
         return this._chartReady
             && this._nodes.length > 0
-            && this._getVisibleNodes().length === 0;
+            && (this._lastVisibleNodes || []).length === 0;
     }
 
     get isMobile() {
@@ -802,7 +870,9 @@ export default class MetaMapperGraph extends LightningElement {
 
     handleCanvasKeyDown(e) {
         if (e.key === 'Escape') {
-            if (this._contextMenu) {
+            if (this._badgePopover) {
+                this.closeBadgePopover();
+            } else if (this._contextMenu) {
                 this.closeContextMenu();
             } else if (this._focusPath) {
                 this._clearFocusPath();
@@ -820,6 +890,51 @@ export default class MetaMapperGraph extends LightningElement {
         // when no ECharts node was right-clicked
         if (!this._contextMenu) {
             e.preventDefault();
+        }
+    }
+
+    // Opens the confidence/dynamic-reference explanation popover when the just-selected node
+    // carries a qualifying badge. A node can carry more than one badge simultaneously - both
+    // popovers are shown, stacked, per CLAUDE.md "Confidence badge popover" section.
+    _openBadgePopoverIfApplicable(node, nativeEvent) {
+        const badges = MetaMapperGraph._getBadgeEntries(node);
+        if (!badges.length) {
+            this._badgePopover = null;
+            return;
+        }
+        this._badgePopover = {
+            x: nativeEvent ? nativeEvent.clientX : 0,
+            y: nativeEvent ? nativeEvent.clientY : 0,
+            badges,
+        };
+        setTimeout(() => {
+            if (!this._isMounted) return;
+            const closeBtn = this.template.querySelector('.badge-popover-close');
+            if (closeBtn) closeBtn.focus();
+        }, 0);
+    }
+
+    closeBadgePopover() {
+        this._badgePopover = null;
+        setTimeout(() => {
+            if (!this._isMounted) return;
+            const wrapper = this.template.querySelector('.graph-canvas-wrapper');
+            if (wrapper) wrapper.focus();
+        }, 0);
+    }
+
+    get badgePopoverStyle() {
+        if (!this._badgePopover) return '';
+        return `top: ${this._badgePopover.y}px; left: ${this._badgePopover.x}px;`;
+    }
+
+    get badgePopoverEntries() {
+        return this._badgePopover ? this._badgePopover.badges : [];
+    }
+
+    handleBadgePopoverKeyDown(e) {
+        if (e.key === 'Escape') {
+            this.closeBadgePopover();
         }
     }
 

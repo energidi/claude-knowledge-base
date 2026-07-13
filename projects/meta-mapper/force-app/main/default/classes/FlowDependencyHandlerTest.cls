@@ -40,7 +40,7 @@ private class FlowDependencyHandlerTest {
             Metadata_Type__c        = 'Flow',
             Metadata_Name__c        = 'Account_Before_Save',
             Unique_Component_Key__c = job.Id + ':flow',
-            Dependencies_Fetched__c = true
+            Has_Fetched_Dependencies__c = true
         );
         insert flowNode;
 

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>Dependencies_Fetched__c</fullName>
-    <defaultValue>false</defaultValue>
-    <description>Engine processing flag. False = the Tooling API has not yet been called to discover this component's child dependencies. True = the Tooling API fetch is complete for this node, or the node was intentionally marked done (circular node, dynamic reference, or max ancestor depth exceeded). The engine queries WHERE Dependencies_Fetched__c = false to find pending work. Do not edit manually.</description>
-    <label>Dependencies Fetched</label>
-    <type>Checkbox</type>
-</CustomField>

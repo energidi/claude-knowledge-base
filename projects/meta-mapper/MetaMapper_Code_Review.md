@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** July 12, 2026 (Round 76 - sf-orchestrator full pass: 35 findings applied/resolved - 1 Critical, 12 High, 14 Medium, 8 Low; plus 1 pre-existing SOQL clause-order bug caught during verification)
+**Last Updated:** July 13, 2026 (Round 77 - sf-orchestrator full pass: 15 findings applied - 1 Critical, 2 High, 5 Medium, 7 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3914,6 +3914,29 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
 
 ---
+
+## Round 77 Fixes Applied
+
+Full sf-orchestrator review (all 8 lenses: architecture, UX, naming, security, performance, testing, automation, static analysis). 15 findings applied (1 Critical, 2 High, 5 Medium, 7 Low). Overall verdict before fixes: NO-GO (1 Critical accessibility gap - Graph View warning badges spec'd but never implemented). Security and Static Analysis lenses returned zero new findings this round. Static analysis re-confirmed the same environment gap as Round 76 (PMD/CPD/SFGE/Flow still blocked by missing Java 11+/Python 3.10+ on this machine - not a code defect) and the same pre-existing prettier formatting drift accepted since Round 75; neither is new.
+
+**Critical:**
+- Finding 1 (UX - `metaMapperGraph.js`/`.html`/`.css`): the Graph View node warning system (Supplemental `[S]` badge, low-confidence red badge + click popover, `Is_Dynamic_Reference__c` warning badge + popover, plain-English `aria-label`) was spec'd in CLAUDE.md but never rendered - only tooltip/ARIA-table text existed. Fixed: added `_getBadgeEntries()`/`_confidencePopoverText()`/`_dynamicReferencePopoverText()` static helpers producing the exact CLAUDE.md copy (ValidationRule regex 65%, FlexiPage XML 60%, generic 60-69%, dynamic-reference message); node labels now prefix a bracket-glyph badge (`[?]`/`[!]`/`[S]`); clicking a badged node opens a dismissible popover (Esc, backdrop click, or explicit Close button - same pattern as the existing context menu) showing all applicable badge texts stacked. Rollback: revert `metaMapperGraph.js/.html/.css` to pre-Round-77 state (reintroduces the WCAG AA gap - not recommended).
+
+**High:**
+- Finding 2 (Performance - `metaMapperGraph.js`): `showFilterEmpty` re-ran the full unmemoized `applyFilters()` O(n) scan on every re-render, so every arrow-key press re-filtered the entire node list on large graphs, defeating the dispatchAction-only optimization the file had just added. Fixed: `_renderGraph()` now caches its visible-node result in `this._lastVisibleNodes`; `showFilterEmpty` reads the cache instead of calling `_getVisibleNodes()` directly.
+- Finding 3 (Automation - `DependencyJobController.resumeJob()`): no row lock on the Paused-status check before `update as user job` + `System.enqueueJob()`; two concurrent `resumeJob()` calls (double-click, two tabs) could both pass the check and spawn two independent, concurrently self-chaining `DependencyQueueable` chains for the same job - the same bug class already fixed for `cancelJob()` in Round 70 but never applied here. Fixed: added `MetadataScanJobSelector.getByIdForResumeLocked()` (`WITH USER_MODE ... FOR UPDATE`, mirroring `cancelJob()`'s proven pattern); `resumeJob()` now locks and re-verifies `Status__c == 'Paused'` inside the lock before the DML/enqueue. Removed the now-unused unlocked `getByIdForResume()`. Rollback: revert `DependencyJobController.cls`/`MetadataScanJobSelector.cls` to pre-Round-77 state (reintroduces the race - not recommended).
+
+**Medium:**
+- Finding 4 (Architecture - `MetadataDependencyService.resolveRootId()`): broke the class's own documented heap-guard contract by calling `res.getBodyAsBlob().toString()` before checking body size, unlike every other callout path in the class. Fixed: reordered to check `Blob.size()` before `.toString()`.
+- Finding 5 (UX - `metaMapperGraph.html`): spanning tree notice had redundant `aria-live="polite"` alongside `role="status"` (CLAUDE.md itself flags this as a double-announcement risk). Fixed: removed the redundant attribute.
+- Findings 6-7 (UX - `metaMapperFormatters.renderPills()`): silently dropped unrecognized `Dependency_Context__c` keys instead of the spec'd plain-text fallback, and never gated on the `"v"` schema-version key. Fixed: added a fallback branch for unknown keys and a version check that falls back to a generic label for any non-v1 payload.
+- Finding 8 (Testing - `DependencyJobControllerTest.getJobStatus_returnsRecord`): never asserted `batchSizeInUse`/`peSuppressionActive`, the two `JobStatusResult` fields the Paused-banner and PE-polling-fallback UX depend on. Fixed: added both assertions plus a new `getJobStatus_withBatchSizeOverride_reflectsOverride` test.
+
+**Low:**
+- Findings 9-14 (Naming - 6 boolean fields): `Active_Flows_Only__c`, `Disable_Platform_Events__c`, `Admin_Customized__c`, `Result_Save_Attempted__c`, `Platform_Events_Auto_Suppressed__c`, `Dependencies_Fetched__c` were bare adjectives/imperatives/past-participles, not Is/Has/Can-prefixed. Renamed to `Only_Include_Active_Flows__c`, `Should_Disable_Platform_Events__c`, `Has_Admin_Customized__c`, `Has_Attempted_Result_Save__c`, `Is_Platform_Events_Auto_Suppressed__c`, `Has_Fetched_Dependencies__c` respectively - field-meta.xml files renamed (fullName + label updated), and every reference updated across 34 files (Apex classes/tests, the CMDT Default record, the `MetaMapper_Admin` permission set, `metaMapperResults.js`, CLAUDE.md, and `MetaMapper_Technical_Design.md`). Round-history entries in this file that reference the old names by design were left untouched (they describe what was true at the time). Rollback: this is a wide mechanical rename across 34+ files - reverting is not recommended; if needed, re-run the inverse renames listed in Phase 2's Rename Summary for this round.
+- Finding 15 (Testing - `DependencyNotificationServiceTest.publishProgress_repeatedCalls_suppressionGuardIsIdempotent`): zero `Assert` statements, relied solely on absence-of-exception. Fixed: added an explicit assertion matching the sibling test's pattern.
+
+**Verification:** `npm run lint` - clean, zero violations. `npm run test:unit` - 3 suites, 60 tests, all passing. `npm run prettier:verify` - the 7 files touched this round show the same pre-existing repo-wide formatting-drift condition accepted since Round 75 (not new). **Apex-side changes (resumeJob() race fix, resolveRootId() heap-guard fix, the two new/updated test assertions, and the 6 field renames) are not yet compile/test-verified against a live org** - that requires the Phase 5 deploy, which is gated on explicit user approval.
 
 ## Round 76 Fixes Applied
 

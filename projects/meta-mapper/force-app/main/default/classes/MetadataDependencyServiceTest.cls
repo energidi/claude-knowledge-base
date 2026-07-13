@@ -74,7 +74,7 @@ private class MetadataDependencyServiceTest {
     @IsTest
     static void fetchDependencies_http500_logsErrorAndPopulatesFailedParents() {
         // Finding #1: HTTP 500 must populate failedParentMetaIds so DependencyQueueable
-        // knows not to mark the parent as Dependencies_Fetched__c = true.
+        // knows not to mark the parent as Has_Fetched_Dependencies__c = true.
         Test.setMock(HttpCalloutMock.class, new ToolingApiMock(500, 'Internal Server Error'));
         DependencyFetchContext opts = new DependencyFetchContext();
         opts.jobId = 'a003000000000001AAA';

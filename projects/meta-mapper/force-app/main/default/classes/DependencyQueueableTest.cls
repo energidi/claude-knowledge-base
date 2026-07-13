@@ -13,7 +13,7 @@ private class DependencyQueueableTest {
             Target_Metadata_Type__c    = 'CustomField',
             Target_API_Name__c         = 'Account.MyField__c',
             Status__c                  = status,
-            Active_Flows_Only__c       = false,
+            Only_Include_Active_Flows__c       = false,
             Components_Analyzed__c     = 0,
             Processing_Cycle_Count__c = 0,
             Last_Progress_Cycle__c   = 0,
@@ -30,7 +30,7 @@ private class DependencyQueueableTest {
             Metadata_Type__c            = 'ApexClass',
             Metadata_Name__c            = 'TestClass',
             Unique_Component_Key__c = jobId + ':' + metaId,
-            Dependencies_Fetched__c     = fetched
+            Has_Fetched_Dependencies__c     = fetched
         );
         insert node;
         return node;
@@ -122,13 +122,13 @@ private class DependencyQueueableTest {
         Test.stopTest();
 
         Metadata_Dependency__c node = [
-            SELECT Dependencies_Fetched__c
+            SELECT Has_Fetched_Dependencies__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :job.Id
             LIMIT 1
         ];
-        Assert.isTrue(node.Dependencies_Fetched__c,
-            'Processed node should be marked Dependencies_Fetched__c = true');
+        Assert.isTrue(node.Has_Fetched_Dependencies__c,
+            'Processed node should be marked Has_Fetched_Dependencies__c = true');
     }
 
     // ---- new tests for Round 18 fixes ----
@@ -145,12 +145,12 @@ private class DependencyQueueableTest {
         Test.stopTest();
 
         Metadata_Dependency__c node = [
-            SELECT Dependencies_Fetched__c
+            SELECT Has_Fetched_Dependencies__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :job.Id
             LIMIT 1
         ];
-        Assert.isFalse(node.Dependencies_Fetched__c,
+        Assert.isFalse(node.Has_Fetched_Dependencies__c,
             'Parent node must NOT be marked fetched when the Tooling API call fails');
 
         Metadata_Scan_Job__c refreshed = [
@@ -223,7 +223,7 @@ private class DependencyQueueableTest {
         Test.stopTest();
 
         List<Metadata_Dependency__c> nodes = [
-            SELECT Metadata_Id__c, Dependencies_Fetched__c
+            SELECT Metadata_Id__c, Has_Fetched_Dependencies__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :job.Id
             ORDER BY CreatedDate
@@ -231,7 +231,7 @@ private class DependencyQueueableTest {
         Assert.areEqual(2, nodes.size(), 'Parent + child node should exist after processing');
 
         Metadata_Dependency__c parent = nodes[0];
-        Assert.isTrue(parent.Dependencies_Fetched__c,
+        Assert.isTrue(parent.Has_Fetched_Dependencies__c,
             'Parent should be marked fetched after successful child discovery');
 
         Metadata_Scan_Job__c refreshed = [
@@ -272,7 +272,7 @@ private class DependencyQueueableTest {
             Metadata_Type__c        = 'CustomField',
             Metadata_Name__c        = 'Account.MyField__c',
             Unique_Component_Key__c = job.Id + ':',
-            Dependencies_Fetched__c   = false
+            Has_Fetched_Dependencies__c   = false
         );
         insert root;
         Test.setMock(HttpCalloutMock.class, new RootIdResolveMock());
@@ -293,7 +293,7 @@ private class DependencyQueueableTest {
     @IsTest
     static void execute_ancestorPathNear32000Chars_setsMaxDepthExceededNotCircular() {
         // The ancestor path depth guard (ANCESTOR_PATH_MARGIN/ANCESTOR_PATH_MAX) must stop
-        // traversal via Dependencies_Fetched__c = true and a maxDepthExceeded context flag,
+        // traversal via Has_Fetched_Dependencies__c = true and a maxDepthExceeded context flag,
         // and must NOT set Is_Circular__c - depth overflow is a traversal ceiling, not an
         // ancestry cycle (previously untested per the testing review).
         Metadata_Scan_Job__c job = makeJob('Processing');
@@ -303,7 +303,7 @@ private class DependencyQueueableTest {
             Metadata_Type__c        = 'ApexClass',
             Metadata_Name__c        = 'ParentClass',
             Unique_Component_Key__c = job.Id + ':a001000000000001AAA',
-            Dependencies_Fetched__c = false,
+            Has_Fetched_Dependencies__c = false,
             Ancestor_Path__c        = 'X'.repeat(31990), // + 20-char margin > 32000 trips the guard
             Dependency_Depth__c     = 500
         );
@@ -322,13 +322,13 @@ private class DependencyQueueableTest {
         Test.stopTest();
 
         Metadata_Dependency__c child = [
-            SELECT Dependencies_Fetched__c, Is_Circular__c, Dependency_Context__c
+            SELECT Has_Fetched_Dependencies__c, Is_Circular__c, Dependency_Context__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :job.Id AND Metadata_Id__c = 'a002000000000001AAA'
             LIMIT 1
         ];
-        Assert.isTrue(child.Dependencies_Fetched__c,
-            'Depth-exceeded node must be marked Dependencies_Fetched__c = true to stop traversal');
+        Assert.isTrue(child.Has_Fetched_Dependencies__c,
+            'Depth-exceeded node must be marked Has_Fetched_Dependencies__c = true to stop traversal');
         Assert.areNotEqual(true, child.Is_Circular__c,
             'Depth overflow is a traversal ceiling, not an ancestry cycle - Is_Circular__c must not be set');
         Assert.isTrue(child.Dependency_Context__c.contains('maxDepthExceeded'),

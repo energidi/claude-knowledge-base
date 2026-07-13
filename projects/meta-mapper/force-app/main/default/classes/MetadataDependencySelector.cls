@@ -31,7 +31,7 @@ public without sharing class MetadataDependencySelector {
                    Unique_Component_Key__c
             FROM Metadata_Dependency__c
             WHERE Metadata_Scan_Job__c = :jobId
-            AND Dependencies_Fetched__c = false
+            AND Has_Fetched_Dependencies__c = false
             ORDER BY CreatedDate ASC, Id ASC
             LIMIT :queryLimit
         ];
@@ -141,7 +141,7 @@ public without sharing class MetadataDependencySelector {
                    Metadata_Type__c,
                    Metadata_Name__c,
                    Dependency_Depth__c,
-                   Dependencies_Fetched__c,
+                   Has_Fetched_Dependencies__c,
                    Is_Circular__c,
                    Is_Dynamic_Reference__c,
                    Discovery_Source__c,
@@ -176,7 +176,7 @@ public without sharing class MetadataDependencySelector {
                    Metadata_Type__c,
                    Metadata_Name__c,
                    Dependency_Depth__c,
-                   Dependencies_Fetched__c,
+                   Has_Fetched_Dependencies__c,
                    Is_Circular__c,
                    Is_Dynamic_Reference__c,
                    Dependency_Context__c,

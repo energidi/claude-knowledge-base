@@ -235,6 +235,28 @@
     outline: none;
 }
 
+/* Badge explanation popover (confidence / dynamic-reference / supplemental) */
+.badge-popover {
+    position: fixed;
+    background: var(--slds-g-color-surface-1, #ffffff);
+    border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    z-index: 9000;
+    max-width: var(--slds-g-sizing-14, 320px);
+    padding: var(--slds-g-spacing-3, 0.75rem);
+    border-radius: var(--slds-g-radius-border-1, 4px);
+}
+
+.badge-popover-entry {
+    font-size: var(--slds-g-font-scale-base, 0.8125rem);
+    color: var(--slds-g-color-neutral-base-10, #3e3e3c);
+    margin-bottom: var(--slds-g-spacing-2, 0.5rem);
+}
+
+.badge-popover-close {
+    margin-top: var(--slds-g-spacing-2, 0.5rem);
+}
+
 /* Modals */
 .modal-backdrop {
     position: fixed;

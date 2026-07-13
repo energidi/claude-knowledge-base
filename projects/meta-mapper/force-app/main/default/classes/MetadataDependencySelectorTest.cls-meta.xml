@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Direct unit tests for MetadataDependencySelector.nextUnprocessed() (job scoping, Dependencies_Fetched__c filter, limit) and dedupForResults() (scoped Tier-1 cycle-detection dedup query), previously exercised only incidentally.</description>
+    <description>Direct unit tests for MetadataDependencySelector.nextUnprocessed() (job scoping, Has_Fetched_Dependencies__c filter, limit) and dedupForResults() (scoped Tier-1 cycle-detection dedup query), previously exercised only incidentally.</description>
     <status>Active</status>
 </ApexClass>
