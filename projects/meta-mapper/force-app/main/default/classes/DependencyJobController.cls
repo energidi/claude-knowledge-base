@@ -136,6 +136,15 @@ public with sharing class DependencyJobController {
         // Sandbox: limit to 1 concurrent job to bound peak Data Storage.
         Integer maxConcurrent = sandboxOverrideActive ? 1
             : (settings.Max_Concurrent_Jobs__c != null ? ((Decimal) settings.Max_Concurrent_Jobs__c).intValue() : 2);
+        // Round 79 Finding #4: Max_Concurrent_Jobs__c = 0 disables all new scans org-wide -
+        // an intentional admin-controlled kill switch. Without this explicit check, the
+        // concurrency guard below rejects every submission with a misleading "another scan
+        // is already running" message, since 0 >= 0 is always true.
+        if (maxConcurrent <= 0) {
+            throw new DependencyJobException(
+                'MetaMapper scans are currently disabled by your admin (Max Concurrent Scans is set to 0).'
+            );
+        }
         // Primary: count active Queueable jobs in AsyncApexJob (indexed by ApexClassId).
         Integer activeCount = jobSelector.countActiveQueueables(maxConcurrent);
         if (activeCount >= maxConcurrent) {

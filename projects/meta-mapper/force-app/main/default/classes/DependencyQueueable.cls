@@ -117,16 +117,24 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             // Metadata.Operations.enqueueDeployment() which is treated as a callout and
             // cannot be called after uncommitted DML.
             new DependencyNotificationService().checkAndSuppressIfNeeded(jobId);
+            // Round 79 Finding #5: load the job once here and pass it into runEngine() -
+            // previously execute() queried getStatusOnly() and runEngine() separately queried
+            // getByIdForEngine() for the identical row on every execution (two single-row
+            // SOQL calls for the same record, every self-chain).
+            Metadata_Scan_Job__c job = new MetadataScanJobSelector().getByIdForEngine(jobId);
+            if (job == null) {
+                return;
+            }
             // Transition Initializing ? Processing BEFORE the savepoint so a rollback
             // cannot revert the status back to Initializing. Once the engine begins
             // execution the job is always either Processing or (on failure) Failed.
-            String initStatus = new MetadataScanJobSelector().getStatusOnly(jobId);
-            if ('Initializing'.equals(initStatus)) {
+            if ('Initializing'.equals(job.Status__c)) {
                 update new Metadata_Scan_Job__c(Id = jobId, Status__c = 'Processing');
+                job.Status__c = 'Processing';
             }
             calloutsAtSavepoint = Limits.getCallouts();
             sp = Database.setSavepoint();
-            runEngine();
+            runEngine(job);
         } catch (Exception e) {
             if (sp != null && Limits.getCallouts() == calloutsAtSavepoint) {
                 Database.rollback(sp);
@@ -135,15 +143,11 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         }
     }
 
-    private void runEngine() {
+    private void runEngine(Metadata_Scan_Job__c job) {
         MetadataScanJobSelector jobSelector  = new MetadataScanJobSelector();
         MetadataDependencySelector nodeSelector = new MetadataDependencySelector();
 
-        // Step 1 - load job
-        Metadata_Scan_Job__c job = jobSelector.getByIdForEngine(jobId);
-        if (job == null) {
-            return;
-        }
+        // Step 1 - job already loaded and passed in by execute() (Round 79 Finding #5).
 
         // Step 2 - cancel check (first operation after load)
         if (job.Status__c == 'Cancelled') {

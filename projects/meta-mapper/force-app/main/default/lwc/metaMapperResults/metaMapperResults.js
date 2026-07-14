@@ -56,6 +56,7 @@ export default class MetaMapperResults extends LightningElement {
     _isMounted = false;
     _filteredNodesCache = null;
     _nodeMapCache = null;
+    _typeCountsCache = null;
     _pendingNodeId = null;
     _pendingFocusNodeId = null;
     _copilotChecked = false;
@@ -200,6 +201,7 @@ export default class MetaMapperResults extends LightningElement {
     _invalidateCaches() {
         this._filteredNodesCache = null;
         this._nodeMapCache = null;
+        this._typeCountsCache = null;
     }
 
     // --- Computed getters ---
@@ -242,16 +244,23 @@ export default class MetaMapperResults extends LightningElement {
     }
 
     get typeCounts() {
-        const counts = buildTypeCounts(this.filteredNodes);
-        return Object.entries(counts)
-            .map(([type, count]) => ({
-                type,
-                count,
-                label: type,
-                icon: TYPE_ICONS[type] || 'utility:connected_apps'
-            }))
-            .sort((a, b) => b.count - a.count)
-            .filter(tc => tc.count > 0);
+        // Round 79 Finding #6: memoized like filteredNodes/nodeMap - this getter is read
+        // from the template and independently re-evaluated by showStatsTile and
+        // showStatsTileShimmer in the same render pass, so an unmemoized build+sort ran
+        // up to 3x per render on large completed scans.
+        if (!this._typeCountsCache) {
+            const counts = buildTypeCounts(this.filteredNodes);
+            this._typeCountsCache = Object.entries(counts)
+                .map(([type, count]) => ({
+                    type,
+                    count,
+                    label: type,
+                    icon: TYPE_ICONS[type] || 'utility:connected_apps'
+                }))
+                .sort((a, b) => b.count - a.count)
+                .filter(tc => tc.count > 0);
+        }
+        return this._typeCountsCache;
     }
 
     get showStatsTile() {

@@ -160,7 +160,7 @@
                         <template lwc:if={showTreeLoadError}>
                             <div class="tab-load-error" role="alert">
                                 <p>Tree could not be loaded.</p>
-                                <lightning-button label="Retry" onclick={handleRetryTab}></lightning-button>
+                                <lightning-button label="Retry" variant="brand" onclick={handleRetryTab}></lightning-button>
                             </div>
                         </template>
                         <template lwc:else>
@@ -179,7 +179,7 @@
                         <template lwc:if={showGraphLoadError}>
                             <div class="tab-load-error" role="alert">
                                 <p>Graph could not be loaded.</p>
-                                <lightning-button label="Retry" onclick={handleRetryTab}></lightning-button>
+                                <lightning-button label="Retry" variant="brand" onclick={handleRetryTab}></lightning-button>
                             </div>
                         </template>
                         <template lwc:else>

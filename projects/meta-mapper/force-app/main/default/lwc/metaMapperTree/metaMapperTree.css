@@ -130,7 +130,7 @@ mark {
     position: fixed;
     background: white;
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
-    box-shadow: 0 2px 8px var(--slds-g-color-shadow-1, rgba(0, 0, 0, 0.2));
+    box-shadow: 0 2px 8px var(--metamapper-g-color-shadow-1, rgba(0, 0, 0, 0.2));
     z-index: 9000;
     min-width: 180px;
     border-radius: var(--slds-g-radius-border-1, 4px);

@@ -40,7 +40,12 @@ module.exports = defineConfig([
         files: ['**/lwc/**/*.test.js'],
         extends: [lwcConfig],
         rules: {
-            '@lwc/lwc/no-unexpected-wire-adapter-usages': 'off'
+            '@lwc/lwc/no-unexpected-wire-adapter-usages': 'off',
+            // Same rationale as the component-file block above: setTimeout/clearTimeout
+            // (flushPromises helpers, fake-timer-driven state machine assertions) is the
+            // standard pattern in this project's test files - carried forward here since
+            // flat-config block ordering otherwise resets the rule to "error" for *.test.js.
+            '@lwc/lwc/no-async-operation': 'off'
         },
         languageOptions: {
             globals: {

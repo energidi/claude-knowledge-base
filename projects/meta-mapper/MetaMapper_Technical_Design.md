@@ -71,7 +71,7 @@ Integer activeQueueables = [
     AND Status IN ('Processing', 'Preparing')
 ];
 ```
-Rejects with user-facing message if count >= `Max_Concurrent_Jobs__c` (default 2).
+Rejects with user-facing message if count >= `Max_Concurrent_Jobs__c` (default 2). Setting `Max_Concurrent_Jobs__c = 0` is the supported kill switch to disable all new scans org-wide without a deployment; `createJob()` throws a dedicated message for this case rather than the generic concurrency-rejection message (Round 79).
 
 ### Live Progress (Platform Events)
 

@@ -70,7 +70,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.72);
+    background: var(--metamapper-g-color-overlay-1, rgba(0, 0, 0, 0.72));
     color: var(--slds-g-color-neutral-base-100, #ffffff);
     font-size: var(--slds-g-font-scale-base, 0.8125rem);
     padding: var(--slds-g-spacing-2, 0.5rem) var(--slds-g-spacing-4, 1rem);
@@ -215,7 +215,7 @@
     position: fixed;
     background: var(--slds-g-color-surface-1, #ffffff);
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px var(--metamapper-g-color-shadow-1, rgba(0, 0, 0, 0.2));
     z-index: 9000;
     min-width: 180px;
     border-radius: var(--slds-g-radius-border-1, 4px);
@@ -240,7 +240,7 @@
     position: fixed;
     background: var(--slds-g-color-surface-1, #ffffff);
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px var(--metamapper-g-color-shadow-1, rgba(0, 0, 0, 0.2));
     z-index: 9000;
     max-width: var(--slds-g-sizing-14, 320px);
     padding: var(--slds-g-spacing-3, 0.75rem);
@@ -261,7 +261,7 @@
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--metamapper-g-color-overlay-2, rgba(0, 0, 0, 0.5));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -275,7 +275,7 @@
     width: 90%;
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 24px var(--metamapper-g-color-shadow-2, rgba(0, 0, 0, 0.3));
 }
 
 .modal-header {

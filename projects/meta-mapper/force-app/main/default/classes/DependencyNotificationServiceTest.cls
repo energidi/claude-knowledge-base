@@ -115,4 +115,36 @@ private class DependencyNotificationServiceTest {
         Assert.areEqual('Pre-existing diagnostic message', refreshed.Scan_Diagnostic_Log__c,
             'Normal publishProgress must not modify Scan_Diagnostic_Log__c');
     }
+
+    @IsTest
+    static void publishProgress_deliversEventWithCorrectFields() {
+        // Round 79 Finding #1: prior tests only asserted the absence of a publish-failure
+        // notice (a no-throw proxy). This asserts the actual delivered Dependency_Scan_Status__e
+        // payload so a field-mapping regression (wrong job Id, stale status, dropped message)
+        // would be caught.
+        Metadata_Scan_Job__c job = new Metadata_Scan_Job__c(
+            Target_Metadata_Type__c = 'ApexClass',
+            Target_API_Name__c      = 'MyClass',
+            Status__c                = 'Processing',
+            Components_Analyzed__c  = 0
+        );
+        insert job;
+
+        DependencyNotificationService svc = new DependencyNotificationService();
+        Test.startTest();
+        svc.publishProgress(job.Id, 'Processing', 5, 'Analyzing dependencies...');
+        Test.stopTest();
+
+        List<Dependency_Scan_Status__e> events =
+            Test.getEventBus().getDeliveredEvents(Dependency_Scan_Status__e.SObjectType);
+        Assert.areEqual(1, events.size(), 'Exactly one event should have been delivered');
+        Assert.areEqual(job.Id, events[0].Scan_Job_Id__c,
+            'Delivered event should carry the job Id passed to publishProgress');
+        Assert.areEqual('Processing', events[0].Status__c,
+            'Delivered event should carry the status passed to publishProgress');
+        Assert.areEqual(5, events[0].Components_Analyzed__c,
+            'Delivered event should carry the component count passed to publishProgress');
+        Assert.areEqual('Analyzing dependencies...', events[0].Progress_Message__c,
+            'Delivered event should carry the message passed to publishProgress');
+    }
 }

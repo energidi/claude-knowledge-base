@@ -275,6 +275,29 @@ private class MetadataDependencyServiceTest {
         }
     }
 
+    private class ToolingApi500ThenOkMock implements HttpCalloutMock {
+        // Returns 500 on the first call, then 200 with one result record on the second call.
+        // Records callCount so the test can prove the retry fires exactly once.
+        Integer callCount = 0;
+        public HttpResponse respond(HttpRequest req) {
+            callCount++;
+            HttpResponse res = new HttpResponse();
+            if (callCount == 1) {
+                res.setStatusCode(500);
+                res.setBody('Internal Server Error');
+            } else {
+                res.setStatusCode(200);
+                res.setBody('{"done":true,"totalSize":1,"records":['
+                    + '{"MetadataComponentId":"a001000000000001AAA",'
+                    + '"MetadataComponentName":"ClassA","MetadataComponentType":"ApexClass",'
+                    + '"RefMetadataComponentId":"a002000000000001AAA",'
+                    + '"RefMetadataComponentName":"MyField","RefMetadataComponentType":"CustomField"}'
+                    + ']}');
+            }
+            return res;
+        }
+    }
+
     private class ToolingApi414ThenOkMock implements HttpCalloutMock {
         // Returns 414 on the first call, then 200 with one result record on subsequent calls.
         // Used to verify the split-and-recover happy path (not max-depth exhaustion).
@@ -315,6 +338,27 @@ private class MetadataDependencyServiceTest {
             'Results should be returned after a 414 split-and-recover');
         Assert.isTrue(opts.errors.isEmpty(),
             'No errors should be logged when split-and-recover succeeds');
+    }
+
+    @IsTest
+    static void fetchDependencies_http500ThenOk_retriesOnceAndRecovers() {
+        // Round 79 Finding #2: proves the documented 5xx single-retry actually retries
+        // exactly once and recovers - not zero retries (would fail this test's happy-path
+        // assertion) and not unbounded retries (would inflate the mock's callCount above 2).
+        ToolingApi500ThenOkMock mock = new ToolingApi500ThenOkMock();
+        Test.setMock(HttpCalloutMock.class, mock);
+        DependencyFetchContext opts = new DependencyFetchContext();
+        opts.jobId = 'a003000000000001AAA';
+        MetadataDependencyService svc = new MetadataDependencyService();
+        Map<String, List<Metadata_Dependency__c>> result =
+            svc.fetchDependencies(new List<String>{ 'a002000000000001AAA' }, opts);
+
+        Assert.isFalse(result.isEmpty(),
+            'A 500-then-200 sequence should recover and return results after the single retry');
+        Assert.isTrue(opts.errors.size() == 1 && opts.errors[0].contains('retrying once'),
+            'Exactly one "retrying once" notice should be logged for the single retry');
+        Assert.areEqual(2, mock.callCount,
+            'Exactly two callouts should occur: the initial 500 and the one retry - not zero, not unbounded');
     }
 
     @IsTest
