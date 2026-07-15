@@ -27,7 +27,7 @@ public with sharing class DependencyJobController {
 
     /**
      * Returned by getJobStatus() so the LWC receives both the job record and the
-     * Should_Disable_Platform_Events__c settings flag in a single callout. The flag tells
+     * Is_Platform_Events_Disabled__c settings flag in a single callout. The flag tells
      * the LWC whether to activate polling fallback instead of waiting for PE events.
      */
     public class JobStatusResult {
@@ -184,7 +184,7 @@ public with sharing class DependencyJobController {
             Target_Metadata_Type__c = metadataType,
             Target_API_Name__c      = apiName,
             Target_Parent_Object__c        = targetObject,
-            Only_Include_Active_Flows__c    = activeFlowsOnly == true,
+            Is_Active_Flows_Only__c    = activeFlowsOnly == true,
             Status__c               = STATUS_INITIALIZING,
             Job_Type__c             = 'Dependency_Map',
             Components_Analyzed__c  = 0,
@@ -256,7 +256,10 @@ public with sharing class DependencyJobController {
                 WHERE RefMetadataComponentId IN (
                     SELECT MetadataComponentId
                     FROM MetadataComponentDependency
-                    WHERE MetadataComponentId.Name = :apiName // bind variable prevents SOQL injection on user-supplied input
+                    // MetadataComponentId is a polymorphic lookup with no queryable ".Name"
+                    // relationship field - MetadataComponentName is the correct first-class
+                    // field for this filter. Bind variable prevents SOQL injection on user input.
+                    WHERE MetadataComponentName = :apiName
                 )
                 WITH USER_MODE
             ];
@@ -303,7 +306,7 @@ public with sharing class DependencyJobController {
             return null;
         }
         MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
-        Boolean platformEventsDisabled = settings.Should_Disable_Platform_Events__c == true
+        Boolean platformEventsDisabled = settings.Is_Platform_Events_Disabled__c == true
             || statusJob.Is_Platform_Events_Auto_Suppressed__c == true;
         Integer batchSizeInUse = statusJob.Batch_Size_Override__c != null
             ? ((Decimal) statusJob.Batch_Size_Override__c).intValue()
@@ -544,7 +547,7 @@ public with sharing class DependencyJobController {
 
         System.enqueueJob(new DependencyQueueable(
             jobId,
-            job.Only_Include_Active_Flows__c,
+            job.Is_Active_Flows_Only__c,
             overrideBatchSize
         ));
     }

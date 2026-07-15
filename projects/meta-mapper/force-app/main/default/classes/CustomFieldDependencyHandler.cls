@@ -236,6 +236,31 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
         return result;
     }
 
+    /**
+     * Inverted token pass over a pre-tokenized ValidationRule formula: matches bare field
+     * references (status__c) and namespace-prefixed references (pkg__status__c) in O(tokens)
+     * instead of O(fields x tokens). Extracted as a pure, @TestVisible static method so the
+     * matching/namespace-stripping logic can be unit tested with controlled input, independent
+     * of the ValidationRule SOQL query that supplies formulaTokens in production.
+     */
+    @TestVisible
+    private static Set<String> matchFieldTokensInFormula(Set<String> formulaTokens, Set<String> fieldApiNamesLower) {
+        Set<String> matchedByToken = new Set<String>();
+        for (String token : formulaTokens) {
+            if (fieldApiNamesLower.contains(token)) {
+                matchedByToken.add(token);
+            } else if (token.contains('__')) {
+                // Strip first namespace prefix: 'pkg__status__c' -> 'status__c'
+                String afterNs = token.substring(token.indexOf('__') + 2);
+                // Only act if remainder is itself a custom field name (has its own __)
+                if (afterNs.contains('__') && fieldApiNamesLower.contains(afterNs)) {
+                    matchedByToken.add(afterNs);
+                }
+            }
+        }
+        return matchedByToken;
+    }
+
     // --- ValidationRule tokenized match ---
 
     private SupplementalScanResult findValidationRuleReferences(
@@ -380,19 +405,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
                 // prefixed field. indexOf strips only the first '__' segment (pkg__), leaving
                 // 'status__c'. The contains('__') guard on the remainder ensures we only act
                 // when the stripped portion is itself a field name (contains its own suffix).
-                Set<String> matchedByToken = new Set<String>();
-                for (String token : formulaTokens) {
-                    if (fieldApiNamesLower.contains(token)) {
-                        matchedByToken.add(token);
-                    } else if (token.contains('__')) {
-                        // Strip first namespace prefix: 'pkg__status__c' -> 'status__c'
-                        String afterNs = token.substring(token.indexOf('__') + 2);
-                        // Only act if remainder is itself a custom field name (has its own __)
-                        if (afterNs.contains('__') && fieldApiNamesLower.contains(afterNs)) {
-                            matchedByToken.add(afterNs);
-                        }
-                    }
-                }
+                Set<String> matchedByToken = matchFieldTokensInFormula(formulaTokens, fieldApiNamesLower);
 
                 for (String lowerField : fieldApiNamesLower) {
                     // Primary: O(1) Set lookup from the inverted token pass above.
@@ -568,10 +581,7 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
                         result.addError(soqlMsg2);
                         break;
                     }
-                    List<String> fieldBatch = new List<String>();
-                    for (Integer fj = fi; fj < Math.min(fi + fieldBatchSize, relevantFields.size()); fj++) {
-                        fieldBatch.add(relevantFields[fj]);
-                    }
+                    List<String> fieldBatch = batchOfFields(relevantFields, fi, fieldBatchSize);
                     List<String> conditions = new List<String>();
                     for (String field : fieldBatch) {
                         conditions.add(field + ' IN :matchValues');
@@ -661,6 +671,21 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             result.addError(descErr);
         }
         return result;
+    }
+
+    /**
+     * Returns the slice of fields at [startIndex, startIndex + batchSize) - the CMT field-batching
+     * pagination logic that keeps a single dynamic SOQL WHERE clause under the 20,000-char limit.
+     * Extracted as a pure, @TestVisible static method so the >MAX_CMT_FIELDS_PER_QUERY split
+     * behavior can be unit tested without a live CMT query.
+     */
+    @TestVisible
+    private static List<String> batchOfFields(List<String> fields, Integer startIndex, Integer batchSize) {
+        List<String> batch = new List<String>();
+        for (Integer fj = startIndex; fj < Math.min(startIndex + batchSize, fields.size()); fj++) {
+            batch.add(fields[fj]);
+        }
+        return batch;
     }
 
     // --- Helpers ---

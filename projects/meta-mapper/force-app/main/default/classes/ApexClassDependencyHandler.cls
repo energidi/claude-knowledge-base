@@ -223,10 +223,7 @@ public without sharing class ApexClassDependencyHandler implements IDependencyTy
                     result.addError(soqlMsg2);
                     break;
                 }
-                List<String> fieldBatch = new List<String>();
-                for (Integer fj = fi; fj < Math.min(fi + fieldBatchSize, relevantFields.size()); fj++) {
-                    fieldBatch.add(relevantFields[fj]);
-                }
+                List<String> fieldBatch = batchOfFields(relevantFields, fi, fieldBatchSize);
                 List<String> conditions = new List<String>();
                 for (String field : fieldBatch) {
                     conditions.add(field + ' IN :classNames');
@@ -286,10 +283,8 @@ public without sharing class ApexClassDependencyHandler implements IDependencyTy
                         // values in the upsert list, causing a fatal DML crash.
                         // H1: buildNode returns null when the parent's Ancestor_Path__c is near the
                         // 32,000-char Long Text limit. Log and skip rather than upserting a truncated path.
-                        Metadata_Dependency__c supplementalNode = CustomFieldDependencyHandler.buildNode(
-                            jobId, parentNodes.get(0),
-                            record.Id, 'CustomMetadata', entityName + '.' + recordName,
-                            CONFIDENCE_CMT, true, record.Id + ':' + field
+                        Metadata_Dependency__c supplementalNode = buildDynamicReferenceNode(
+                            jobId, parentNodes.get(0), record.Id, entityName, recordName, field
                         );
                         if (supplementalNode == null) {
                             result.addError('ApexClassDependencyHandler.scanCmtEntity: ancestor path depth '
@@ -318,5 +313,43 @@ public without sharing class ApexClassDependencyHandler implements IDependencyTy
         }
 
         return result;
+    }
+
+    /**
+     * Returns the slice of fields at [startIndex, startIndex + batchSize) - the CMT field-batching
+     * pagination logic that keeps a single dynamic SOQL WHERE clause under the 20,000-char limit.
+     * Extracted as a pure, @TestVisible static method so the >MAX_CMT_FIELDS_PER_QUERY split
+     * behavior can be unit tested without a live CMT query.
+     */
+    @TestVisible
+    private static List<String> batchOfFields(List<String> fields, Integer startIndex, Integer batchSize) {
+        List<String> batch = new List<String>();
+        for (Integer fj = startIndex; fj < Math.min(startIndex + batchSize, fields.size()); fj++) {
+            batch.add(fields[fj]);
+        }
+        return batch;
+    }
+
+    /**
+     * Builds the supplemental node for a matched CMT field value, always flagging
+     * Is_Dynamic_Reference__c = true (per class header: a CMT text field value is not a
+     * referentially-enforced Apex class reference) at CONFIDENCE_CMT. Extracted as a pure,
+     * @TestVisible static method so the flagging/confidence behavior can be unit tested with a
+     * controlled parent node, independent of the live CMT SOQL query that supplies it.
+     */
+    @TestVisible
+    private static Metadata_Dependency__c buildDynamicReferenceNode(
+        Id jobId,
+        Metadata_Dependency__c parent,
+        String recordId,
+        String entityName,
+        String recordName,
+        String field
+    ) {
+        return CustomFieldDependencyHandler.buildNode(
+            jobId, parent,
+            recordId, 'CustomMetadata', entityName + '.' + recordName,
+            CONFIDENCE_CMT, true, recordId + ':' + field
+        );
     }
 }

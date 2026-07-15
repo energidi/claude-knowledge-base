@@ -17,6 +17,11 @@ const TYPE_COLORS = {
 };
 const DEFAULT_COLOR = '#3e3e3c';
 
+// setup/CONTRAST_MATRIX.md "Graph search highlight" table: the #FFB81C highlight ring
+// fails the required 3:1 contrast ratio against these node fill colors. Documented
+// remediation is a wider border plus a shadow, not a color change.
+const LOW_CONTRAST_HIGHLIGHT_TYPES = new Set(['ApexClass', 'ApexTrigger', 'CustomField', 'WorkflowRule']);
+
 const LEGEND_TYPES = [
     { type: 'ApexClass', label: 'Apex Class', icon: 'utility:apex' },
     { type: 'ApexTrigger', label: 'Apex Trigger', icon: 'utility:apex' },
@@ -549,6 +554,7 @@ export default class MetaMapperGraph extends LightningElement {
             // distinct from the yellow 3px selection ring even when both flags are set.
             let borderColor;
             let borderWidth;
+            let shadowBlur = 0;
             if (isActive) {
                 borderColor = '#FFFFFF';
                 borderWidth = 4;
@@ -558,6 +564,14 @@ export default class MetaMapperGraph extends LightningElement {
                 // "borderWidth: 3 ... On mobile, borderWidth: 2." Selection border stays 3
                 // regardless of viewport - only the search-match-only highlight is mobile-scaled.
                 borderWidth = isSelected ? 3 : (this.isMobile ? 2 : 3);
+                // setup/CONTRAST_MATRIX.md: the #FFB81C highlight ring fails 3:1 against
+                // ApexClass/ApexTrigger, CustomField, and WorkflowRule node fills. Documented
+                // remediation: borderWidth 4 + shadowBlur 8 for visual distinction independent
+                // of the color ratio.
+                if (LOW_CONTRAST_HIGHLIGHT_TYPES.has(n.Metadata_Type__c)) {
+                    borderWidth = 4;
+                    shadowBlur = 8;
+                }
             } else {
                 borderColor = baseColor;
                 borderWidth = n.Is_Circular__c ? 2 : 1;
@@ -591,6 +605,8 @@ export default class MetaMapperGraph extends LightningElement {
                     borderWidth,
                     borderColor,
                     borderType,
+                    shadowBlur,
+                    shadowColor: shadowBlur ? borderColor : undefined,
                 },
                 emphasis: {
                     itemStyle: { borderWidth: 3, borderColor: '#FFB81C' },

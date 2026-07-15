@@ -13,7 +13,7 @@ private class DependencyQueueableTest {
             Target_Metadata_Type__c    = 'CustomField',
             Target_API_Name__c         = 'Account.MyField__c',
             Status__c                  = status,
-            Only_Include_Active_Flows__c       = false,
+            Is_Active_Flows_Only__c       = false,
             Components_Analyzed__c     = 0,
             Processing_Cycle_Count__c = 0,
             Last_Progress_Cycle__c   = 0,

@@ -378,6 +378,14 @@ export default class MetaMapperProgress extends LightningElement {
         this.cancelDisabled = true;
         this.cancelLabel = 'Cancelling...';
         this.showCancellingSubtext = true;
+        // CLAUDE.md Cancel focus management: "On 'Stop Analysis', focus stays on the
+        // button as it transitions to 'Cancelling...' state." The modal's confirm button
+        // is removed when the modal closes, so focus must be moved to the page's
+        // .cancel-btn (now showing "Cancelling...") once it re-renders.
+        setTimeout(() => {
+            const btn = this.template.querySelector('.cancel-btn');
+            if (btn) btn.focus();
+        }, 0);
         try {
             await cancelJob({ jobId: this.jobId });
             this._cancelPhase = 'cancelling';
@@ -418,6 +426,13 @@ export default class MetaMapperProgress extends LightningElement {
         const overrideBatchSize = slower ? Math.max(1, Math.floor(currentBatchSize / 2)) : currentBatchSize;
         try {
             await resumeJob({ jobId: this.jobId, overrideBatchSize });
+            // CLAUDE.md Resume state machine: "the banner is replaced by the progress
+            // view and focus moves to the progress bar" on resumeJob() success.
+            setTimeout(() => {
+                if (!this._isMounted) return;
+                const wrapper = this.template.querySelector('[data-id="progressBarWrapper"]');
+                if (wrapper) wrapper.focus();
+            }, 0);
             this._startPolling();
             // Initial timeout; _poll() resets this on each Paused-confirming poll.
             this._resumeTimeoutTimer = setTimeout(() => {

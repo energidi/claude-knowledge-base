@@ -110,8 +110,8 @@ private class DependencyJobControllerTest {
         Id jobId = DependencyJobController.createJob('ApexClass', 'MyClass', null, null);
         Test.stopTest();
 
-        Metadata_Scan_Job__c job = [SELECT Only_Include_Active_Flows__c FROM Metadata_Scan_Job__c WHERE Id = :jobId];
-        Assert.areEqual(false, job.Only_Include_Active_Flows__c);
+        Metadata_Scan_Job__c job = [SELECT Is_Active_Flows_Only__c FROM Metadata_Scan_Job__c WHERE Id = :jobId];
+        Assert.areEqual(false, job.Is_Active_Flows_Only__c);
     }
 
     @IsTest
@@ -331,17 +331,20 @@ private class DependencyJobControllerTest {
     }
 
     @IsTest
-    static void getComponentCount_validApiName_returnsBucketOrNull() {
-        // MetadataComponentDependency is not writable in tests; the query returns 0 rows.
-        // Zero rows = Small bucket. Verify no exception is thrown and the return value is valid.
+    static void getComponentCount_validApiName_returnsSmallBucketForZeroRows() {
+        // MetadataComponentDependency is not writable in tests, so the query always returns 0
+        // rows against real data - which correctly maps to the "Small" bucket. A previous version
+        // of this test only asserted "null OR a valid bucket string", which passed identically
+        // whether the query threw (e.g. an invalid relationship-field reference) or succeeded -
+        // masking a real MALFORMED_QUERY defect for many review rounds. Asserting the exact
+        // expected bucket proves the query actually executes successfully end-to-end.
         Test.startTest();
         String result = DependencyJobController.getComponentCount('Account');
         Test.stopTest();
 
-        if (result != null) {
-            Set<String> validBuckets = new Set<String>{ 'Small', 'Medium', 'Large', 'Very Large' };
-            Assert.isTrue(validBuckets.contains(result), 'Result must be a valid bucket: ' + result);
-        }
+        Assert.areEqual('Small', result,
+            'A zero-row MetadataComponentDependency count must resolve to the Small bucket - '
+            + 'null would indicate the underlying SOQL query is throwing');
     }
 
     // -----------------------------------------------------------------------

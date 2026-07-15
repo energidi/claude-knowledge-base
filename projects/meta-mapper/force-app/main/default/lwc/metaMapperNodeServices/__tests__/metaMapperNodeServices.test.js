@@ -173,14 +173,12 @@ describe('c-meta-mapper-node-services', () => {
             expect(isNamespacePrefixed('a__MyClass')).toBe(true);
         });
 
-        // [?] CLAUDE.md documents 'My__Test__c' as "included" (no namespace), but this has the
-        // identical two-double-underscore shape as a genuinely namespaced field like
-        // 'myns__My_Field__c' (documented as excluded) - the two cases cannot be reliably told
-        // apart by regex alone without a real installed-namespace list. Documenting current
-        // behavior rather than asserting the spec's claimed outcome, which would require
-        // fabricating a heuristic that risks misclassifying real namespaced components.
-        it('[?] "My__Test__c": current behavior treats the leading segment as a namespace (spec ambiguity, see comment)', () => {
-            expect(isNamespacePrefixed('My__Test__c')).toBe(true);
+        it('excludes a namespaced custom field with a trailing __c suffix', () => {
+            expect(isNamespacePrefixed('myns__My_Field__c')).toBe(true);
+        });
+
+        it('includes "My__Test__c" - inner double-underscore without a leading namespace prefix', () => {
+            expect(isNamespacePrefixed('My__Test__c')).toBe(false);
         });
     });
 

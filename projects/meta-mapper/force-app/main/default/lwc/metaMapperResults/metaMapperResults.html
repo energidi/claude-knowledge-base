@@ -85,7 +85,7 @@
                     <template lwc:if={summaryText}>
                         <p class="summary-body">{summaryDisplayText}</p>
                         <template lwc:if={summaryTruncated}>
-                            <a onclick={toggleSummaryExpanded}>{summaryToggleLabel}</a>
+                            <a class="summary-toggle" onclick={toggleSummaryExpanded}>{summaryToggleLabel}</a>
                         </template>
                         <div class="slds-var-m-top_small">
                             <lightning-button label={copyLabel} variant="neutral" onclick={handleCopySummary}></lightning-button>

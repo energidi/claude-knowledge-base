@@ -85,7 +85,7 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
-        <field>Metadata_Scan_Job__c.Only_Include_Active_Flows__c</field>
+        <field>Metadata_Scan_Job__c.Is_Active_Flows_Only__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>

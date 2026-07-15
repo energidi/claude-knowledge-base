@@ -4,3 +4,11 @@
 .tab-content { min-height: 400px; }
 .tab-content.is-transitioning { opacity: 0.5; pointer-events: none; }
 .summary-body { white-space: pre-line; user-select: text; }
+.summary-toggle { display: inline-block; }
+@media (max-width: 1023px) {
+    .summary-toggle {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+}

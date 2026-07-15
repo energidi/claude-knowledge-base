@@ -102,4 +102,7 @@ Do not begin LWC implementation until every cell in the matrix relevant to the u
 - `WorkflowRule` `TYPE_COLORS` entry changed from `#dd7a01` to `#b35a00` per the "Light Background" recommended fix above.
 - `_buildOption()` now sets an explicit per-node `label.color`: white (`#FFFFFF`) when `document.body.classList.contains('slds-theme_inverse')` is true (dark theme), otherwise the node's type color (`baseColor`) - implementing the "Recommended approach for dark mode" white-label-text strategy described above, instead of lightening each of the six failing hex values individually.
 
+**Applied (metaMapperGraph.js), July 15, 2026 (Round 80):**
+- The "Graph Search Highlight - 3 failures" remediation above was implemented: added a `LOW_CONTRAST_HIGHLIGHT_TYPES` set (`ApexClass`, `ApexTrigger`, `CustomField`, `WorkflowRule`) in `_buildOption()`. When a selected/highlighted node's type is in this set, `borderWidth` is raised to 4 and `itemStyle.shadowBlur: 8` (with `shadowColor` matching the highlight border color) is applied, per the documented fix.
+
 **Not yet verified:** These are calculated-ratio fixes only. No live Lighthouse, axe, or Salesforce Accessibility Checker run was performed in this environment to confirm the rendered contrast - that check still needs to be run against a deployed org before shipping, per the Implementation Gate above.

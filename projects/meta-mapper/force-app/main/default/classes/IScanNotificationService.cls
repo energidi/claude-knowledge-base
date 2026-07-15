@@ -15,7 +15,7 @@ public interface IScanNotificationService {
     /**
      * Called from DependencyQueueable.execute() BEFORE Database.setSavepoint().
      * Checks the org daily Platform Event allocation and, if >80% consumed, queues
-     * the CMDT deployment that sets Should_Disable_Platform_Events__c = true.
+     * the CMDT deployment that sets Is_Platform_Events_Disabled__c = true.
      * Must be DML-free: runs before the engine's Tooling API callouts, and any DML
      * before a callout triggers "uncommitted work pending".
      *

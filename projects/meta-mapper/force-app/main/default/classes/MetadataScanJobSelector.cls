@@ -21,7 +21,7 @@ public without sharing class MetadataScanJobSelector {
         List<Metadata_Scan_Job__c> results = [
             SELECT Id,
                    Status__c,
-                   Only_Include_Active_Flows__c,
+                   Is_Active_Flows_Only__c,
                    Components_Analyzed__c,
                    Processing_Cycle_Count__c,
                    Last_Progress_Cycle__c,
@@ -341,7 +341,7 @@ public without sharing class MetadataScanJobSelector {
      */
     public Metadata_Scan_Job__c getByIdForResumeLocked(String jobId) {
         List<Metadata_Scan_Job__c> rows = [
-            SELECT Id, Status__c, Only_Include_Active_Flows__c, Processing_Cycle_Count__c
+            SELECT Id, Status__c, Is_Active_Flows_Only__c, Processing_Cycle_Count__c
             FROM Metadata_Scan_Job__c
             WHERE Id = :jobId
             WITH USER_MODE

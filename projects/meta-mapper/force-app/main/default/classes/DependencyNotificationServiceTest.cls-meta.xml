@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Unit tests for DependencyNotificationService. Covers Platform Event publish, auto-suppression when org daily PE limit exceeds 80%, and the CMDT Should_Disable_Platform_Events__c flag mutation path.</description>
+    <description>Unit tests for DependencyNotificationService. Covers Platform Event publish, auto-suppression when org daily PE limit exceeds 80%, and the CMDT Is_Platform_Events_Disabled__c flag mutation path.</description>
     <status>Active</status>
 </ApexClass>

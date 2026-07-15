@@ -18,6 +18,14 @@ export default class MetaMapperComponentDetailsPanel extends LightningElement {
     _pendingMobileFocus = false;
     _copyLinkTimeoutId = null;
 
+    // Memoization cache for breadcrumbs/setupUrl - both are re-derived by several dependent
+    // getters per render (up to 4x each on deep trees / JSON.parse calls). Cached per
+    // selectedNodeId + nodeMap identity, invalidated whenever either changes.
+    _breadcrumbsCache = null;
+    _breadcrumbsCacheKey = null;
+    _setupUrlCache = null;
+    _setupUrlCacheKey = null;
+
     // ── Public API ───────────────────────────────────────────────────────────
 
     @api
@@ -109,18 +117,29 @@ export default class MetaMapperComponentDetailsPanel extends LightningElement {
     // ── Breadcrumbs ───────────────────────────────────────────────────────────
 
     get breadcrumbs() {
+        const cacheKey = this.selectedNodeId + ':' + (this.nodeMap ? this.nodeMap.size : 0);
+        if (this._breadcrumbsCacheKey === cacheKey) {
+            return this._breadcrumbsCache;
+        }
         const node = this.selectedNode;
-        if (!node || !node.Ancestor_Path__c) return [];
-        const ids = node.Ancestor_Path__c.split('|').filter(Boolean);
-        return ids.map(id => {
-            const ancestor = this.nodeMap && this.nodeMap.get(id);
-            return {
-                id,
-                sepId: 'sep-' + id,
-                name: ancestor ? ancestor.Metadata_Name__c : id,
-                type: ancestor ? ancestor.Metadata_Type__c : ''
-            };
-        });
+        let result;
+        if (!node || !node.Ancestor_Path__c) {
+            result = [];
+        } else {
+            const ids = node.Ancestor_Path__c.split('|').filter(Boolean);
+            result = ids.map(id => {
+                const ancestor = this.nodeMap && this.nodeMap.get(id);
+                return {
+                    id,
+                    sepId: 'sep-' + id,
+                    name: ancestor ? ancestor.Metadata_Name__c : id,
+                    type: ancestor ? ancestor.Metadata_Type__c : ''
+                };
+            });
+        }
+        this._breadcrumbsCacheKey = cacheKey;
+        this._breadcrumbsCache = result;
+        return result;
     }
 
     get hasBreadcrumbs() {
@@ -164,9 +183,15 @@ export default class MetaMapperComponentDetailsPanel extends LightningElement {
     // ── Setup URL ─────────────────────────────────────────────────────────────
 
     get setupUrl() {
+        const cacheKey = this.selectedNodeId + ':' + this.orgId;
+        if (this._setupUrlCacheKey === cacheKey) {
+            return this._setupUrlCache;
+        }
         const node = this.selectedNode;
-        if (!node || !this.orgId) return null;
-        return resolveSetupUrl(node, this.orgId);
+        const result = (!node || !this.orgId) ? null : resolveSetupUrl(node, this.orgId);
+        this._setupUrlCacheKey = cacheKey;
+        this._setupUrlCache = result;
+        return result;
     }
 
     get setupButtonDisabled() {

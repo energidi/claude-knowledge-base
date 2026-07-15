@@ -128,7 +128,7 @@ mark {
 
 .context-menu {
     position: fixed;
-    background: white;
+    background: var(--slds-g-color-surface-1, #ffffff);
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     box-shadow: 0 2px 8px var(--metamapper-g-color-shadow-1, rgba(0, 0, 0, 0.2));
     z-index: 9000;

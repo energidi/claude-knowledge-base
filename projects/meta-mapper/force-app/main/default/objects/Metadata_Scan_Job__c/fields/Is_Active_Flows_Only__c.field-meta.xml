@@ -1,8 +1,8 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>Only_Include_Active_Flows__c</fullName>
+    <fullName>Is_Active_Flows_Only__c</fullName>
     <description>When checked, inactive and deprecated Flow versions are excluded from scan results. Reduces scan scope and processing time. Default: true. Unchecking this includes all Flow versions, including inactive ones, and may significantly increase scan duration.</description>
     <defaultValue>true</defaultValue>
-    <label>Only Include Active Flows</label>
+    <label>Is Active Flows Only</label>
     <type>Checkbox</type>
 </CustomField>

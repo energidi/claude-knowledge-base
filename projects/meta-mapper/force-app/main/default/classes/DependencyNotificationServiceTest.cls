@@ -10,7 +10,7 @@ private class DependencyNotificationServiceTest {
 
     @IsTest
     static void publishProgress_doesNotThrow() {
-        // CMDT is read-only in tests so we cannot inject Should_Disable_Platform_Events__c = true.
+        // CMDT is read-only in tests so we cannot inject Is_Platform_Events_Disabled__c = true.
         // Validates that the service handles any org PE state without throwing AND that no
         // publish-failure notice is recorded, proving EventBus.publish() actually accepted
         // the event under normal (non-suppressed) test conditions.

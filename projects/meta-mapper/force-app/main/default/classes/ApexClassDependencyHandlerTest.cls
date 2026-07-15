@@ -63,4 +63,74 @@ private class ApexClassDependencyHandlerTest {
         // meaningful assertion here is that the full CMT-entity scan completes without throwing.
         Assert.isNotNull(result, 'findSupplemental should return a result object without throwing');
     }
+
+    // ---- buildDynamicReferenceNode() ----
+
+    @IsTest
+    static void buildDynamicReferenceNode_matchedCmtField_flagsIsDynamicReferenceAndConfidence() {
+        Metadata_Scan_Job__c job = new Metadata_Scan_Job__c(
+            Target_Metadata_Type__c = 'ApexClass',
+            Target_API_Name__c      = 'MyTestClass',
+            Status__c               = 'Processing'
+        );
+        insert job;
+        Metadata_Dependency__c parent = new Metadata_Dependency__c(
+            Metadata_Id__c      = 'a0010000000000010AA',
+            Ancestor_Path__c    = '',
+            Dependency_Depth__c = 0
+        );
+
+        Metadata_Dependency__c node = ApexClassDependencyHandler.buildDynamicReferenceNode(
+            job.Id, parent, 'm000000000000010AA', 'Factory_Config__mdt', 'Default', 'handler__c'
+        );
+
+        Assert.isNotNull(node, 'A valid parent should produce a supplemental node');
+        Assert.isTrue(node.Is_Dynamic_Reference__c,
+            'CMT field references must always be flagged Is_Dynamic_Reference__c = true - the platform '
+            + 'does not enforce referential integrity between a CMT text field and an Apex class name');
+        Assert.areEqual(85, node.Supplemental_Confidence__c,
+            'CMT field lookup confidence must be the documented CONFIDENCE_CMT value of 85');
+        Assert.areEqual('Factory_Config__mdt.Default', node.Metadata_Name__c,
+            'Metadata_Name__c should combine the entity name and record DeveloperName');
+        Assert.areEqual('Supplemental', node.Discovery_Source__c,
+            'CMT-discovered nodes must be marked Discovery_Source__c = Supplemental');
+        Assert.areEqual(job.Id + ':m000000000000010AA:handler__c', node.Unique_Component_Key__c,
+            'Unique key should combine jobId, recordId, and field to allow one node per (record, field) pair');
+    }
+
+    @IsTest
+    static void buildDynamicReferenceNode_ancestorPathNearLimit_returnsNull() {
+        Metadata_Scan_Job__c job = new Metadata_Scan_Job__c(
+            Target_Metadata_Type__c = 'ApexClass',
+            Target_API_Name__c      = 'MyTestClass',
+            Status__c               = 'Processing'
+        );
+        insert job;
+        Metadata_Dependency__c parent = new Metadata_Dependency__c(
+            Metadata_Id__c      = 'a0010000000000011AA',
+            Ancestor_Path__c    = 'X'.repeat(31985),
+            Dependency_Depth__c = 500
+        );
+
+        Metadata_Dependency__c node = ApexClassDependencyHandler.buildDynamicReferenceNode(
+            job.Id, parent, 'm000000000000011AA', 'Factory_Config__mdt', 'Default', 'handler__c'
+        );
+
+        Assert.isNull(node, 'buildDynamicReferenceNode must return null when the ancestor path depth guard trips');
+    }
+
+    // ---- batchOfFields() ----
+
+    @IsTest
+    static void batchOfFields_moreFieldsThanBatchSize_splitsIntoCorrectSlices() {
+        List<String> fields = new List<String>();
+        for (Integer i = 0; i < 22; i++) {
+            fields.add('field' + i + '__c');
+        }
+        List<String> firstBatch = ApexClassDependencyHandler.batchOfFields(fields, 0, 20);
+        List<String> secondBatch = ApexClassDependencyHandler.batchOfFields(fields, 20, 20);
+        Assert.areEqual(20, firstBatch.size(), 'First batch should contain exactly MAX_CMT_FIELDS_PER_QUERY fields');
+        Assert.areEqual(2, secondBatch.size(), 'Second batch should contain the remaining 2 fields');
+        Assert.areEqual('field20__c', secondBatch[0], 'Second batch should start where the first batch ended');
+    }
 }

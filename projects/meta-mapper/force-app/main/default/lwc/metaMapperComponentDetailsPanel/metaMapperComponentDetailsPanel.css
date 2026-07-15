@@ -2,7 +2,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: white;
+    background: var(--slds-g-color-surface-1, #ffffff);
     border-left: 1px solid var(--slds-g-color-border-base-1, #dddbda);
     width: var(--slds-g-sizing-15, 320px);
     overflow: hidden;

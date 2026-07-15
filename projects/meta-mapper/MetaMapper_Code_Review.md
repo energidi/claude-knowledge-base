@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** July 14, 2026 (Round 79 - sf-orchestrator full pass: 13 findings applied - 0 Critical, 3 High, 7 Medium, 3 Low)
+**Last Updated:** July 15, 2026 (Round 80 - sf-orchestrator full pass: 19 findings applied - 2 Critical, 5 High, 10 Medium, 2 Low)
 **Date:** May 23, 2026
 
 ---
@@ -18,6 +18,7 @@ Findings listed here appeared in one or more prior review rounds and were **deli
 | Static Analysis (tooling) | PMD/CPD/SFGE/Flow engines fail to instantiate on the current scanning machine (missing Java 11+/Python 3.10+) - not a code defect, no Apex/Flow static-analysis coverage occurs until the environment is fixed | Round 76 | Environment prerequisite outside the codebase; requires installing Java/Python or disabling those engines in Code Analyzer config, then re-running - not fixable via a code edit |
 | Architecture (observability) | All 41 Apex classes rely solely on transient `System.debug()` with no org-wide, queryable operational log for cleanup/ring-buffer/scheduler failures (Nebula Logger or equivalent not adopted) | Round 76 | Requires installing/deploying an external unlocked package across the whole codebase; too large for a fix-pass diff - deferred as a separate initiative |
 | Testing (tooling) | `jest.config.js` cannot carry a `coverageThreshold` - the `@lwc/jest-transformer`/Istanbul toolchain in this environment only instruments LWC files with zero tests (they report a phantom 0%) and produces no coverage entry at all for files that ARE tested (confirmed by running the pre-existing, untouched `metaMapperFilters` suite alone with `--coverage`), so any global threshold fails `npm run test:unit:coverage` unconditionally regardless of real coverage | Round 79 | Environment/toolchain limitation, not a code defect; requires a working Istanbul+LWC coverage integration (toolchain upgrade or a different coverage collector) before a real threshold can be enforced - not fixable via a jest.config.js edit alone |
+| Testing (LWC coverage) | `metaMapperApp` (root shell, deep-link routing, `empApi` subscription/distribution), `metaMapperTree` (virtual rendering, ARIA, keyboard nav), and `metaMapperGraph` (ECharts canvas integration, context menu, focus-path state machine) remain without Jest coverage | Round 80 | High integration complexity (ECharts canvas rendering, `empApi` streaming, virtual-scroll DOM) makes these substantially more expensive to test than the two components prioritized and completed this round (`metaMapperSearch`, `metaMapperComponentDetailsPanel`); deferred to a future round rather than shipping shallow/low-value tests |
 
 ---
 
@@ -3915,6 +3916,39 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
 
 ---
+
+## Round 80 Fixes Applied
+
+Full sf-orchestrator review (all 8 lenses: architecture, UX, naming, security, performance, testing, automation, static analysis). 19 findings applied (2 Critical, 5 High, 10 Medium, 2 Low). Overall verdict before fixes: NO-GO (2 Critical UX accessibility gaps - graph search-highlight contrast never applied despite being documented in CONTRAST_MATRIX.md, and Cancel-confirm focus never restored). Security, Automation, and Static Analysis lenses returned zero findings (clean passes, verified by direct code re-read and a live `sf code-analyzer` run whose only hits traced to already-accepted environment/tooling conditions from prior rounds).
+
+**Critical (UX):**
+- Finding 1 (`metaMapperGraph.js`): the `#FFB81C` search/selection highlight ring fails the project's own documented 3:1 WCAG contrast requirement against ApexClass, CustomField, and WorkflowRule node fills - `setup/CONTRAST_MATRIX.md` prescribes a fix (`borderWidth: 4` + `shadowBlur: 8`) that was never applied to the code. Fixed: added a `LOW_CONTRAST_HIGHLIGHT_TYPES` set and applied the documented remediation in `_buildOption()`.
+- Finding 2 (`metaMapperProgress.js`): confirming "Stop Analysis" in the cancel modal never restored keyboard focus to `.cancel-btn` (only "Keep Running" did), violating the documented focus-management spec. Fixed: added the same `setTimeout` + `.focus()` pattern to `handleConfirmCancel()`.
+
+**High:**
+- Finding 3 (UX - `metaMapperResults.js`): a Failed job with no recoverable nodes rendered both the serializer-failure banner AND the unrelated zero-results empty state simultaneously. Fixed: `isZeroResults` now excludes `isSerializerFailure`.
+- Finding 4 (UX/Export - `metaMapperNodeServices.js`): `isNamespacePrefixed()` incorrectly excluded `My__Test__c` from package.xml, contradicting CLAUDE.md's own documented test case. Fixed: namespace prefix now requires a length-dependent minimum (1 char when the name has only one `__` delimiter, 3+ chars when a trailing `__c`-style suffix follows) - satisfies all 5 documented test cases without misclassifying real namespaced fields. Added `myns__My_Field__c` (excluded) and corrected the `My__Test__c` (included) assertion in `metaMapperNodeServices.test.js`, replacing a prior round's `[?]`-tagged "document current behavior" placeholder test.
+- Finding 5 (UX - `metaMapperProgress.js`): on successful `resumeJob()`, focus never moved to the progress bar as the documented Resume state machine requires. Fixed: added a focusable wrapper (`data-id="progressBarWrapper"`, `tabindex="-1"`) and focus it after resume succeeds.
+- Finding 6 (Testing - `CustomFieldDependencyHandler.cls`): the token-match/namespace-strip and CMT field-batching logic had zero deterministic coverage. Fixed: extracted `matchFieldTokensInFormula()` and `batchOfFields()` as `@TestVisible` static methods; added 6 tests in `CustomFieldDependencyHandlerTest.cls`.
+- Finding 7 (Testing - `ApexClassDependencyHandler.cls`): CMT class-reference match/flagging logic was untested. Fixed: extracted `buildDynamicReferenceNode()` and `batchOfFields()` as `@TestVisible` static methods; added 3 tests in `ApexClassDependencyHandlerTest.cls` asserting `Is_Dynamic_Reference__c = true` and `Supplemental_Confidence__c = 85` are actually set.
+
+**Medium:**
+- Finding 8 (Architecture - `DependencyJobController.getComponentCount()`): subquery filtered on `MetadataComponentId.Name`, an invalid relationship traversal off a polymorphic lookup field that SOQL rejects (`MALFORMED_QUERY`) - silently swallowed by the method's `catch`, so the "Estimated scan scope" preview never rendered in any org. Fixed: query now filters on `MetadataComponentName` (first-class field).
+- Finding 9 (Architecture/Testing - `DependencyJobControllerTest.cls`): `getComponentCount_validApiName_returnsBucketOrNull` asserted "null OR a valid bucket," passing identically whether the query threw or succeeded - masking Finding 8 for many rounds. Fixed: renamed and strengthened to assert the exact `'Small'` bucket for a zero-row result.
+- Finding 10 (Naming): `MetaMapper_Settings__mdt.Should_Disable_Platform_Events__c` lacked the required Is/Has/Can boolean prefix. Renamed to `Is_Platform_Events_Disabled__c`; cascaded through `DependencyJobController.cls`, `DependencyNotificationService.cls`, `IScanNotificationService.cls`, `DependencyNotificationServiceTest.cls(-meta.xml)`, `Is_Platform_Events_Auto_Suppressed__c.field-meta.xml` (description reference), and the CMDT `Default` record.
+- Finding 11 (Naming): `Metadata_Scan_Job__c.Only_Include_Active_Flows__c` lacked the required prefix. Renamed to `Is_Active_Flows_Only__c`; cascaded through `DependencyJobController.cls`, `DependencyJobControllerTest.cls`, `MetadataScanJobSelector.cls`, `DependencyQueueableTest.cls`, and `MetaMapper_Admin.permissionset-meta.xml`.
+- Finding 12 (UX - dark mode): `metaMapperComponentDetailsPanel.css` and `metaMapperTree.css` hardcoded `background: white`, ignoring `slds-theme_inverse`. Fixed: replaced with `var(--slds-g-color-surface-1, #ffffff)`.
+- Finding 13 (UX - `metaMapperResults.js`/`.css`): the AI Summary Card's documented 200-char/44px-touch-target mobile truncation rule was unimplemented (always truncated at 300 regardless of viewport). Fixed: `summaryDisplayText`/`summaryTruncated` branch on `isMobile`; added a 44px min-height rule for the "Show more" toggle below 1024px.
+- Finding 14 (UX - `metaMapperSearch.css`): no `<768px` media query existed for the documented full-width Submit button. Fixed: added the media query.
+- Finding 15 (Performance - `metaMapperComponentDetailsPanel.js`): `breadcrumbs` getter was unmemoized and re-invoked by 4 dependent getters per render - up to 4x O(depth) recompute on deep trees. Fixed: cached per `selectedNodeId`+`nodeMap` signature.
+- Finding 16 (Testing - `metaMapperExport`): zero Jest coverage existed for the only client-logic-only LWC without it. Fixed: added `metaMapperExport.test.js` (7 tests: filename sanitization, button enable/disable state, single-format failure isolation).
+- Finding 17 (Testing - LWC coverage): 5 of 8 stateful LWC components remained untested. **Partially applied**: added `metaMapperSearch.test.js` (11 tests: form validation, `createJob()` invocation, concurrency-rejection recovery) and `metaMapperComponentDetailsPanel.test.js` (7 tests: breadcrumb ID-to-name resolution including 10-ancestor truncation, per-type Setup URL routing). `metaMapperApp`, `metaMapperTree`, and `metaMapperGraph` deferred - see new Known Skipped Finding above (higher integration complexity: ECharts canvas, `empApi` streaming, virtual-scroll DOM).
+
+**Low:**
+- Finding 18 (Static Analysis/UX - `metaMapperGraph.css`): `kbd` element hardcoded `border-radius: 3px` instead of the SLDS token used elsewhere in the file. Fixed: `var(--slds-g-radius-border-1, 4px)`.
+- Finding 19 (Performance - `metaMapperComponentDetailsPanel.js`): `setupUrl` getter unmemoized, re-invoked (with a `JSON.parse`) by 4 dependent getters per render. Fixed: cached alongside Finding 15's mechanism.
+
+**Verification:** `npm run lint` - clean, zero violations. `npm run test:unit` - 8 suites, 105 tests, all passing (up from 5 suites / 81 tests pre-round; 3 brand-new suites this round: `metaMapperSearch`, `metaMapperComponentDetailsPanel`, `metaMapperExport`). `npm run prettier:verify` - 204 files flagged, consistent with the pre-existing repo-wide formatting-drift condition accepted since Round 75 (201 in Round 79; the +3 reflects this round's new/renamed files, not a regression). Grep-verified zero stale references to the two renamed fields (`Only_Include_Active_Flows__c`, `Should_Disable_Platform_Events__c`) across `force-app/`. Apex-side changes (Findings 6, 7, 8, 9) are not yet compile/test-verified against a live org - deployment is gated on explicit user approval per Phase 5.
 
 ## Round 79 Fixes Applied
 

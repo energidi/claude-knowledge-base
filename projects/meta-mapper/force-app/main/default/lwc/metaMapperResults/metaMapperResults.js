@@ -211,7 +211,7 @@ export default class MetaMapperResults extends LightningElement {
     get showGraphLoadError() { return this.tabLoadFailed && this.activeTab === 'graph'; }
     get isCompleted() { return this.job && this.job.Status__c === 'Completed'; }
     get hasResults()  { return !this.isLoading && !this.loadError; }
-    get isZeroResults() { return this.hasResults && this.allNodes.length === 0; }
+    get isZeroResults() { return this.hasResults && this.allNodes.length === 0 && !this.isSerializerFailure; }
     get showTabs() { return this.hasResults && this.allNodes.length > 0; }
     get targetApiName() { return (this.job && this.job.Target_API_Name__c) || ''; }
 
@@ -278,10 +278,13 @@ export default class MetaMapperResults extends LightningElement {
     get summaryDisplayText() {
         if (!this.summaryText) return '';
         if (this.summaryExpanded) return this.summaryText;
-        return truncateAt(this.summaryText, 300);
+        // CLAUDE.md AI Summary Card responsive spec: < 1024px truncates at 200 chars, >= 1024px at 300.
+        return truncateAt(this.summaryText, this.isMobile ? 200 : 300);
     }
 
-    get summaryTruncated() { return this.summaryText && this.summaryText.length > 300; }
+    get summaryTruncated() {
+        return this.summaryText && this.summaryText.length > (this.isMobile ? 200 : 300);
+    }
     get summaryToggleLabel() { return this.summaryExpanded ? 'Show less' : 'Show more'; }
     get tabContentClass() { return this.isTransitioning ? 'tab-content is-transitioning' : 'tab-content'; }
     get isTransitioningStr() { return this.isTransitioning ? 'true' : null; }

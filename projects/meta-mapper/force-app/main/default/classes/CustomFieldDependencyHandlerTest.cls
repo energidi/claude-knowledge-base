@@ -152,4 +152,65 @@ private class CustomFieldDependencyHandlerTest {
         Assert.areEqual(32, child.Unique_Component_Key__c.length(),
             'Oversized raw key should fall back to a 32-char MD5 hex digest');
     }
+
+    // ---- matchFieldTokensInFormula() ----
+
+    @IsTest
+    static void matchFieldTokensInFormula_bareFieldToken_matches() {
+        Set<String> tokens = new Set<String>{ 'if', 'status__c', 'true' };
+        Set<String> fields = new Set<String>{ 'status__c' };
+        Set<String> matched = CustomFieldDependencyHandler.matchFieldTokensInFormula(tokens, fields);
+        Assert.areEqual(1, matched.size(), 'Bare field token should match directly');
+        Assert.isTrue(matched.contains('status__c'), 'Matched set should contain the bare field name');
+    }
+
+    @IsTest
+    static void matchFieldTokensInFormula_namespacePrefixedToken_stripsNamespaceAndMatches() {
+        Set<String> tokens = new Set<String>{ 'pkg__status__c' };
+        Set<String> fields = new Set<String>{ 'status__c' };
+        Set<String> matched = CustomFieldDependencyHandler.matchFieldTokensInFormula(tokens, fields);
+        Assert.areEqual(1, matched.size(), 'Namespace-prefixed token should match after stripping the first segment');
+        Assert.isTrue(matched.contains('status__c'), 'Matched set should contain the stripped field name');
+    }
+
+    @IsTest
+    static void matchFieldTokensInFormula_tokenWithoutMatchingField_isIgnored() {
+        Set<String> tokens = new Set<String>{ 'unrelated_token', 'pkg__other_field__c' };
+        Set<String> fields = new Set<String>{ 'status__c' };
+        Set<String> matched = CustomFieldDependencyHandler.matchFieldTokensInFormula(tokens, fields);
+        Assert.isTrue(matched.isEmpty(), 'Tokens that do not match any scanned field should produce no matches');
+    }
+
+    @IsTest
+    static void matchFieldTokensInFormula_doubleUnderscoreWithNoKnownField_isIgnored() {
+        // 'my__thing' contains '__' but stripping the first segment ('thing') is not itself a
+        // custom field name (no '__' remainder) - must not be treated as a namespace match.
+        Set<String> tokens = new Set<String>{ 'my__thing' };
+        Set<String> fields = new Set<String>{ 'status__c' };
+        Set<String> matched = CustomFieldDependencyHandler.matchFieldTokensInFormula(tokens, fields);
+        Assert.isTrue(matched.isEmpty(), 'A double-underscore token whose remainder has no field suffix should not match');
+    }
+
+    // ---- batchOfFields() ----
+
+    @IsTest
+    static void batchOfFields_fewerFieldsThanBatchSize_returnsAllFields() {
+        List<String> fields = new List<String>{ 'a__c', 'b__c', 'c__c' };
+        List<String> batch = CustomFieldDependencyHandler.batchOfFields(fields, 0, 20);
+        Assert.areEqual(3, batch.size(), 'A field list smaller than the batch size should return in a single batch');
+    }
+
+    @IsTest
+    static void batchOfFields_moreFieldsThanBatchSize_splitsIntoCorrectSlices() {
+        List<String> fields = new List<String>();
+        for (Integer i = 0; i < 25; i++) {
+            fields.add('field' + i + '__c');
+        }
+        List<String> firstBatch = CustomFieldDependencyHandler.batchOfFields(fields, 0, 20);
+        List<String> secondBatch = CustomFieldDependencyHandler.batchOfFields(fields, 20, 20);
+        Assert.areEqual(20, firstBatch.size(), 'First batch should contain exactly MAX_CMT_FIELDS_PER_QUERY fields');
+        Assert.areEqual(5, secondBatch.size(), 'Second batch should contain the remaining 5 fields');
+        Assert.areEqual('field0__c', firstBatch[0], 'First batch should start at the given startIndex');
+        Assert.areEqual('field20__c', secondBatch[0], 'Second batch should start where the first batch ended');
+    }
 }

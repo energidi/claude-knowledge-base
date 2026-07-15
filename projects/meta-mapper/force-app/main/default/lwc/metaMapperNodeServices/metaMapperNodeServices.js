@@ -46,7 +46,19 @@ export function isNamespacePrefixed(apiName, metadataType) {
         const dot = apiName.lastIndexOf('.');
         name = dot >= 0 ? apiName.substring(dot + 1) : apiName;
     }
-    return /^[A-Za-z][A-Za-z0-9]*__/.test(name);
+    const match = /^[A-Za-z][A-Za-z0-9]*(?=__)/.exec(name);
+    if (!match) return false;
+    const prefix = match[0];
+    // CLAUDE.md's documented test cases require a length-dependent minimum: a name with
+    // only one "__" total (no trailing custom-suffix segment, e.g. "a__MyClass") can have a
+    // 1-character namespace; a name with a trailing "__c"/"__mdt"-style suffix segment after
+    // the candidate namespace (e.g. "My__Test__c" vs "myns__My_Field__c") needs a 3+ character
+    // namespace to be treated as managed-package-prefixed - otherwise a short leading word
+    // immediately followed by another "__"-delimited segment (not a real registered namespace)
+    // would be misclassified as namespaced.
+    const doubleUnderscoreCount = (name.match(/__/g) || []).length;
+    const minLength = doubleUnderscoreCount >= 2 ? 3 : 1;
+    return prefix.length >= minLength;
 }
 
 export function extractTypes(nodes) {

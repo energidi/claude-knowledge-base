@@ -1,7 +1,7 @@
 # MetaMapper - Technical Design
 
-**Version:** 14.2  
-**Date:** July 11, 2026  
+**Version:** 14.3  
+**Date:** July 15, 2026  
 **Status:** Phase 3 implementation in progress
 
 ---
@@ -78,7 +78,7 @@ Rejects with user-facing message if count >= `Max_Concurrent_Jobs__c` (default 2
 `DependencyQueueable` publishes exactly one `Dependency_Scan_Status__e` event per execution - after the final DML commit, not after each inner loop iteration. The `metaMapperProgress` LWC subscribes via `lightning/empApi` on mount and unsubscribes on destroy.
 
 **Dynamic Platform Event degradation:**  
-`DependencyNotificationService.publishProgress()` checks `OrgLimits.getMap().get('DailyStandardVolumePlatformEvents')` before each publish. If >80% consumed, suppresses the event and flips `Should_Disable_Platform_Events__c = true` on the CMDT Default record via `Metadata.Operations.enqueueDeployment()`.
+`DependencyNotificationService.publishProgress()` checks `OrgLimits.getMap().get('DailyStandardVolumePlatformEvents')` before each publish. If >80% consumed, suppresses the event and flips `Is_Platform_Events_Disabled__c = true` on the CMDT Default record via `Metadata.Operations.enqueueDeployment()`.
 
 ### Graph Visualization
 
@@ -132,7 +132,7 @@ When no unprocessed nodes remain, `DependencyQueueable` enqueues `ScanResultFile
 | `Target_Metadata_Type__c` | Picklist | CustomField, ValidationRule, Flow, ApexClass, ApexTrigger, WorkflowRule, etc. |
 | `Target_API_Name__c` | Text 255 | Developer Name of the target metadata |
 | `Target_Parent_Object__c` | Text 255 | Optional - required when type = CustomField |
-| `Only_Include_Active_Flows__c` | Checkbox | Default true - drops inactive Flow versions |
+| `Is_Active_Flows_Only__c` | Checkbox | Default true - drops inactive Flow versions |
 | `Status__c` | Picklist | Initializing, Processing, Completed, Failed, Cancelled, Paused |
 | `Scan_Diagnostic_Log__c` | Long Text 32768 | Full exception on failure + all engine diagnostic notices (PE suppression warnings, retry logs, HTTP 414 restarts). Populated by engine only. |
 | `Components_Analyzed__c` | Number | Running counter for progress bar |
@@ -348,7 +348,7 @@ Apply `WITH USER_MODE` / `AccessLevel.USER_MODE` only at the `@AuraEnabled` cont
 | `Flow_Scan_Batch_Size__c` | 15 | Flow batch size. Each Flow node = 1 extra validation callout. |
 | `Retention_Hours__c` | 72 | Hours before Failed/Cancelled job hard-delete. Min 1. |
 | `Dml_Safety_Margin_Rows__c` | 750 | DML rows to reserve in guardrail before self-chain |
-| `Should_Disable_Platform_Events__c` | false | Suppresses PE publish; LWC falls back to polling |
+| `Is_Platform_Events_Disabled__c` | false | Suppresses PE publish; LWC falls back to polling |
 | `Stall_Pause_Threshold__c` | 5 | Consecutive zero-progress cycles before auto-pause |
 | `Max_Concurrent_Jobs__c` | 2 | Max active MetaMapper Queueables. Rejects above threshold. |
 | `Cleanup_Chunk_Size__c` | 2000 | DML chunk size for node deletion batch |
