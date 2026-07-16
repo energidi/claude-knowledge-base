@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Tab container and shared state owner for Tree and Graph views. Calls DependencyJobController.getNodeHierarchy(). Owns filter state (persisted in sessionStorage), selection state, and isTransitioning flag. Hosts metaMapperComponentDetailsPanel, metaMapperExport, and the AI Summary card. Fires startnew, filtersreset, askcopilot, showtoast, and showerror events.</description>
+    <description>Tab container and shared state owner for Tree and Graph views. Calls DependencyJobController.getNodeHierarchy(). Owns filter state (persisted in sessionStorage), selection state, and isTransitioning flag. Hosts metaMapperComponentDetailsPanel, metaMapperExport, and the AI Summary card. Fires startnewscan, filtersreset, askcopilot, showtoast, and showerror events.</description>
     <isExposed>false</isExposed>
 </LightningComponentBundle>

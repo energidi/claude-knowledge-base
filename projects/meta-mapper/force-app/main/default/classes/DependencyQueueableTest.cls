@@ -413,6 +413,81 @@ private class DependencyQueueableTest {
             + 'partial batch or trigger a self-chained DependencyQueueable execution');
     }
 
+    @IsTest
+    static void execute_childReferencesAncestor_setsCircularAndMergesCycleAttribute() {
+        // Confirmed 2-hop ancestry cycle: A is already an ancestor of B. When the Tooling
+        // API returns A as a "child" of B, the engine must mark it Is_Circular__c = true,
+        // stop traversal, and merge cycleClosesAt into Dependency_Context__c rather than
+        // treating it as a brand-new node.
+        Metadata_Scan_Job__c job = makeJob('Processing');
+        String ancestorId = 'a001000000000001AAA';
+        Metadata_Dependency__c parent = new Metadata_Dependency__c(
+            Metadata_Scan_Job__c    = job.Id,
+            Metadata_Id__c          = 'a003000000000001AAA',
+            Metadata_Type__c        = 'ApexClass',
+            Metadata_Name__c        = 'ParentClass',
+            Unique_Component_Key__c = job.Id + ':a003000000000001AAA',
+            Has_Fetched_Dependencies__c = false,
+            Ancestor_Path__c        = ancestorId,
+            Ancestor_Id_Index__c    = ancestorId.right(6),
+            Dependency_Depth__c     = 1
+        );
+        insert parent;
+
+        String mockBody = '{"done":true,"totalSize":1,"records":['
+            + '{"MetadataComponentId":"' + ancestorId + '",'
+            + '"MetadataComponentName":"AncestorClass","MetadataComponentType":"ApexClass",'
+            + '"RefMetadataComponentId":"a003000000000001AAA",'
+            + '"RefMetadataComponentName":"ParentClass","RefMetadataComponentType":"ApexClass"}'
+            + ']}';
+        Test.setMock(HttpCalloutMock.class, new ToolingApiMock(200, mockBody));
+
+        Test.startTest();
+        System.enqueueJob(new DependencyQueueable(job.Id, false, null));
+        Test.stopTest();
+
+        Metadata_Dependency__c child = [
+            SELECT Is_Circular__c, Has_Fetched_Dependencies__c, Dependency_Context__c
+            FROM Metadata_Dependency__c
+            WHERE Metadata_Scan_Job__c = :job.Id AND Metadata_Id__c = :ancestorId
+            LIMIT 1
+        ];
+        Assert.isTrue(child.Is_Circular__c,
+            'Child resolving to an existing ancestor must be flagged Is_Circular__c = true');
+        Assert.isTrue(child.Has_Fetched_Dependencies__c,
+            'Circular node must be marked Has_Fetched_Dependencies__c = true to stop further traversal');
+        Assert.isTrue(child.Dependency_Context__c.contains('"cycleClosesAt":"a003000000000001AAA"'),
+            'Dependency_Context__c must record the cycle-closing parent ID a003000000000001AAA');
+    }
+
+    @IsTest
+    static void execute_nodeCapReached_pausesJobWithComponentLimitReason() {
+        // Distinct from execute_stallDetected_pausesJob (Pause_Reason__c = 'StallDetected'):
+        // this exercises the node cap check (Step 8), which pauses with
+        // Pause_Reason__c = 'ComponentLimitReached' when Components_Analyzed__c reaches
+        // the CMDT Max_Components__c ceiling. MetaMapper_Settings__mdt is read-only in this
+        // test context, so the live CMDT default (5,000 per CLAUDE.md) is relied upon
+        // rather than inserting a custom record - same approach as execute_stallDetected_pausesJob.
+        Metadata_Scan_Job__c job = makeJob('Processing');
+        job.Components_Analyzed__c = 5000;
+        update job;
+
+        makeNode(job.Id, 'a001000000000001AAA', false);
+        Test.setMock(HttpCalloutMock.class, new EmptyToolingApiMock());
+
+        Test.startTest();
+        System.enqueueJob(new DependencyQueueable(job.Id, false, null));
+        Test.stopTest();
+
+        Metadata_Scan_Job__c refreshed = [
+            SELECT Status__c, Pause_Reason__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+        ];
+        Assert.areEqual('Paused', refreshed.Status__c,
+            'Node cap reached should pause the job');
+        Assert.areEqual('ComponentLimitReached', refreshed.Pause_Reason__c,
+            'Pause_Reason__c must be ComponentLimitReached, distinct from the StallDetected case');
+    }
+
     // ---- mocks ----
 
     private class EmptyToolingApiMock implements HttpCalloutMock {

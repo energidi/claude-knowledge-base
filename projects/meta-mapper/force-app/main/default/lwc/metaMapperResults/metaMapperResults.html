@@ -36,7 +36,7 @@
         <!-- Scan complete reload banner -->
         <template lwc:if={showReloadBanner}>
             <div class="slds-notify slds-notify_alert slds-theme_success slds-var-m-bottom_small" role="status">
-                <p>Scan complete! <a onclick={reloadResults}>Reload results</a> to see the final dependency map.</p>
+                <p>Scan complete! <a href="javascript:void(0);" tabindex="0" role="button" onclick={reloadResults} onkeydown={reloadResultsKeyDown}>Reload results</a> to see the final dependency map.</p>
             </div>
         </template>
 
@@ -44,8 +44,8 @@
         <template lwc:if={showPartialBanner}>
             <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-bottom_small" role="status">
                 <p>This scan has stopped. These results are partial.
-                    <a onclick={handleExportPartial}> Download partial results</a> or
-                    <a onclick={handleStartNew}> Start a new scan</a>.
+                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleExportPartial} onkeydown={handleExportPartialKeyDown}> Download partial results</a> or
+                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleStartNew} onkeydown={handleStartNewKeyDown}> Start a new scan</a>.
                 </p>
             </div>
         </template>
@@ -79,13 +79,13 @@
                     </template>
                     <template lwc:if={summaryFailed}>
                         <p class="slds-text-color_weak">Summary could not be generated.
-                            <a onclick={dismissSummary}> Dismiss</a>
+                            <a href="javascript:void(0);" tabindex="0" role="button" onclick={dismissSummary} onkeydown={dismissSummaryKeyDown}> Dismiss</a>
                         </p>
                     </template>
                     <template lwc:if={summaryText}>
                         <p class="summary-body">{summaryDisplayText}</p>
                         <template lwc:if={summaryTruncated}>
-                            <a class="summary-toggle" onclick={toggleSummaryExpanded}>{summaryToggleLabel}</a>
+                            <a class="summary-toggle" href="javascript:void(0);" tabindex="0" role="button" onclick={toggleSummaryExpanded} onkeydown={toggleSummaryExpandedKeyDown}>{summaryToggleLabel}</a>
                         </template>
                         <div class="slds-var-m-top_small">
                             <lightning-button label={copyLabel} variant="neutral" onclick={handleCopySummary}></lightning-button>

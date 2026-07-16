@@ -35,6 +35,11 @@
                         Validation Rule API names do not include the parent object. Enter just the developer name as shown in Setup (e.g. Validate_Phone).
                     </p>
                 </template>
+                <template lwc:if={_hasWhitespaceHint}>
+                    <p class="slds-form-element__help slds-text-color_weak">
+                        Remove extra spaces from the API name.
+                    </p>
+                </template>
             </div>
 
             <!-- Target Object typeahead (CustomField only) -->
@@ -124,7 +129,7 @@
                                 <lightning-spinner size="x-small" variant="inverse" alternative-text="Loading"></lightning-spinner>
                             </template>
                             <template lwc:else>
-                                <a onclick={handleViewRunningScan} class="slds-m-left_x-small"> View the running scan</a>
+                                <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewRunningScan} onkeydown={handleViewRunningScanKeyDown} class="slds-m-left_x-small"> View the running scan</a>
                             </template>
                             <template lwc:if={viewScanError}>
                                 <span class="slds-m-left_x-small">{viewScanError}</span>

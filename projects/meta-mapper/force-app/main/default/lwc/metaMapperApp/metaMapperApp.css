@@ -1,9 +1,9 @@
-.full-height { min-height: 60vh; }
+.full-height { min-height: 60vh; /* SLDS2: no equivalent hook */ }
 .toast-overlay {
     position: fixed; bottom: var(--slds-g-spacing-4, 1rem); right: var(--slds-g-spacing-4, 1rem);
-    z-index: 9999; min-width: 300px; max-width: 500px;
+    z-index: 9999; min-width: 300px; max-width: 500px; /* SLDS2: no equivalent hook */
     border-radius: var(--slds-g-radius-border-1, 4px); padding: var(--slds-g-spacing-3, 0.75rem) var(--slds-g-spacing-4, 1rem);
     box-shadow: 0 2px 8px var(--metamapper-g-color-shadow-1, rgba(0,0,0,0.25));
 }
-.meta-mapper-tour-container { max-width: 600px; }
+.meta-mapper-tour-container { max-width: 600px; /* SLDS2: no equivalent hook */ }
 .setup-modal-content ol { margin-left: var(--slds-g-spacing-5, 1.5rem); line-height: 1.8; }

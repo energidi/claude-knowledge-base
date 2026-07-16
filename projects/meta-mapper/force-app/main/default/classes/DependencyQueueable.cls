@@ -171,6 +171,10 @@ public without sharing class DependencyQueueable implements Queueable, Database.
         // Step 5a - resolve root node Tooling API ID on first execution.
         // The root node is inserted with Metadata_Id__c = '' at job creation. Without this
         // step the Tooling API fetch silently skips it, leaving the scan target with no children.
+        if (Limits.getLimitCallouts() - Limits.getCallouts() < 1) {
+            System.enqueueJob(new DependencyQueueable(jobId, isActiveFlowsOnly, overrideBatchSize));
+            return;
+        }
         for (Metadata_Dependency__c node : batch) {
             if (String.isBlank(node.Metadata_Id__c)) {
                 String resolvedId = new MetadataDependencyService().resolveRootId(
@@ -295,6 +299,12 @@ public without sharing class DependencyQueueable implements Queueable, Database.
             Metadata_Scan_Job__c cycleUpdate = new Metadata_Scan_Job__c(Id = job.Id);
             cycleUpdate.Processing_Cycle_Count__c = job.Processing_Cycle_Count__c;
             update cycleUpdate;
+            // Re-verify the job is still Processing before self-chaining. A concurrent
+            // cancel between the step 2 check and here must not spawn another execution.
+            String guardrailStatus = jobSelector.getStatusOnly(jobId);
+            if (guardrailStatus == null || guardrailStatus != 'Processing') {
+                return;
+            }
             System.enqueueJob(new DependencyQueueable(jobId, isActiveFlowsOnly, overrideBatchSize));
             return;
         }

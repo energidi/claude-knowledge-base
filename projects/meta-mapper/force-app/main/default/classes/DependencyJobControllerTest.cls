@@ -3,8 +3,10 @@
  *
  * Unit tests for DependencyJobController. Covers createJob() guards, getJobStatus(),
  * getNodeHierarchy() routing, getObjectList(), cancelJob(), and resumeJob().
- * All tests use System.runAs() with a test user that has no special permissions
- * unless explicitly granted, so USER_MODE enforcement is implicitly validated.
+ * createJob_restrictedUser_userModeDenies() is the one test that runs under
+ * System.runAs() with an unprivileged Standard User (no MetaMapper_Admin permission
+ * set) to prove USER_MODE / "insert as user" actually denies access; all other
+ * tests run as the default test-context user and do not exercise USER_MODE denial.
  */
 @IsTest
 private class DependencyJobControllerTest {
@@ -130,6 +132,39 @@ private class DependencyJobControllerTest {
         } catch (DependencyJobException e) {
             Assert.isTrue(e.getMessage().contains('already running'),
                 'Message should mention that a scan is already running');
+        }
+    }
+
+    @IsTest
+    static void createJob_restrictedUser_userModeDenies() {
+        // No MetaMapper_Admin permission set assigned - Standard User profile grants no
+        // CRUD/FLS on Metadata_Scan_Job__c. Proves WITH USER_MODE / "insert as user"
+        // actually enforces access, rather than assuming it (the previous header comment
+        // claimed implicit USER_MODE validation despite zero runAs calls anywhere in this file).
+        Profile standardProfile = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        User restrictedUser = new User(
+            LastName          = 'Restricted',
+            Email             = 'metamapper.restricted@example.com',
+            Username          = 'metamapper.restricted' + DateTime.now().getTime() + '@example.com',
+            Alias             = 'mmrstr',
+            TimeZoneSidKey    = 'America/Los_Angeles',
+            LocaleSidKey      = 'en_US',
+            EmailEncodingKey  = 'UTF-8',
+            LanguageLocaleKey = 'en_US',
+            ProfileId         = standardProfile.Id
+        );
+        insert restrictedUser;
+
+        System.runAs(restrictedUser) {
+            try {
+                DependencyJobController.createJob('ApexClass', 'MyClass', null, false);
+                Assert.fail('Expected an access-denied exception when the running user lacks '
+                    + 'CRUD/FLS on Metadata_Scan_Job__c');
+            } catch (Exception e) {
+                Assert.isTrue(e instanceof System.NoAccessException,
+                    'insert as user should throw System.NoAccessException for a user without '
+                    + 'MetaMapper_Admin access, got ' + e.getTypeName());
+            }
         }
     }
 

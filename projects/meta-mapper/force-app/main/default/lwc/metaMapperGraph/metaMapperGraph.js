@@ -100,6 +100,10 @@ export default class MetaMapperGraph extends LightningElement {
     _spanningNoticeDismissed = false;
     _isMounted = false;
     _isMobileState = false;
+    // Tablet landscape tier (1024px - 1279px, inclusive both ends): legend collapses into a
+    // toggle-button overlay drawer per CLAUDE.md "Responsive Behavior" table.
+    _isTabletLandscapeState = false;
+    _legendDrawerOpen = false;
     _tabReadyTimeout = null;
     _showMobileGraphTip = false;
     _lastTapMs = 0;
@@ -133,6 +137,7 @@ export default class MetaMapperGraph extends LightningElement {
             this._spanningNoticeDismissed = false;
         }
         this._isMobileState = window.innerWidth < 1024;
+        this._isTabletLandscapeState = window.innerWidth >= 1024 && window.innerWidth < 1280;
         if (this._isMobileState) {
             try {
                 this._showMobileGraphTip =
@@ -146,6 +151,13 @@ export default class MetaMapperGraph extends LightningElement {
                 this._chart.resize();
             }
             this._isMobileState = window.innerWidth < 1024;
+            const wasTabletLandscape = this._isTabletLandscapeState;
+            this._isTabletLandscapeState = window.innerWidth >= 1024 && window.innerWidth < 1280;
+            // Leaving the tablet-landscape tier (resize to desktop or mobile) auto-closes the
+            // legend drawer - it has no meaning outside this breakpoint.
+            if (wasTabletLandscape && !this._isTabletLandscapeState) {
+                this._legendDrawerOpen = false;
+            }
         };
         window.addEventListener('resize', this._handleResize);
     }
@@ -174,6 +186,9 @@ export default class MetaMapperGraph extends LightningElement {
 
     disconnectedCallback() {
         this._isMounted = false;
+        // Auto-close the legend drawer - it should not remain open if the user tabs away
+        // and back (per CLAUDE.md "Auto-closes on tab switch").
+        this._legendDrawerOpen = false;
         clearTimeout(this._tabReadyTimeout);
         clearTimeout(this._ariaRebuildTimer);
         clearTimeout(this._searchDebounceTimer);
@@ -752,6 +767,22 @@ export default class MetaMapperGraph extends LightningElement {
         return this._isMobileState;
     }
 
+    // Tablet landscape tier (1024px - 1279px): legend renders as a toggle-button overlay
+    // drawer instead of an always-visible sidebar.
+    get showLegendToggle() {
+        return this._isTabletLandscapeState;
+    }
+
+    get showLegendBackdrop() {
+        return this._isTabletLandscapeState && this._legendDrawerOpen;
+    }
+
+    get legendDrawerClass() {
+        return this._isTabletLandscapeState && this._legendDrawerOpen
+            ? 'graph-legend legend-drawer-open'
+            : 'graph-legend';
+    }
+
     get legendItems() {
         return LEGEND_TYPES.map((item) => ({
             ...item,
@@ -890,6 +921,40 @@ export default class MetaMapperGraph extends LightningElement {
 
     handleSwitchToTree() {
         this.dispatchEvent(new CustomEvent('switchtotree', { bubbles: true, composed: true }));
+    }
+
+    // ---- tablet landscape legend drawer ----
+
+    // Opacity continuity (CLAUDE.md "Responsive Behavior"): read the drawer's current computed
+    // opacity before flipping state so the CSS transition starts from where it visually is,
+    // rather than resetting to 0 and flashing on rapid toggles.
+    _captureLegendAnimStartOpacity() {
+        const drawer = this.template.querySelector('.graph-legend');
+        if (drawer) {
+            drawer.style.setProperty('--anim-start-opacity', getComputedStyle(drawer).opacity);
+        }
+    }
+
+    handleToggleLegendDrawer() {
+        this._captureLegendAnimStartOpacity();
+        this._legendDrawerOpen = !this._legendDrawerOpen;
+        if (this._legendDrawerOpen) {
+            setTimeout(() => {
+                if (!this._isMounted) return;
+                const closeBtn = this.template.querySelector('.legend-drawer-close');
+                if (closeBtn) closeBtn.focus();
+            }, 0);
+        }
+    }
+
+    handleCloseLegendDrawer() {
+        this._captureLegendAnimStartOpacity();
+        this._legendDrawerOpen = false;
+        setTimeout(() => {
+            if (!this._isMounted) return;
+            const toggleBtn = this.template.querySelector('.legend-toggle-btn');
+            if (toggleBtn) toggleBtn.focus();
+        }, 0);
     }
 
     dismissLargeGraphWarning() {

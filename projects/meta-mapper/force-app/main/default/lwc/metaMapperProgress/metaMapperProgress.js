@@ -462,8 +462,22 @@ export default class MetaMapperProgress extends LightningElement {
         this.dispatchEvent(new CustomEvent('viewpartialresults', { bubbles: true, composed: true }));
     }
 
+    handleViewPartialResultsKeyDown(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.handleViewPartialResults(event);
+        }
+    }
+
     handleStartNew() {
-        this.dispatchEvent(new CustomEvent('startnew', { bubbles: true, composed: true }));
+        this.dispatchEvent(new CustomEvent('startnewscan', { bubbles: true, composed: true }));
+    }
+
+    handleStartNewKeyDown(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.handleStartNew(event);
+        }
     }
 
     dismissLongRunningBanner() {
@@ -475,5 +489,12 @@ export default class MetaMapperProgress extends LightningElement {
         this._pollFailCount = 0;
         this.showPollErrorBanner = false;
         this._startPolling();
+    }
+
+    handleRetryPollingKeyDown(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.handleRetryPolling(event);
+        }
     }
 }

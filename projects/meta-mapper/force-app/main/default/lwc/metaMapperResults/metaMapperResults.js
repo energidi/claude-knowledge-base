@@ -365,7 +365,9 @@ export default class MetaMapperResults extends LightningElement {
     handlePanelClosed() { this.selectedNodeId = null; }
 
     toggleSummaryExpanded() { this.summaryExpanded = !this.summaryExpanded; }
+    toggleSummaryExpandedKeyDown(event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.toggleSummaryExpanded(event); } }
     dismissSummary() { this.summaryDismissed = true; }
+    dismissSummaryKeyDown(event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.dismissSummary(event); } }
 
     handleCopySummary() {
         navigator.clipboard.writeText(this.summaryText).then(() => {
@@ -392,11 +394,14 @@ export default class MetaMapperResults extends LightningElement {
     }
 
     reloadResults() { this.loadResults(); }
-    handleStartNew() { this.dispatchEvent(new CustomEvent('startnew', { bubbles: true, composed: true })); }
+    reloadResultsKeyDown(event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.reloadResults(event); } }
+    handleStartNew() { this.dispatchEvent(new CustomEvent('startnewscan', { bubbles: true, composed: true })); }
+    handleStartNewKeyDown(event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.handleStartNew(event); } }
     handleExportPartial() {
         const exportEl = this.template.querySelector('c-meta-mapper-export');
         if (exportEl) exportEl.exportCsv();
     }
+    handleExportPartialKeyDown(event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.handleExportPartial(event); } }
 
     handleSwitchToTree() { this._activateTab('tree'); }
     handleRetryTab() { this._activateTab(this.activeTab); }

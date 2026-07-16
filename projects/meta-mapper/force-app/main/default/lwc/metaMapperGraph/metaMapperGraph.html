@@ -29,8 +29,26 @@
 
     <!-- Main layout: legend + canvas column -->
     <div class="graph-layout">
-        <!-- Legend sidebar -->
-        <div class="graph-legend" aria-label="Graph legend">
+        <!-- Legend drawer backdrop (tablet landscape only, shown while the drawer is open) -->
+        <template lwc:if={showLegendBackdrop}>
+            <div class="legend-drawer-backdrop" onclick={handleCloseLegendDrawer}></div>
+        </template>
+
+        <!-- Legend sidebar (desktop) / overlay drawer (tablet landscape) -->
+        <div class={legendDrawerClass} aria-label="Graph legend">
+            <template lwc:if={showLegendToggle}>
+                <div class="legend-drawer-header">
+                    <span class="legend-drawer-title">Legend</span>
+                    <button
+                        class="legend-drawer-close slds-button"
+                        aria-label="Close legend"
+                        onclick={handleCloseLegendDrawer}
+                    >
+                        Close
+                    </button>
+                </div>
+            </template>
+
             <!-- Spanning tree notice -->
             <template if:true={showSpanningNotice}>
                 <div role="status" class="spanning-notice">
@@ -113,6 +131,15 @@
                     >
                         ?
                     </button>
+                </template>
+                <template lwc:if={showLegendToggle}>
+                    <lightning-button-icon
+                        icon-name="utility:rows"
+                        size="small"
+                        aria-label="Toggle legend"
+                        class="legend-toggle-btn"
+                        onclick={handleToggleLegendDrawer}
+                    ></lightning-button-icon>
                 </template>
 
                 <!-- Graph live region for announcements -->

@@ -16,7 +16,7 @@
         <template lwc:if={showLongRunningBanner}>
             <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="alert">
                 <p>This scan is taking longer than usual.
-                    <a onclick={handleViewPartialResults}> View partial results so far</a> - this will not cancel the scan.
+                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewPartialResults} onkeydown={handleViewPartialResultsKeyDown}> View partial results so far</a> - this will not cancel the scan.
                 </p>
                 <button class="slds-button slds-button_icon slds-notify__close" onclick={dismissLongRunningBanner}
                     aria-label="Dismiss long-running notice" title="Dismiss">
@@ -29,8 +29,8 @@
         <template lwc:if={showTimeoutBanner}>
             <div class="slds-notify slds-notify_alert slds-theme_warning" role="alert" aria-live="assertive">
                 <p>This scan has been running for over an hour. It may be stuck.
-                    <a onclick={handleViewPartialResults}> View partial results</a> or
-                    <a onclick={handleStartNew}> Start a new scan</a>.
+                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewPartialResults} onkeydown={handleViewPartialResultsKeyDown}> View partial results</a> or
+                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleStartNew} onkeydown={handleStartNewKeyDown}> Start a new scan</a>.
                 </p>
             </div>
         </template>
@@ -78,7 +78,7 @@
         <!-- View partial results link + Start new scan (Cancelled state) -->
         <template lwc:if={isCancelled}>
             <div class="slds-var-m-top_x-small">
-                <a onclick={handleViewPartialResults}>View partial results</a>
+                <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewPartialResults} onkeydown={handleViewPartialResultsKeyDown}>View partial results</a>
             </div>
             <div class="slds-var-m-top_medium">
                 <lightning-button variant="brand" label="Start new scan"
@@ -114,7 +114,7 @@
         <template lwc:if={showPollErrorBanner}>
             <div class="slds-notify slds-notify_alert slds-theme_error slds-var-m-top_small" role="alert">
                 <p>Progress updates have stopped. Check your network connection.
-                    <a onclick={handleRetryPolling}> Retry polling</a>
+                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleRetryPolling} onkeydown={handleRetryPollingKeyDown}> Retry polling</a>
                 </p>
             </div>
         </template>

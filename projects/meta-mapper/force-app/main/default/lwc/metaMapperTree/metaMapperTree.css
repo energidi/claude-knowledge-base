@@ -8,7 +8,7 @@
 .search-bar {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--slds-g-spacing-1, 0.25rem);
     margin-bottom: var(--slds-g-spacing-2, 0.5rem);
 }
 
@@ -29,7 +29,9 @@
 
 .tree-scroll-container {
     overflow-y: auto;
+    /* SLDS2: no equivalent hook */
     height: 450px;
+    /* SLDS2: no equivalent hook */
     min-height: 400px;
     position: relative;
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
@@ -43,10 +45,12 @@
 .tree-row {
     display: flex;
     align-items: center;
+    /* SLDS2: no equivalent hook */
     height: 40px;
     cursor: pointer;
     padding-right: var(--slds-g-spacing-2, 0.5rem);
     box-sizing: border-box;
+    /* SLDS2: no equivalent hook */
     border-left: 3px solid transparent;
     user-select: none;
 }
@@ -88,6 +92,7 @@
 
 .type-icon {
     flex-shrink: 0;
+    /* SLDS2: no equivalent hook */
     margin-right: 0.375rem;
     margin-left: var(--slds-g-spacing-1, 0.25rem);
 }
@@ -132,6 +137,7 @@ mark {
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     box-shadow: 0 2px 8px var(--metamapper-g-color-shadow-1, rgba(0, 0, 0, 0.2));
     z-index: 9000;
+    /* SLDS2: no equivalent hook */
     min-width: 180px;
     border-radius: var(--slds-g-radius-border-1, 4px);
     overflow: hidden;

@@ -197,23 +197,8 @@ public without sharing class MetadataScanJobSelector {
     }
 
     /**
-     * Returns the fields needed by updateJobFailed() in DependencyQueueable.
-     * No row lock - used outside any locking context.
-     *
-     * @param jobId  ID of the Metadata_Scan_Job__c record
-     * @return       The job record, or null if not found
-     */
-    public Metadata_Scan_Job__c getForFailedUpdate(String jobId) {
-        List<Metadata_Scan_Job__c> rows = [
-            SELECT Id, Status__c, Scan_Diagnostic_Log__c, Components_Analyzed__c
-            FROM Metadata_Scan_Job__c WHERE Id = :jobId LIMIT 1
-        ];
-        return rows.isEmpty() ? null : rows[0];
-    }
-
-    /**
-     * Same as getForFailedUpdate but WITH FOR UPDATE to serialize concurrent
-     * ScanResultFileQueueable instances in updateJobFailed().
+     * Returns the fields needed by updateJobFailed(), WITH FOR UPDATE to serialize
+     * concurrent DependencyQueueable / ScanResultFileQueueable failure handlers.
      *
      * @param jobId  ID of the Metadata_Scan_Job__c record
      * @return       The job record locked FOR UPDATE, or null if not found

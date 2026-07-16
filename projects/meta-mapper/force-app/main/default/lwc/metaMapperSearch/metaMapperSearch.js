@@ -41,6 +41,7 @@ export default class MetaMapperSearch extends LightningElement {
     @track targetObjectError = '';
     @track complexityBucket = null;
     @track _complexityLoading = false;
+    @track _hasWhitespaceHint = false;
 
     _typeaheadTimer = null;
     _complexityTimer = null;
@@ -84,7 +85,9 @@ export default class MetaMapperSearch extends LightningElement {
     }
 
     handleApiNameChange(event) {
-        this.apiName = event.detail.value;
+        const rawValue = event.detail.value || '';
+        this._hasWhitespaceHint = rawValue !== rawValue.trim();
+        this.apiName = rawValue;
         this._scheduleComplexityPreview();
     }
 
@@ -253,5 +256,12 @@ export default class MetaMapperSearch extends LightningElement {
     dismissError() {
         this.submissionError = '';
         this.isRunningScanError = false;
+    }
+
+    handleViewRunningScanKeyDown(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.handleViewRunningScan(event);
+        }
     }
 }

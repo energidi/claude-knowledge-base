@@ -28,7 +28,8 @@
 
         <!-- Advanced section (collapsible) -->
         <div class="export-advanced">
-            <button class="slds-button slds-button_neutral toggle-advanced" onclick={handleToggleAdvanced}>
+            <button class="slds-button slds-button_neutral toggle-advanced" onclick={handleToggleAdvanced}
+                aria-controls="advancedContent" aria-expanded={advancedExpandedAttr}>
                 <lightning-icon
                     icon-name={advancedChevronIcon}
                     size="x-small"
@@ -38,7 +39,7 @@
             </button>
 
             <template if:true={_advancedOpen}>
-                <div class="advanced-content">
+                <div class="advanced-content" id="advancedContent">
                     <button
                         class="slds-button slds-button_neutral"
                         onclick={handleDownloadPackageXml}

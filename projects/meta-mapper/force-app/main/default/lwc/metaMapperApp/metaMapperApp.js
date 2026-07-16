@@ -301,8 +301,21 @@ export default class MetaMapperApp extends LightningElement {
         this._refreshJob().then(() => { this.view = 'progress'; });
     }
 
-    handleLearnMore() { this.showLearnMoreModal = true; }
+    handleLearnMore() {
+        this.showLearnMoreModal = true;
+        setTimeout(() => {
+            const modal = this.template.querySelector('section[aria-label="MetaMapper setup instructions"]');
+            if (modal) modal.focus();
+        }, 0);
+    }
     closeLearnMore()  { this.showLearnMoreModal = false; }
+
+    handleLearnMoreKeyDown(event) {
+        if (event.key === 'Escape') {
+            event.stopPropagation();
+            this.closeLearnMore();
+        }
+    }
 
     handleTourKeyDown(event) {
         if (event.key === 'Escape') {

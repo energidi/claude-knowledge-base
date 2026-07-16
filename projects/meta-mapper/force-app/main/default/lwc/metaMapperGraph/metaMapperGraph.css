@@ -1,6 +1,7 @@
 /* Layout */
 .graph-layout {
     display: flex;
+    /* SLDS2: no equivalent hook */
     height: 600px;
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     border-radius: var(--slds-g-radius-border-1, 4px);
@@ -8,10 +9,11 @@
 }
 
 .graph-legend {
+    /* SLDS2: no equivalent hook */
     width: 200px;
     flex-shrink: 0;
     overflow-y: auto;
-    border-right: 1px solid var(--slds-g-color-border-base-1, #dddbda);
+    border-right: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     padding: var(--slds-g-spacing-2, 0.5rem);
     background: var(--slds-g-color-surface-1, #ffffff);
 }
@@ -28,10 +30,10 @@
 .graph-toolbar {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--slds-g-spacing-2, 0.5rem);
     padding: var(--slds-g-spacing-2, 0.5rem);
     flex-wrap: wrap;
-    border-bottom: 1px solid var(--slds-g-color-border-base-1, #dddbda);
+    border-bottom: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     background: var(--slds-g-color-surface-2, #f3f2f2);
 }
 
@@ -58,6 +60,7 @@
 /* Canvas */
 .graph-canvas-wrapper {
     flex: 1;
+    /* SLDS2: no equivalent hook */
     min-height: 400px;
     position: relative;
     outline: none;
@@ -89,7 +92,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
+    gap: var(--slds-g-spacing-3, 0.75rem);
     height: 100%;
     font-size: var(--slds-g-font-scale-1, 0.875rem);
     color: var(--slds-g-color-neutral-base-30, #706e6b);
@@ -105,7 +108,7 @@
 .legend-item {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--slds-g-spacing-1, 4px);
     padding: var(--slds-g-spacing-1, 0.25rem) 0;
     font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
     color: var(--slds-g-color-neutral-base-10, #3e3e3c);
@@ -133,12 +136,14 @@
 .spanning-notice {
     display: flex;
     align-items: flex-start;
-    gap: 4px;
+    gap: var(--slds-g-spacing-1, 4px);
+    /* SLDS2: no equivalent hook */
     padding: 0.4rem;
     margin-bottom: var(--slds-g-spacing-2, 0.5rem);
     background: var(--slds-g-color-palette-blue-95, #f4f6fe);
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #d8dde6);
     border-radius: var(--slds-g-radius-border-1, 4px);
+    /* SLDS2: no equivalent hook */
     font-size: 0.6875rem;
     color: var(--slds-g-color-neutral-base-10, #3e3e3c);
 }
@@ -167,7 +172,7 @@
 .large-graph-warning {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--slds-g-spacing-2, 0.5rem);
     padding: var(--slds-g-spacing-2, 0.5rem) var(--slds-g-spacing-3, 0.75rem);
     background: var(--slds-g-color-palette-yellow-90, #fff4ce);
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-warning-base-40, #dd7a01);
@@ -184,6 +189,7 @@
     background: none;
     border: none;
     cursor: pointer;
+    /* SLDS2: no equivalent hook */
     font-size: 1.2rem;
     color: var(--slds-g-color-neutral-base-30, #706e6b);
     padding: 0 var(--slds-g-spacing-1, 0.25rem);
@@ -201,7 +207,7 @@
     text-align: center;
     font-size: var(--slds-g-font-scale-1, 0.875rem);
     color: var(--slds-g-color-neutral-base-30, #706e6b);
-    border-bottom: 1px solid var(--slds-g-color-border-base-1, #dddbda);
+    border-bottom: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
 }
 
 /* Context menu */
@@ -217,6 +223,7 @@
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     box-shadow: 0 2px 8px var(--metamapper-g-color-shadow-1, rgba(0, 0, 0, 0.2));
     z-index: 9000;
+    /* SLDS2: no equivalent hook */
     min-width: 180px;
     border-radius: var(--slds-g-radius-border-1, 4px);
     overflow: hidden;
@@ -273,6 +280,7 @@
     border-radius: var(--slds-g-radius-border-1, 4px);
     max-width: var(--slds-g-sizing-16, 480px);
     width: 90%;
+    /* SLDS2: no equivalent hook */
     max-height: 80vh;
     overflow-y: auto;
     box-shadow: 0 8px 24px var(--metamapper-g-color-shadow-2, rgba(0, 0, 0, 0.3));
@@ -283,7 +291,7 @@
     align-items: center;
     justify-content: space-between;
     padding: var(--slds-g-spacing-4, 1rem) 1.25rem var(--slds-g-spacing-3, 0.75rem);
-    border-bottom: 1px solid var(--slds-g-color-border-base-1, #dddbda);
+    border-bottom: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
 }
 
 .modal-title {
@@ -321,9 +329,9 @@
 .modal-footer {
     display: flex;
     justify-content: flex-end;
-    gap: 0.75rem;
+    gap: var(--slds-g-spacing-3, 0.75rem);
     padding: var(--slds-g-spacing-3, 0.75rem) 1.25rem;
-    border-top: 1px solid var(--slds-g-color-border-base-1, #dddbda);
+    border-top: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
 }
 
 /* Keyboard shortcut list */
@@ -336,10 +344,11 @@
 .shortcut-list li {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: var(--slds-g-spacing-3, 0.75rem);
+    /* SLDS2: no equivalent hook */
     padding: 0.4rem 0;
     font-size: var(--slds-g-font-scale-base, 0.8125rem);
-    border-bottom: 1px solid var(--slds-g-color-surface-2, #f3f2f2);
+    border-bottom: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-surface-2, #f3f2f2);
 }
 
 .shortcut-list li:last-child {
@@ -348,6 +357,7 @@
 
 kbd {
     display: inline-block;
+    /* SLDS2: no equivalent hook */
     padding: 0.15rem 0.4rem;
     background: var(--slds-g-color-surface-2, #f3f2f2);
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
@@ -355,6 +365,7 @@ kbd {
     font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
     font-family: monospace;
     white-space: nowrap;
+    /* SLDS2: no equivalent hook */
     min-width: 90px;
 }
 
@@ -376,4 +387,51 @@ lightning-spinner {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+}
+
+/* Tablet landscape (1024px - 1279px, inclusive both ends): legend collapses into a
+   toggle-button overlay drawer instead of an always-visible sidebar. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+    .graph-layout {
+        position: relative;
+    }
+
+    .legend-drawer-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: 1000;
+    }
+
+    .graph-legend {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1001;
+        transform: translateX(100%);
+        opacity: var(--anim-start-opacity, 0);
+        transition: transform 150ms ease-in-out, opacity 150ms ease-in-out;
+        box-shadow: -2px 0 8px var(--metamapper-g-color-shadow-1, rgba(0, 0, 0, 0.2));
+    }
+
+    .graph-legend.legend-drawer-open {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    .legend-drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: var(--slds-g-spacing-2, 0.5rem);
+        margin-bottom: var(--slds-g-spacing-2, 0.5rem);
+        border-bottom: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
+    }
+
+    .legend-drawer-title {
+        font-weight: var(--slds-g-font-weight-7, 700);
+        font-size: var(--slds-g-font-scale-base, 0.8125rem);
+        color: var(--slds-g-color-neutral-base-10, #3e3e3c);
+    }
 }

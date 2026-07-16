@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** July 15, 2026 (Round 80 - sf-orchestrator full pass: 19 findings applied - 2 Critical, 5 High, 10 Medium, 2 Low)
+**Last Updated:** July 15, 2026 (Round 81 - sf-orchestrator full pass: 15 findings applied - 1 Critical, 5 High, 4 Medium, 5 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3916,6 +3916,37 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
 
 ---
+
+## Round 81 Fixes Applied
+
+Full sf-orchestrator review (all 8 lenses: architecture, UX, naming, security, performance, testing, automation, static analysis). 15 findings applied (1 Critical, 5 High, 4 Medium, 5 Low). Overall verdict before fixes: NO-GO (1 Critical UX accessibility gap - inline text-link actions across three components were not keyboard-reachable). Security and Performance lenses returned zero findings (clean passes, confirmed by direct code re-read). Static analysis's 48 raw `@lwc/lwc/no-async-operation` hits were verified against a live `npm run lint` run (clean, zero output) and confirmed as the same tooling false-positive documented in Rounds 76/78/79 (`sf code-analyzer`'s bundled eslint engine doesn't respect this project's real `eslint.config.js` overrides) - not counted as a finding, no code change.
+
+**Critical (UX):**
+- Finding 1 (`metaMapperProgress.html`, `metaMapperResults.html`, `metaMapperSearch.html`): inline text-link actions (`<a onclick={...}>` with no `href`/`tabindex`/`role`/keyboard handler) were unreachable and unactivatable by keyboard (WCAG 2.1.1) - hit core recovery flows ("View partial results", "Start a new scan", "Retry polling", "Reload results", "Download partial results", summary "Dismiss"/"Show more", "View the running scan"). Fixed: converted each to `href="javascript:void(0);" tabindex="0" role="button"` with a paired `onkeydown` handler (Enter/Space) delegating to the existing click handler, matching the established `.large-graph-dismiss`/context-menu convention.
+
+**High:**
+- Finding 2 (Architecture - `MetaMapper_Admin.permissionset-meta.xml`): `allowDelete=true` was granted on both `Metadata_Scan_Job__c` and `Metadata_Dependency__c`, but no `@AuraEnabled` method ever performs a user-context delete - deletion is entirely engine-managed (SYSTEM_MODE). The over-grant let any assigned user manually delete job/node records mid-scan via Data Loader/Workbench, corrupting in-flight engine state. Fixed: `allowDelete` set to `false` on both object permission blocks; CLAUDE.md corrected (see below).
+- Finding 3 (UX - `metaMapperGraph`): CLAUDE.md's documented 1024-1279px "tablet landscape" responsive tier (legend collapses into a toggle-button overlay drawer) did not exist - zero `@media` queries in the CSS, legend always rendered as a full sidebar. Fixed: added `_isTabletLandscapeState`, a legend toggle button (`lightning-button-icon icon-name="utility:rows"`), a 200px slide-out overlay drawer with `rgba(0,0,0,0.3)` backdrop, 150ms fade transitions, opacity-continuity via `--anim-start-opacity` read from `getComputedStyle()`, and auto-close on unmount/breakpoint-exit. **Scope note:** CLAUDE.md's tablet-landscape spec also describes a "filter panel drawer" and pinning the Node Details Panel at this tier - neither exists as a concrete UI element inside `metaMapperGraph` (filters are inline toolbar controls; the Node Details Panel is a separate sibling component owned by `metaMapperResults`), so the fix was scoped to the one element that actually exists in the codebase - the legend. Building a new filter-panel-drawer UI was treated as a separate feature, not a review fix, per this project's surgical-changes rule.
+- Finding 4 (Testing - `DependencyQueueableTest.cls`): Tier 2 true-ancestry cycle detection (`Is_Circular__c = true` + `cycleClosesAt` context merge) had zero test coverage. Fixed: added `execute_childReferencesAncestor_setsCircularAndMergesCycleAttribute()` (2-hop A→B→A cycle via mocked Tooling API response), asserting `Is_Circular__c`, `Has_Fetched_Dependencies__c`, and `cycleClosesAt` presence.
+- Finding 5 (Testing - `MetadataDependencyServiceTest.cls`): the documented `INVALID_QUERY_LOCATOR` (QueryMore cursor-expiry) recovery path had no test. Fixed: added `fetchDependencies_queryMoreCursorExpired_setsHasQueryMoreFailedAndLogsNotice()` with a mock returning HTTP 400 `INVALID_QUERY_LOCATOR` on the follow-up callout, asserting `hasQueryMoreFailed == true` and the diagnostic notice text.
+- Finding 6 (Testing - `DependencyQueueableTest.cls`): the node-cap pause path (`Components_Analyzed__c >= Max_Components__c` → `Paused`/`ComponentLimitReached`) had no test - only the sibling stall-detection pause path was covered. Fixed: added `execute_nodeCapReached_pausesJobWithComponentLimitReason()`, distinguishing the two `Pause_Reason__c` values.
+
+**Medium:**
+- Finding 7 (UX - `metaMapperApp.js`): the "Learn more" setup-instructions modal had no focus management or Esc-dismiss, unlike every other modal in the app. Fixed: added focus-move on open (matching the tour-modal pattern) and an Esc-key handler.
+- Finding 8 (UX - `metaMapperExport`): the "Advanced" collapsible export toggle had no `aria-expanded`/`aria-controls` (WCAG 4.1.2 disclosure pattern). Fixed: added both attributes, wired to a new `advancedExpandedAttr` getter.
+- Finding 9 (Testing - `DependencyJobControllerTest.cls`): the class header falsely claimed all tests use `System.runAs()` to implicitly validate USER_MODE enforcement - zero `runAs` calls existed in the file. Fixed: corrected the header comment and added `createJob_restrictedUser_userModeDenies()`, a genuine negative test asserting `System.NoAccessException` for a user without the `MetaMapper_Admin` permission set.
+- Finding 10 (Architecture - `DependencyQueueable.cls`): Step 5a's `resolveRootId()` root-ID-resolution callout fired with no callout-budget check before it, breaking the "check budget before every callout" invariant enforced everywhere else in the engine. Fixed: added a `Limits.getLimitCallouts() - Limits.getCallouts() < 1` guard with self-chain before the Step 5a loop.
+
+**Low:**
+- Finding 11 (Architecture - `MetadataScanJobSelector.cls`): `getForFailedUpdate()` (unlocked variant) had zero callers - only `getForFailedUpdateLocked()` is used. Fixed: deleted the dead method; CLAUDE.md's selector method list corrected (see below).
+- Finding 12 (UX - `metaMapperSearch`): the API Name pattern-mismatch message didn't differentiate blank vs. stray-whitespace input. Fixed: added a `_hasWhitespaceHint` detection and a more specific inline hint, matching the existing conditional-helper-text convention.
+- Finding 13 (Naming - LWC event): `startnew` didn't describe what happened, inconsistent with sibling events `viewrunningscan`/`viewpartialresults`. Fixed: renamed to `startnewscan` across `metaMapperResults.js`, `metaMapperProgress.js`, `metaMapperApp.html`/`.js`, and both `.js-meta.xml` descriptions. Zero stale references confirmed via grep.
+- Finding 14 (Automation - `DependencyQueueable.cls`): the Step 9 pre-batch guardrail self-chain didn't re-verify `Status__c` before re-enqueuing, unlike the sibling Step 7/Step 8 paths. Fixed: added the same `getStatusOnly(jobId)` re-verification before the Step 9 `System.enqueueJob(...)` call.
+- Finding 15 (Static Analysis - 6 CSS files): 56 hardcoded px/rem/% values lacked SLDS 2 styling-hook replacements (a rule not present in this project's own `eslint.config.js`, so never caught by `npm run lint`). Fixed: replaced high-confidence matches (border-radius, border-width, common spacing values) with `--slds-g-*` tokens with the original literal retained as fallback; added `/* SLDS2: no equivalent hook */` comments for values with no sensible token mapping (arbitrary dimensions, animation durations, one-off layout values).
+
+**CLAUDE.md updates:** corrected the `MetaMapper_Admin` grants description (Create/Read/Update only, never Delete) in both the Security Model section and the Permission Set component table; removed the deleted `getForFailedUpdate()` reference from the `MetadataScanJobSelector` method list.
+
+**Verification:** `npm run lint` - clean, zero violations (re-confirmed after all fixes, including the tablet-landscape CSS/HTML/JS additions). CSS brace-balance check on `metaMapperGraph.css` - balanced. Apex-side changes (Findings 2, 4, 5, 6, 9, 10, 11) are not yet compile/test-verified against a live org - deployment is gated on explicit user approval per Phase 5.
 
 ## Round 80 Fixes Applied
 

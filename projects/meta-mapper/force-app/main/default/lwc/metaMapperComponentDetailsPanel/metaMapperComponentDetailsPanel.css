@@ -3,7 +3,7 @@
     flex-direction: column;
     height: 100%;
     background: var(--slds-g-color-surface-1, #ffffff);
-    border-left: 1px solid var(--slds-g-color-border-base-1, #dddbda);
+    border-left: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     width: var(--slds-g-sizing-15, 320px);
     overflow: hidden;
 }
@@ -13,7 +13,7 @@
     align-items: center;
     justify-content: space-between;
     padding: var(--slds-g-spacing-3, 0.75rem) var(--slds-g-spacing-4, 1rem);
-    border-bottom: 1px solid var(--slds-g-color-border-base-1, #dddbda);
+    border-bottom: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     flex-shrink: 0;
 }
 
@@ -35,9 +35,9 @@
 
 .panel-footer {
     padding: var(--slds-g-spacing-3, 0.75rem) var(--slds-g-spacing-4, 1rem);
-    border-top: 1px solid var(--slds-g-color-border-base-1, #dddbda);
+    border-top: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     display: flex;
-    gap: 0.5rem;
+    gap: var(--slds-g-spacing-2, 0.5rem);
     flex-shrink: 0;
     flex-wrap: wrap;
     align-items: center;
@@ -65,7 +65,7 @@
 .flag-row {
     display: flex;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: var(--slds-g-spacing-2, 0.5rem);
     margin-bottom: var(--slds-g-spacing-2, 0.5rem);
     font-size: var(--slds-g-font-scale-base, 0.8125rem);
     padding: var(--slds-g-spacing-2, 0.5rem);
@@ -95,12 +95,13 @@
     margin: 0;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: var(--slds-g-spacing-1, 0.25rem);
 }
 
 .pill-item {
     background: var(--slds-g-color-neutral-base-95, #f3f2f2);
     border-radius: var(--slds-g-radius-border-1, 4px);
+    /* SLDS2: no equivalent hook */
     padding: 0.125rem var(--slds-g-spacing-2, 0.5rem);
     font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
 }
@@ -109,11 +110,12 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--slds-g-spacing-1, 0.25rem);
     font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
 }
 
 .breadcrumb-item {
+    /* SLDS2: no equivalent hook */
     max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -140,6 +142,7 @@
 }
 
 .confidence-badge {
+    /* SLDS2: no equivalent hook */
     padding: 0.125rem var(--slds-g-spacing-2, 0.5rem);
     border-radius: var(--slds-g-radius-border-1, 4px);
     font-size: var(--slds-g-font-scale-neg-1, 0.75rem);

@@ -39,6 +39,10 @@ export default class MetaMapperExport extends LightningElement {
         return this._advancedOpen ? 'utility:chevrondown' : 'utility:chevronright';
     }
 
+    get advancedExpandedAttr() {
+        return this._advancedOpen ? 'true' : 'false';
+    }
+
     // --------------- handlers ---------------
 
     @api

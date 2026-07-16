@@ -126,6 +126,31 @@ private class MetadataDependencyServiceTest {
     }
 
     @IsTest
+    static void fetchDependencies_queryMoreCursorExpired_setsHasQueryMoreFailedAndLogsNotice() {
+        // A cursor expiry (INVALID_QUERY_LOCATOR, HTTP 400) on the QueryMore follow-up
+        // must set hasQueryMoreFailed = true so the parent is re-queried from scratch on
+        // the next execution, and must log a diagnostic notice for admin visibility.
+        Test.setMock(HttpCalloutMock.class, new QueryMoreThenCursorExpiredMock());
+
+        DependencyFetchContext opts = new DependencyFetchContext();
+        opts.jobId = 'a003000000000001AAA';
+        MetadataDependencyService svc = new MetadataDependencyService();
+        svc.fetchDependencies(new List<String>{ 'a002000000000001AAA' }, opts);
+
+        Assert.isTrue(opts.hasQueryMoreFailed,
+            'A cursor expiry on the QueryMore follow-up must set hasQueryMoreFailed = true');
+        Boolean hasCursorNotice = false;
+        for (String err : opts.errors) {
+            if (err.contains('QueryMore cursor expired')) {
+                hasCursorNotice = true;
+                break;
+            }
+        }
+        Assert.isTrue(hasCursorNotice,
+            'A diagnostic notice mentioning the expired QueryMore cursor must be recorded in opts.errors');
+    }
+
+    @IsTest
     static void fetchDependencies_calloutBudgetExhausted_populatesFailedParents() {
         // Finding #15: when the pre-call budget guard fires, failedParentMetaIds must be populated.
         // We cannot exhaust callout budget in a test, so we test the opts outcome via the
@@ -246,6 +271,30 @@ private class MetadataDependencyServiceTest {
                     + '"RefMetadataComponentId":"a002000000000001AAA",'
                     + '"RefMetadataComponentName":"MyField","RefMetadataComponentType":"CustomField"}'
                     + ']}');
+            }
+            return res;
+        }
+    }
+
+    private class QueryMoreThenCursorExpiredMock implements HttpCalloutMock {
+        // First call returns page 1 with a nextRecordsUrl; the second call (the QueryMore
+        // follow-up) returns HTTP 400 with an INVALID_QUERY_LOCATOR body, simulating an
+        // expired Tooling API query cursor.
+        private Integer callCount = 0;
+        public HttpResponse respond(HttpRequest req) {
+            callCount++;
+            HttpResponse res = new HttpResponse();
+            if (callCount == 1) {
+                res.setStatusCode(200);
+                res.setBody('{"done":false,"totalSize":1,"nextRecordsUrl":"/services/data/v66.0/tooling/query/01g000000000001","records":['
+                    + '{"MetadataComponentId":"a001000000000001AAA",'
+                    + '"MetadataComponentName":"ClassA","MetadataComponentType":"ApexClass",'
+                    + '"RefMetadataComponentId":"a002000000000001AAA",'
+                    + '"RefMetadataComponentName":"MyField","RefMetadataComponentType":"CustomField"}'
+                    + ']}');
+            } else {
+                res.setStatusCode(400);
+                res.setBody('[{"message":"invalid query locator","errorCode":"INVALID_QUERY_LOCATOR"}]');
             }
             return res;
         }
