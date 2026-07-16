@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** July 15, 2026 (Round 81 - sf-orchestrator full pass: 15 findings applied - 1 Critical, 5 High, 4 Medium, 5 Low)
+**Last Updated:** July 16, 2026 (Round 82 - sf-orchestrator full pass: 12 findings applied - 0 Critical, 3 High, 7 Medium, 2 Low)
 **Date:** May 23, 2026
 
 ---
@@ -3916,6 +3916,37 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
 
 ---
+
+## Round 82 Fixes Applied
+
+Full sf-orchestrator review (all 8 lenses: architecture, UX, naming, security, performance, testing, automation, static analysis). 12 findings applied (0 Critical, 3 High, 7 Medium, 2 Low). Overall verdict before fixes: GO (no Critical findings). Architecture, Security, Performance, Automation, and Static Analysis lenses returned zero findings (clean passes) - the engine core and its governor-limit/security posture remain sound after Round 81.
+
+**High:**
+- Finding 1 (UX - `metaMapperProgress.html`/`.js`): a `Failed` job had no exit affordance on the Progress screen - no "View full error"/"View partial results"/"Start new scan" block existed for `Status__c = 'Failed'` (only `isCancelled` had one), leaving the user stranded on the progress screen. Fixed: added an `isFailed` getter and a sibling template block with a truncated `Scan_Diagnostic_Log__c` expander, a "View partial results" link (`viewpartialresults`), and a "Start a new scan" button (`startnewscan`), using the Round 81 keyboard-accessible inline-link convention.
+- Finding 2 (UX - `metaMapperResults.js`/`.html`): CLAUDE.md's "Job failed mid-way" error banner was never rendered for a deep-linked/cold-loaded `Failed` job that wasn't a serializer failure - the user saw either a misleading zero-results state or a silent partial tree. Fixed: added an `isMidwayFailure` getter (`Status__c === 'Failed' && !isSerializerFailure`); rendered the CLAUDE.md-specified banner ahead of the zero-results/tab blocks; excluded this case from `isZeroResults`.
+- Finding 3 (Testing - `ScanSummaryQueueableTest.cls`): the safety-critical `Status__c != 'Completed'` early-return guard in `ScanSummaryQueueable.execute()` had zero test coverage - every existing test constructed the job as already Completed. Fixed: added `execute_jobStatusFailed_doesNotWriteSummary()` asserting `Scan_Summary_Text__c` stays null.
+
+**Medium:**
+- Finding 4 (UX - `metaMapperSearch.js`): the Submit button was enabled based only on non-blank API Name, never checking the input's own pattern validity, letting an invalid API name round-trip to Apex. Fixed: `isSubmitDisabled` now also calls `checkValidity()` on the API Name `lightning-input`.
+- Finding 5 (UX - `metaMapperFilters.js`): `validateFilters()` only reset `types` to `[]` when all stored types were invalid - `minLevel`/`maxLevel`/`confidenceThreshold` from a stale, unrelated scan session were silently kept. Fixed: when every stored type is discarded, the function now returns `{ ...DEFAULT_FILTERS }` in full; the pre-existing "empty types array is always valid" early return is untouched.
+- Finding 6 (Testing - `DependencyQueueableTest.cls`): the upsert partial-failure branch (transient vs. persistent DML error) had no test forcing a `Database.UpsertResult` failure. Fixed: added a test with a child violating `Metadata_Id_Must_Be_18_Characters`, asserting the parent is still marked fetched and `Scan_Diagnostic_Log__c` records "node dropped".
+- Finding 7 (Testing - `DependencyJobControllerTest.cls`): the `Max_Concurrent_Jobs__c <= 0` kill-switch branch (Round 79) was unreachable in unit tests (CMDT cannot be inserted/modified in Apex test context) and had no acknowledgment of the gap. Fixed: added an explicit documented-untestable comment matching the `DependencyCleanupBatchTest.cls` pattern.
+- Finding 8 (Testing - `metaMapperProgress.test.js`): four CLAUDE.md-documented timer-driven states (30s cancel-timeout banner, 15-min long-running banner, 60-min poll-termination banner, `_pollFailCount` 3/5 escalation) had zero Jest coverage. Fixed: added fake-timer-driven tests for the 30s cancel-timeout banner, the 3-fail warning banner, and the 5-fail non-dismissible banner with a working Retry.
+- Finding 9 (Naming - `DependencyJobController.JobStatusResult`): `peSuppressionActive` was a Boolean without the required Is/Has/Can prefix - missed by the Round 80 field-level pass because it's an Apex wrapper property, not a custom field. Fixed: renamed to `isPeSuppressionActive` across `DependencyJobController.cls`, `DependencyJobControllerTest.cls`, and all LWC consumers (`metaMapperApp`, `metaMapperProgress`, `metaMapperResults`). Zero stale references confirmed via grep.
+- Finding 10 (Naming - `MetaMapper_Admin.permissionset-meta.xml`): the description said "CRUD" while both object-permission blocks explicitly set `allowDelete=false`, misleading admins about delete capability. Fixed: description now reads "Create/Read/Update (never Delete)".
+
+**Low:**
+- Finding 11 (UX - `metaMapperFormatters.js`): `renderPills()`'s fallback copy promised a "raw data" view that doesn't exist anywhere in the codebase. Fixed: reworded to reference the JSON export, which does expose raw `Dependency_Context__c`.
+- Finding 12 (Naming - `metaMapperProgress` LWC event): `jobstatuspolled` named the trigger mechanism rather than the outcome, inconsistent with the Round 81 `startnew` -> `startnewscan` fix, and misleading since it also fires from the watchdog path. Fixed: renamed to `jobstatusupdated`; cascaded to the `metaMapperApp.html` listener.
+
+**Rollback notes (High findings):**
+- Finding 1: revert `metaMapperProgress.html`/`.js` `isFailed` block and handlers to prior version.
+- Finding 2: revert `metaMapperResults.js`/`.html` `isMidwayFailure` block and `isZeroResults` change to prior version.
+- Finding 3: revert `ScanSummaryQueueableTest.cls` to remove `execute_jobStatusFailed_doesNotWriteSummary()`.
+
+**CLAUDE.md updates:** corrected `peSuppressionActive` -> `isPeSuppressionActive` in the `DependencyJobController` method description (`getJobStatus()` response wrapper); corrected the `MetaMapper_Admin` permission set description wording in the Permission Set component table to match the actual XML.
+
+**Verification:** `npm run lint` - clean, zero violations (independently re-run and confirmed). `npm run test:unit` - 8 suites, 108 tests, all passing (per applying agent's report). Independently spot-verified via direct file re-read: `ScanSummaryQueueableTest.cls:82-97`, `metaMapperFilters.js` (empty-array-valid path untouched, full-reset path correct), `DependencyQueueableTest.cls:491-535`, `MetaMapper_Admin.permissionset-meta.xml:3`, and a full-tree grep confirming zero stale `peSuppressionActive` (bare) or `jobstatuspolled` references remain. Apex-side changes (Findings 3, 6, 7, 9) are not yet compile/test-verified against a live org - deployment is gated on explicit user approval per Phase 5.
 
 ## Round 81 Fixes Applied
 

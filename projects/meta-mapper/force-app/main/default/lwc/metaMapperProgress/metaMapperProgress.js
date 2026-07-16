@@ -31,6 +31,7 @@ export default class MetaMapperProgress extends LightningElement {
     @track showPollWarningBanner = false;
     @track showPollErrorBanner = false;
     @track showStreamingQuotaBanner = false;
+    @track showFullError = false;
 
     _jobInternal = null;
     _elapsedFrozenSeconds = null;
@@ -51,16 +52,16 @@ export default class MetaMapperProgress extends LightningElement {
     }
 
     _isMounted = false;
-    _peSuppressionActiveProp = false;
+    _isPeSuppressionActiveProp = false;
     _streamingQuotaBannerDismissed = false;
 
     @api
-    get peSuppressionActive() {
-        return this._peSuppressionActiveProp;
+    get isPeSuppressionActive() {
+        return this._isPeSuppressionActiveProp;
     }
-    set peSuppressionActive(val) {
-        this._peSuppressionActiveProp = val === true;
-        if (this._peSuppressionActiveProp && this._isMounted) {
+    set isPeSuppressionActive(val) {
+        this._isPeSuppressionActiveProp = val === true;
+        if (this._isPeSuppressionActiveProp && this._isMounted) {
             this._startPolling();
         }
     }
@@ -77,9 +78,9 @@ export default class MetaMapperProgress extends LightningElement {
     connectedCallback() {
         this._isMounted = true;
         this._startElapsedTimer();
-        // Props are set before connectedCallback fires; if peSuppressionActive arrived
+        // Props are set before connectedCallback fires; if isPeSuppressionActive arrived
         // before mount the setter could not start polling — check here.
-        if (this._peSuppressionActiveProp) {
+        if (this._isPeSuppressionActiveProp) {
             this._startPolling();
         } else {
             this._resetPeWatchdog();
@@ -100,7 +101,7 @@ export default class MetaMapperProgress extends LightningElement {
     handleStatusEvent(eventData) {
         if (!this._isMounted) return;
         this._resetPeWatchdog();
-        if (eventData && eventData.peSuppressionActive) {
+        if (eventData && eventData.isPeSuppressionActive) {
             this._startPolling();
         }
         if (eventData && eventData.streamingQuotaLimitExceeded && !this._streamingQuotaBannerDismissed) {
@@ -133,6 +134,7 @@ export default class MetaMapperProgress extends LightningElement {
     get isProcessing() { return this.status === 'Processing' || this.status === 'Initializing'; }
     get isTerminal() { return ['Completed', 'Failed', 'Cancelled'].includes(this.status); }
     get isCancelled() { return this.status === 'Cancelled'; }
+    get isFailed() { return this.status === 'Failed'; }
 
     get showStatusLabel() { return !this.isPaused && !this.showTimeoutBanner; }
     get showCancelButton() {
@@ -227,6 +229,18 @@ export default class MetaMapperProgress extends LightningElement {
         }
     }
 
+    get failedErrorLog() { return (this.job && this.job.Scan_Diagnostic_Log__c) || ''; }
+    get hasFailedErrorLog() { return !!this.failedErrorLog; }
+    get failedErrorToggleLabel() { return this.showFullError ? 'Hide full error' : 'View full error'; }
+
+    toggleFullError() { this.showFullError = !this.showFullError; }
+    toggleFullErrorKeyDown(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.toggleFullError(event);
+        }
+    }
+
     // --- Elapsed timer ---
 
     _startElapsedTimer() {
@@ -273,19 +287,19 @@ export default class MetaMapperProgress extends LightningElement {
     // No-op when polling is already active, PE is already suppressed, or job is terminal.
     _resetPeWatchdog() {
         clearTimeout(this._peWatchdogTimer);
-        if (this.isTerminal || this._peSuppressionActiveProp || this._pollTimer || !this._isMounted) return;
+        if (this.isTerminal || this._isPeSuppressionActiveProp || this._pollTimer || !this._isMounted) return;
         this._peWatchdogTimer = setTimeout(() => this._peWatchdogFired(), 45000);
     }
 
     async _peWatchdogFired() {
-        if (!this._isMounted || this.isTerminal || this._peSuppressionActiveProp || this._pollTimer) return;
+        if (!this._isMounted || this.isTerminal || this._isPeSuppressionActiveProp || this._pollTimer) return;
         try {
             const result = await getJobStatus({ jobId: this.jobId });
             if (!this._isMounted) return;
-            this.dispatchEvent(new CustomEvent('jobstatuspolled', {
+            this.dispatchEvent(new CustomEvent('jobstatusupdated', {
                 detail: result, bubbles: true, composed: true
             }));
-            if (result && result.peSuppressionActive) {
+            if (result && result.isPeSuppressionActive) {
                 this._startPolling();
             } else if (this.isProcessing) {
                 this._resetPeWatchdog();
@@ -304,8 +318,8 @@ export default class MetaMapperProgress extends LightningElement {
             this.showPollErrorBanner = false;
             if (!this._isMounted) return;
             // Dispatch the full wrapper so metaMapperApp._storeJobResult() can extract
-            // the raw job record, peSuppressionActive, batchSizeInUse, and maxComponentsCap.
-            this.dispatchEvent(new CustomEvent('jobstatuspolled', {
+            // the raw job record, isPeSuppressionActive, batchSizeInUse, and maxComponentsCap.
+            this.dispatchEvent(new CustomEvent('jobstatusupdated', {
                 detail: result, bubbles: true, composed: true
             }));
             const status = result && result.job && result.job.Status__c;

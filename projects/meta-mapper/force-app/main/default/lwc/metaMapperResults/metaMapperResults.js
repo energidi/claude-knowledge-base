@@ -26,7 +26,7 @@ export default class MetaMapperResults extends LightningElement {
     @api job;
     @api orgId = '';
     @api retentionHours = 72;
-    @api peSuppressionActive = false;
+    @api isPeSuppressionActive = false;
 
     @track allNodes = [];
     @track filters = { ...DEFAULT_FILTERS };
@@ -43,6 +43,7 @@ export default class MetaMapperResults extends LightningElement {
     @track copilotEnabled = false;
     @track showReloadBanner = false;
     @track showPartialBanner = false;
+    @track showMidwayFullError = false;
     @track isTransitioning = false;
     @track activeTab = 'tree';
     @track tabLoadFailed = false;
@@ -211,7 +212,7 @@ export default class MetaMapperResults extends LightningElement {
     get showGraphLoadError() { return this.tabLoadFailed && this.activeTab === 'graph'; }
     get isCompleted() { return this.job && this.job.Status__c === 'Completed'; }
     get hasResults()  { return !this.isLoading && !this.loadError; }
-    get isZeroResults() { return this.hasResults && this.allNodes.length === 0 && !this.isSerializerFailure; }
+    get isZeroResults() { return this.hasResults && this.allNodes.length === 0 && !this.isSerializerFailure && !this.isMidwayFailure; }
     get showTabs() { return this.hasResults && this.allNodes.length > 0; }
     get targetApiName() { return (this.job && this.job.Target_API_Name__c) || ''; }
 
@@ -221,6 +222,26 @@ export default class MetaMapperResults extends LightningElement {
             && this.job.Components_Analyzed__c > 0
             && !this.job.Result_File_Id__c
             && this.job.Has_Attempted_Result_Save__c === true;
+    }
+
+    get isMidwayFailure() {
+        return this.job && this.job.Status__c === 'Failed' && !this.isSerializerFailure;
+    }
+
+    get midwayFailureLog() { return (this.job && this.job.Scan_Diagnostic_Log__c) || ''; }
+    get midwayFailureSummary() {
+        return this.midwayFailureLog
+            ? truncateAt(this.midwayFailureLog, 200)
+            : 'An unexpected error stopped the analysis.';
+    }
+    get midwayFailureToggleLabel() { return this.showMidwayFullError ? 'Hide full error' : 'View full error'; }
+
+    toggleMidwayFullError() { this.showMidwayFullError = !this.showMidwayFullError; }
+    toggleMidwayFullErrorKeyDown(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.toggleMidwayFullError(event);
+        }
     }
 
     get hasPartialNodes() { return this.allNodes && this.allNodes.length > 0; }
@@ -310,7 +331,7 @@ export default class MetaMapperResults extends LightningElement {
             this.isTransitioning = false;
             this.tabLoadFailed = true;
             this._updateTabInert(false);
-            if (!this.peSuppressionActive) { this._reconcileJobStatus(); }
+            if (!this.isPeSuppressionActive) { this._reconcileJobStatus(); }
         }, TAB_TRANSITION_TIMEOUT);
     }
 
@@ -322,7 +343,7 @@ export default class MetaMapperResults extends LightningElement {
             this.isTransitioning = false;
             this.tabLoadFailed = false;
             this._updateTabInert(false);
-            if (!this.peSuppressionActive) { this._reconcileJobStatus(); }
+            if (!this.isPeSuppressionActive) { this._reconcileJobStatus(); }
             if (this._pendingFocusNodeId) {
                 const nodeId = this._pendingFocusNodeId;
                 this._pendingFocusNodeId = null;
@@ -349,7 +370,7 @@ export default class MetaMapperResults extends LightningElement {
         getJobStatus({ jobId: this.jobId })
             .then(w => {
                 if (this._isMounted && w) {
-                    this.dispatchEvent(new CustomEvent('jobstatuspolled', {
+                    this.dispatchEvent(new CustomEvent('jobstatusupdated', {
                         detail: w, bubbles: true, composed: true
                     }));
                 }

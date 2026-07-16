@@ -57,7 +57,7 @@ export default class MetaMapperApp extends LightningElement {
     @track view = 'loading';
     @track jobId = null;
     @track job = null;
-    @track _peSuppressionActive = false;
+    @track _isPeSuppressionActive = false;
     @track _batchSizeInUse = null;
     @track _maxComponentsCap = 0;
     @track _retentionHours = 72;
@@ -183,7 +183,7 @@ export default class MetaMapperApp extends LightningElement {
         const isQuotaLimit = msg && /concurrent clients limit exceeded|streaming api.*limit/i.test(msg);
         const prog = this.template.querySelector('c-meta-mapper-progress');
         if (prog) {
-            prog.handleStatusEvent({ peSuppressionActive: true, streamingQuotaLimitExceeded: isQuotaLimit });
+            prog.handleStatusEvent({ isPeSuppressionActive: true, streamingQuotaLimitExceeded: isQuotaLimit });
         }
     }
 
@@ -202,8 +202,8 @@ export default class MetaMapperApp extends LightningElement {
             this.view = 'progress';
         }
         const prog = this.template.querySelector('c-meta-mapper-progress');
-        // H1: include peSuppressionActive so the progress component can activate polling fallback
-        if (prog) prog.handleStatusEvent({ ...payload, peSuppressionActive: this._peSuppressionActive });
+        // H1: include isPeSuppressionActive so the progress component can activate polling fallback
+        if (prog) prog.handleStatusEvent({ ...payload, isPeSuppressionActive: this._isPeSuppressionActive });
         const res = this.template.querySelector('c-meta-mapper-results');
         if (res) res.notifyStatusChange({ ...(this.job || {}), Status__c: newStatus });
     }
@@ -221,7 +221,7 @@ export default class MetaMapperApp extends LightningElement {
     _storeJobResult(wrapper) {
         if (!wrapper) return;
         this.job = wrapper.job || null;
-        this._peSuppressionActive = wrapper.peSuppressionActive === true;
+        this._isPeSuppressionActive = wrapper.isPeSuppressionActive === true;
         this._batchSizeInUse = wrapper.batchSizeInUse != null ? wrapper.batchSizeInUse : null;
         this._maxComponentsCap = wrapper.maxComponentsCap != null ? wrapper.maxComponentsCap : 0;
         this._retentionHours = wrapper.retentionHours != null ? wrapper.retentionHours : 72;

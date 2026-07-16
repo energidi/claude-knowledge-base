@@ -135,10 +135,10 @@
                 job={job}
                 max-components-cap={maxComponentsCap}
                 batch-size-in-use={_batchSizeInUse}
-                pe-suppression-active={_peSuppressionActive}
+                is-pe-suppression-active={_isPeSuppressionActive}
                 onviewpartialresults={handleViewPartialResults}
                 onstartnewscan={handleStartNew}
-                onjobstatuspolled={handleJobStatusPolled}
+                onjobstatusupdated={handleJobStatusPolled}
                 onshowerror={handleShowError}>
             </c-meta-mapper-progress>
         </template>
@@ -150,7 +150,7 @@
                 job={job}
                 org-id={orgId}
                 retention-hours={retentionHours}
-                pe-suppression-active={_peSuppressionActive}
+                is-pe-suppression-active={_isPeSuppressionActive}
                 onstartnewscan={handleStartNew}
                 onshowerror={handleShowError}
                 onshowtoast={handleShowToast}

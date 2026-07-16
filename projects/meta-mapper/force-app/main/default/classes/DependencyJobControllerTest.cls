@@ -123,6 +123,11 @@ private class DependencyJobControllerTest {
         // status meet or exceed Max_Concurrent_Jobs__c (default CMDT value = 2). No
         // AsyncApexJob rows exist in this test context, so the primary countActiveQueueables
         // check passes and the secondary job-record check is the one that fires.
+        // Note: the Max_Concurrent_Jobs__c <= 0 kill-switch branch (DependencyJobController.cls
+        // lines 143-147) is not covered here - MetaMapper_Settings__mdt is read-only in unit
+        // tests (matches the same documented limitation in DependencyCleanupBatchTest), so a
+        // CMDT value of 0 cannot be injected without a live org record configured that way.
+        // This is intentionally left as documented-untestable rather than silently uncovered.
         buildJob('Processing');
         buildJob('Processing');
 
@@ -178,9 +183,9 @@ private class DependencyJobControllerTest {
         DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(job.Id);
         Assert.isNotNull(result);
         Assert.areEqual('Processing', result.job.Status__c);
-        // batchSizeInUse/peSuppressionActive drive the Paused-banner batch-size display and the
+        // batchSizeInUse/isPeSuppressionActive drive the Paused-banner batch-size display and the
         // LWC's PE-suppressed polling fallback - both must be populated, not just Status__c.
-        Assert.areEqual(false, result.peSuppressionActive,
+        Assert.areEqual(false, result.isPeSuppressionActive,
             'Platform Events should not be suppressed with default CMDT settings');
         Assert.areEqual(50, result.batchSizeInUse,
             'batchSizeInUse should default to the CMDT Scan_Batch_Size__c value when no override is set');

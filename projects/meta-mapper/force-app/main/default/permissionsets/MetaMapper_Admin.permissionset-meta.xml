@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Grants full access to MetaMapper. Assign to admins and developers who need to run dependency scans. Provides CRUD on Metadata_Scan_Job__c and Metadata_Dependency__c, access to the MetaMapper LWC and Apex controller, and Named Credential principal access required for Tooling API callouts. Must be assigned before a user can access or operate MetaMapper. Does not grant access to broader org data beyond what the user's existing profile already permits.</description>
+    <description>Grants full access to MetaMapper. Assign to admins and developers who need to run dependency scans. Provides Create/Read/Update (never Delete) on Metadata_Scan_Job__c and Metadata_Dependency__c, access to the MetaMapper LWC and Apex controller, and Named Credential principal access required for Tooling API callouts. Must be assigned before a user can access or operate MetaMapper. Does not grant access to broader org data beyond what the user's existing profile already permits.</description>
     <label>MetaMapper Admin</label>
 
     <!-- Object permissions -->

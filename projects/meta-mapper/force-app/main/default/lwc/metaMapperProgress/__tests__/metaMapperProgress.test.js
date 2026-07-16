@@ -30,6 +30,14 @@ function findButtonByLabel(root, label) {
     return Array.from(root.querySelectorAll('lightning-button')).find((b) => b.label === label);
 }
 
+function findLinkByText(root, text) {
+    return Array.from(root.querySelectorAll('a')).find((a) => a.textContent.trim() === text);
+}
+
+function findParagraphContaining(root, text) {
+    return Array.from(root.querySelectorAll('p')).find((p) => p.textContent.includes(text));
+}
+
 function makeElement(job) {
     const el = createElement('c-meta-mapper-progress', { is: MetaMapperProgress });
     el.jobId = 'a001000000000001AAA';
@@ -181,10 +189,10 @@ describe('c-meta-mapper-progress', () => {
     });
 
     describe('Platform Event suppression / polling fallback', () => {
-        it('setting peSuppressionActive true after mount starts polling and shows the polling notice', async () => {
+        it('setting isPeSuppressionActive true after mount starts polling and shows the polling notice', async () => {
             getJobStatus.mockResolvedValue({ job: { Status__c: 'Processing' } });
             const el = makeElement();
-            el.peSuppressionActive = true;
+            el.isPeSuppressionActive = true;
             await Promise.resolve();
 
             expect(el.shadowRoot.querySelector('p[aria-live="polite"]').textContent).toBe(
@@ -192,9 +200,9 @@ describe('c-meta-mapper-progress', () => {
             );
         });
 
-        it('handleStatusEvent with peSuppressionActive starts polling even if the prop was never set', async () => {
+        it('handleStatusEvent with isPeSuppressionActive starts polling even if the prop was never set', async () => {
             const el = makeElement();
-            el.handleStatusEvent({ Status__c: 'Processing', peSuppressionActive: true });
+            el.handleStatusEvent({ Status__c: 'Processing', isPeSuppressionActive: true });
             await Promise.resolve();
 
             expect(el.shadowRoot.querySelector('p[aria-live="polite"]').textContent).toContain('Live updates paused');
@@ -202,13 +210,86 @@ describe('c-meta-mapper-progress', () => {
 
         it('a terminal status event clears the polling notice', async () => {
             const el = makeElement();
-            el.handleStatusEvent({ Status__c: 'Processing', peSuppressionActive: true });
+            el.handleStatusEvent({ Status__c: 'Processing', isPeSuppressionActive: true });
             await Promise.resolve();
             expect(el.shadowRoot.querySelector('p[aria-live="polite"]')).not.toBeNull();
 
             el.handleStatusEvent({ Status__c: 'Completed' });
             await Promise.resolve();
             expect(el.shadowRoot.querySelector('p[aria-live="polite"]')).toBeNull();
+        });
+    });
+
+    describe('cancel timeout and poll failure recovery (fake timers)', () => {
+        it('shows the cancellation-taking-longer banner and re-enables Cancel after 30s with no Cancelled status', async () => {
+            jest.useFakeTimers();
+            cancelJob.mockResolvedValue(undefined);
+            const el = makeElement();
+
+            el.shadowRoot.querySelector('.cancel-btn').click();
+            await Promise.resolve();
+            findButtonByLabel(el.shadowRoot, 'Stop Analysis').click();
+            // Flush the cancelJob() promise resolution before advancing the 30s timer.
+            await jest.advanceTimersByTimeAsync(0);
+
+            await jest.advanceTimersByTimeAsync(30000);
+
+            expect(
+                findParagraphContaining(el.shadowRoot, 'Cancellation is taking longer than expected')
+            ).not.toBeUndefined();
+            const btn = el.shadowRoot.querySelector('.cancel-btn');
+            expect(btn.disabled).toBe(false);
+            expect(btn.label).toBe('Cancel');
+        });
+
+        it('shows the dismissible poll warning banner after 3 consecutive getJobStatus failures', async () => {
+            jest.useFakeTimers();
+            getJobStatus.mockRejectedValue(new Error('network error'));
+            const el = makeElement();
+            el.isPeSuppressionActive = true;
+            await jest.advanceTimersByTimeAsync(0);
+
+            // Each failed poll re-schedules itself at the 5s Processing interval.
+            await jest.advanceTimersByTimeAsync(5000);
+            await jest.advanceTimersByTimeAsync(5000);
+            await jest.advanceTimersByTimeAsync(5000);
+
+            expect(
+                findParagraphContaining(el.shadowRoot,
+                    'Progress updates are having trouble reaching the server')
+            ).not.toBeUndefined();
+        });
+
+        it('stops polling and shows the non-dismissible error banner after 5 consecutive failures; Retry resets the count and restarts polling', async () => {
+            jest.useFakeTimers();
+            getJobStatus.mockRejectedValue(new Error('network error'));
+            const el = makeElement();
+            el.isPeSuppressionActive = true;
+            await jest.advanceTimersByTimeAsync(0);
+
+            // 5 consecutive 5s poll cycles, unrolled to avoid awaiting inside a loop.
+            await jest.advanceTimersByTimeAsync(5000);
+            await jest.advanceTimersByTimeAsync(5000);
+            await jest.advanceTimersByTimeAsync(5000);
+            await jest.advanceTimersByTimeAsync(5000);
+            await jest.advanceTimersByTimeAsync(5000);
+
+            expect(
+                findParagraphContaining(el.shadowRoot, 'Progress updates have stopped')
+            ).not.toBeUndefined();
+
+            getJobStatus.mockResolvedValue({ job: { Status__c: 'Processing' } });
+            const callsBeforeRetry = getJobStatus.mock.calls.length;
+            findLinkByText(el.shadowRoot, 'Retry polling').click();
+            await jest.advanceTimersByTimeAsync(0);
+
+            expect(
+                findParagraphContaining(el.shadowRoot, 'Progress updates have stopped')
+            ).toBeUndefined();
+
+            // Retry restarts polling: the next 5s tick must issue a fresh getJobStatus() call.
+            await jest.advanceTimersByTimeAsync(5000);
+            expect(getJobStatus.mock.calls.length).toBeGreaterThan(callsBeforeRetry);
         });
     });
 });

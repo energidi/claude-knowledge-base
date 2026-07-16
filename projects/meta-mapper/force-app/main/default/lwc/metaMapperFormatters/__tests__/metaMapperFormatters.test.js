@@ -101,7 +101,7 @@ describe('c-meta-mapper-formatters', () => {
 
         it('falls back to a generic label for an unsupported schema version', () => {
             expect(renderPills(JSON.stringify({ v: 2, isWrite: true }))).toBe(
-                'Additional context available (unsupported format) - view raw data for details'
+                'Additional context available in a newer format - export to JSON for full details'
             );
         });
 

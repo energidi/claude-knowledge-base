@@ -93,7 +93,7 @@ Rejects with user-facing message if count >= `Max_Concurrent_Jobs__c` (default 2
 - `@AuraEnabled` controller methods use `WITH USER_MODE` / `AccessLevel.USER_MODE`
 - Async engine classes (`DependencyQueueable`, `ScanResultFileQueueable`, `DependencyCleanupBatch`, `MetadataDependencyDeletionBatch`) operate in SYSTEM_MODE for reliable internal orchestration
 - `ContentVersion.FirstPublishLocationId = jobId`. After auto-creation of `ContentDocumentLink`, `ScanResultFileQueueable` queries it and sets `ShareType = 'V'`, `Visibility = 'InternalUsers'`
-- Permission Set `MetaMapper_Admin` grants CRUD on both custom objects, Named Credential principal access, and LWC/controller access. Every field explicitly assigned by `insert as user`/`update as user` in `DependencyJobController` must be granted `editable = true` here.
+- Permission Set `MetaMapper_Admin` grants Create/Read/Update (never Delete) on both custom objects, Named Credential principal access, and LWC/controller access. Every field explicitly assigned by `insert as user`/`update as user` in `DependencyJobController` must be granted `editable = true` here.
 - **Accepted trade-off:** `Dependency_Scan_Status__e` has no row-level sharing - it is delivered to every subscribed MetaMapper user regardless of the target job's Private OWD. Mitigated by keeping the payload generic (never `Target_API_Name__c`/metadata names in `Progress_Message__c`); the LWC's `Scan_Job_Id__c` filter is a UX convenience, not a security boundary.
 
 ### Data Lifecycle

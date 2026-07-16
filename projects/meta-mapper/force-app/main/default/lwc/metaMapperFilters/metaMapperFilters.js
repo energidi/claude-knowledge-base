@@ -30,6 +30,7 @@ export function validateFilters(raw, availableTypes) {
     const base = sanitizeSchema(raw);
     if (!base.types || base.types.length === 0) return base;
     const valid = base.types.filter(t => availableTypes.includes(t));
+    if (valid.length === 0) return { ...DEFAULT_FILTERS };
     const cleaned = { ...base, types: valid };
     return cleaned;
 }

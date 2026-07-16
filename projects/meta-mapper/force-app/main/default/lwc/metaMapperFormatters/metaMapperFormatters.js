@@ -42,7 +42,7 @@ export function renderPills(contextJson) {
     let ctx;
     try { ctx = JSON.parse(contextJson); } catch { return ''; }
     if (ctx.v != null && ctx.v !== KNOWN_SCHEMA_VERSION) {
-        return 'Additional context available (unsupported format) - view raw data for details';
+        return 'Additional context available in a newer format - export to JSON for full details';
     }
     const parts = [];
     if (ctx.isWrite === true)  parts.push('Writes to this field');

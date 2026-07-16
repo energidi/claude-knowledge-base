@@ -488,6 +488,52 @@ private class DependencyQueueableTest {
             'Pause_Reason__c must be ComponentLimitReached, distinct from the StallDetected case');
     }
 
+    @IsTest
+    static void execute_upsertPartialFailure_persistentFailureDropsNodeAndMarksParentFetched() {
+        // Finding #6: a child with an invalid Metadata_Id__c (violates the
+        // Metadata_Id_Must_Be_18_Characters validation rule) causes Database.upsert(..., false)
+        // to return a failed UpsertResult for that record. This is a persistent failure
+        // (FIELD_CUSTOM_VALIDATION_EXCEPTION, not in TRANSIENT_DML_STATUS_CODES), so per
+        // CLAUDE.md the parent must still be marked Has_Fetched_Dependencies__c = true
+        // (best-effort loss - the poison child is dropped, not retried forever) and the
+        // failure must be logged to Scan_Diagnostic_Log__c.
+        Metadata_Scan_Job__c job = makeJob('Processing');
+        makeNode(job.Id, 'a001000000000001AAA', false);
+
+        String mockBody = '{"done":true,"totalSize":1,"records":['
+            + '{"MetadataComponentId":"shortInvalidId",'
+            + '"MetadataComponentName":"BadChild","MetadataComponentType":"ApexClass",'
+            + '"RefMetadataComponentId":"a001000000000001AAA",'
+            + '"RefMetadataComponentName":"ParentField","RefMetadataComponentType":"CustomField"}'
+            + ']}';
+        Test.setMock(HttpCalloutMock.class, new ToolingApiMock(200, mockBody));
+
+        Test.startTest();
+        System.enqueueJob(new DependencyQueueable(job.Id, false, null));
+        Test.stopTest();
+
+        Metadata_Dependency__c parent = [
+            SELECT Has_Fetched_Dependencies__c
+            FROM Metadata_Dependency__c
+            WHERE Metadata_Scan_Job__c = :job.Id AND Metadata_Id__c = 'a001000000000001AAA'
+            LIMIT 1
+        ];
+        Assert.isTrue(parent.Has_Fetched_Dependencies__c,
+            'Parent must be marked fetched after a persistent upsert failure on its child (best-effort loss)');
+
+        Integer childCount = [
+            SELECT COUNT() FROM Metadata_Dependency__c
+            WHERE Metadata_Scan_Job__c = :job.Id AND Metadata_Id__c = 'shortInvalidId'
+        ];
+        Assert.areEqual(0, childCount, 'The invalid child node must not have been persisted');
+
+        Metadata_Scan_Job__c refreshed = [
+            SELECT Scan_Diagnostic_Log__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+        ];
+        Assert.isTrue(refreshed.Scan_Diagnostic_Log__c.contains('node dropped'),
+            'Scan_Diagnostic_Log__c must record the persistent upsert failure as a dropped node');
+    }
+
     // ---- mocks ----
 
     private class EmptyToolingApiMock implements HttpCalloutMock {

@@ -79,6 +79,28 @@ private class ScanSummaryQueueableTest {
     }
 
     @IsTest
+    static void execute_jobStatusFailed_doesNotWriteSummary() {
+        Metadata_Scan_Job__c job = new Metadata_Scan_Job__c(
+            Target_Metadata_Type__c = 'ApexClass',
+            Target_API_Name__c      = 'MyClass',
+            Status__c               = 'Failed',
+            Components_Analyzed__c  = 7,
+            Component_Type_Counts__c       = '{"v":1,"ApexClass":5,"Flow":2}'
+        );
+        insert job;
+
+        Test.startTest();
+        System.enqueueJob(new ScanSummaryQueueable(job.Id));
+        Test.stopTest();
+
+        Metadata_Scan_Job__c refreshed = [
+            SELECT Scan_Summary_Text__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+        ];
+        Assert.isNull(refreshed.Scan_Summary_Text__c,
+            'Summary must not be written when job status is not Completed');
+    }
+
+    @IsTest
     static void execute_jobNotFound_doesNotThrow() {
         Test.startTest();
         System.enqueueJob(new ScanSummaryQueueable('a000000000000001AAA'));

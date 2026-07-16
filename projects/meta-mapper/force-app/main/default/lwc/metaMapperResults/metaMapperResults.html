@@ -69,6 +69,20 @@
             </div>
         </template>
 
+        <!-- Midway failure state (Failed job, not a serializer failure) -->
+        <template lwc:if={isMidwayFailure}>
+            <div class="slds-notify slds-notify_alert slds-theme_error slds-var-m-bottom_small" role="alert">
+                <p>{midwayFailureSummary}</p>
+                <a href="javascript:void(0);" tabindex="0" role="button" onclick={toggleMidwayFullError} onkeydown={toggleMidwayFullErrorKeyDown}>{midwayFailureToggleLabel}</a>
+                <template lwc:if={showMidwayFullError}>
+                    <div class="slds-var-m-top_x-small slds-text-body_small slds-theme_shade slds-var-p-around_small">{midwayFailureLog}</div>
+                </template>
+                <div class="slds-var-m-top_small">
+                    <lightning-button label="Start a new scan" variant="brand" onclick={handleStartNew}></lightning-button>
+                </div>
+            </div>
+        </template>
+
         <!-- AI Summary Card -->
         <template lwc:if={showSummaryCard}>
             <lightning-card title="Scan Summary" class="slds-var-m-bottom_small">

@@ -86,6 +86,25 @@
             </div>
         </template>
 
+        <!-- Failed state: error summary expander + view partial results + start new scan -->
+        <template lwc:if={isFailed}>
+            <template lwc:if={hasFailedErrorLog}>
+                <div class="slds-var-m-top_x-small">
+                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={toggleFullError} onkeydown={toggleFullErrorKeyDown}>{failedErrorToggleLabel}</a>
+                    <template lwc:if={showFullError}>
+                        <div class="slds-var-m-top_x-small slds-text-body_small slds-theme_shade slds-var-p-around_small">{failedErrorLog}</div>
+                    </template>
+                </div>
+            </template>
+            <div class="slds-var-m-top_x-small">
+                <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewPartialResults} onkeydown={handleViewPartialResultsKeyDown}>View partial results</a>
+            </div>
+            <div class="slds-var-m-top_medium">
+                <lightning-button variant="brand" label="Start a new scan"
+                    onclick={handleStartNew}></lightning-button>
+            </div>
+        </template>
+
         <!-- Progress bar or spinner -->
         <template lwc:if={showProgressBar}>
             <div class="slds-var-m-vertical_small" data-id="progressBarWrapper" tabindex="-1">

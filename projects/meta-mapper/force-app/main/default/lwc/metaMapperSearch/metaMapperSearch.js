@@ -74,6 +74,8 @@ export default class MetaMapperSearch extends LightningElement {
         if (this.isSubmitting) return true;
         if (!this.selectedType || !this.apiName.trim()) return true;
         if (this.showTargetObject && !this.targetObject.trim()) return true;
+        const apiNameInput = this.template.querySelector('lightning-input[name="apiName"]');
+        if (apiNameInput && !apiNameInput.checkValidity()) return true;
         return false;
     }
 

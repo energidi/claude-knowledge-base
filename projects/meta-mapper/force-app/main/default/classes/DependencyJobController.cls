@@ -32,14 +32,14 @@ public with sharing class DependencyJobController {
      */
     public class JobStatusResult {
         @AuraEnabled public Metadata_Scan_Job__c job;
-        @AuraEnabled public Boolean peSuppressionActive;
+        @AuraEnabled public Boolean isPeSuppressionActive;
         @AuraEnabled public Integer batchSizeInUse;
         @AuraEnabled public Integer maxComponentsCap;
         @AuraEnabled public Integer retentionHours;
 
         public JobStatusResult(Metadata_Scan_Job__c job, Boolean platformEventsDisabled, Integer batchSize, Integer maxCap, Integer retentionHrs) {
             this.job                = job;
-            this.peSuppressionActive = platformEventsDisabled;
+            this.isPeSuppressionActive = platformEventsDisabled;
             this.batchSizeInUse     = batchSize;
             this.maxComponentsCap   = maxCap;
             this.retentionHours     = retentionHrs;
