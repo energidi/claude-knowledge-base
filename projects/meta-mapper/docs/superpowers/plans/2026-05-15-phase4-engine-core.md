@@ -6,22 +6,22 @@
 
 ## Session Status (last updated 2026-05-15)
 
-| Task | Status | Notes |
-|---|---|---|
-| Task 0 - Job_Type__c field | DONE | Field file created and committed |
-| Task 1 - MetadataDependencyService | DONE | DependencyOptions refactored to mutable accumulator; IMetadataDependencyService return type changed to `Map<String, List<Metadata_Dependency__c>>`; isFirstPage guard on lastResultCount; INVALID_QUERY_LOCATOR gated on HTTP 400; buildNode() null guard |
-| Task 2 - DependencyNotificationService | DONE | Uses `new MetaMapperSettingsProvider().getSettings()` |
-| Task 3 - DependencyNodeCleanupBatch | DONE | CleanupMode enum (NODES_ONLY / NODES_AND_JOB); constructor reads no CMDT - batchSize passed by caller |
-| Task 4 - DependencyQueueable | DONE | |
-| Task 5 - ScanResultFileQueueable | SPEC REVIEW PASSED - quality review pending | **Open fix:** ring buffer failure logs only to `System.debug` - should also append to `Error_Progress_Label__c` on current job for admin visibility |
-| Task 6 - ScanSummaryQueueable | NOT STARTED | Spec at lines 1124-1211 of this file |
-| Task 7 - Test classes (x6) | NOT STARTED | Specs at lines 1219-1654 of this file |
-| Task 8 - Code Review v17 | NOT STARTED | Copy structure from v16; update for Phase 4 classes |
+| Task                                   | Status                                      | Notes                                                                                                                                                                                                                                                     |
+| -------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task 0 - Job_Type\_\_c field           | DONE                                        | Field file created and committed                                                                                                                                                                                                                          |
+| Task 1 - MetadataDependencyService     | DONE                                        | DependencyOptions refactored to mutable accumulator; IMetadataDependencyService return type changed to `Map<String, List<Metadata_Dependency__c>>`; isFirstPage guard on lastResultCount; INVALID_QUERY_LOCATOR gated on HTTP 400; buildNode() null guard |
+| Task 2 - DependencyNotificationService | DONE                                        | Uses `new MetaMapperSettingsProvider().getSettings()`                                                                                                                                                                                                     |
+| Task 3 - DependencyNodeCleanupBatch    | DONE                                        | CleanupMode enum (NODES_ONLY / NODES_AND_JOB); constructor reads no CMDT - batchSize passed by caller                                                                                                                                                     |
+| Task 4 - DependencyQueueable           | DONE                                        |                                                                                                                                                                                                                                                           |
+| Task 5 - ScanResultFileQueueable       | SPEC REVIEW PASSED - quality review pending | **Open fix:** ring buffer failure logs only to `System.debug` - should also append to `Error_Progress_Label__c` on current job for admin visibility                                                                                                       |
+| Task 6 - ScanSummaryQueueable          | NOT STARTED                                 | Spec at lines 1124-1211 of this file                                                                                                                                                                                                                      |
+| Task 7 - Test classes (x6)             | NOT STARTED                                 | Specs at lines 1219-1654 of this file                                                                                                                                                                                                                     |
+| Task 8 - Code Review v17               | NOT STARTED                                 | Copy structure from v16; update for Phase 4 classes                                                                                                                                                                                                       |
 
 ### Key Technical Decisions (non-negotiable for next session)
 
 - `MetaMapperSettingsProvider`: no `getInstance()` - use `new MetaMapperSettingsProvider().getSettings()`
-- `Error_Progress_Label__c` on Metadata_Scan_Job__c: Long Text **32768** - use `.left(32768)` everywhere
+- `Error_Progress_Label__c` on Metadata_Scan_Job\_\_c: Long Text **32768** - use `.left(32768)` everywhere
 - `MetadataDependencySelector.listByJob()`: two params - `(String jobId, Integer limitRows)`
 - `IMetadataDependencyService.fetchDependencies()`: returns `Map<String, List<Metadata_Dependency__c>>` keyed by `RefMetadataComponentId`
 - `DependencyNodeCleanupBatch` constructor: no CMDT read; batchSize passed by caller to `Database.executeBatch()`
@@ -51,51 +51,53 @@
 
 ## File Map
 
-| File | Action | Purpose |
-|---|---|---|
-| `force-app/main/default/classes/MetadataDependencyService.cls` | Create | Tooling API HTTP layer - fetches `MetadataComponentDependency`, handles QueryMore, HTTP 414 split/retry |
-| `force-app/main/default/classes/MetadataDependencyService.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/DependencyNotificationService.cls` | Create | Platform Event publisher with OrgLimits auto-suppress |
-| `force-app/main/default/classes/DependencyNotificationService.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/DependencyNodeCleanupBatch.cls` | Create | Batch deletes node records for a job; optionally deletes job record |
-| `force-app/main/default/classes/DependencyNodeCleanupBatch.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/DependencyQueueable.cls` | Create | Main async engine - traversal, guardrails, cycle detection, self-chain |
-| `force-app/main/default/classes/DependencyQueueable.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/ScanResultFileQueueable.cls` | Create | Serializes nodes to ContentVersion JSON, transitions job to Completed |
-| `force-app/main/default/classes/ScanResultFileQueueable.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/ScanSummaryQueueable.cls` | Create | Builds plain-English Scan_Summary_Text__c from Result_Summary__c |
-| `force-app/main/default/classes/ScanSummaryQueueable.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/MetadataDependencyServiceTest.cls` | Create | Unit tests for Tooling API service |
-| `force-app/main/default/classes/MetadataDependencyServiceTest.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/DependencyNotificationServiceTest.cls` | Create | Unit tests for notification service |
-| `force-app/main/default/classes/DependencyNotificationServiceTest.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/DependencyNodeCleanupBatchTest.cls` | Create | Unit tests for cleanup batch |
-| `force-app/main/default/classes/DependencyNodeCleanupBatchTest.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/DependencyQueueableTest.cls` | Create | Unit tests for async engine |
-| `force-app/main/default/classes/DependencyQueueableTest.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/ScanResultFileQueueableTest.cls` | Create | Unit tests for serializer |
-| `force-app/main/default/classes/ScanResultFileQueueableTest.cls-meta.xml` | Create | API version 66.0 |
-| `force-app/main/default/classes/ScanSummaryQueueableTest.cls` | Create | Unit tests for summary generator |
-| `force-app/main/default/classes/ScanSummaryQueueableTest.cls-meta.xml` | Create | API version 66.0 |
-| `MetaMapper_Code_Review_v17.md` | Create | Code review document for Phase 4 classes |
+| File                                                                                    | Action | Purpose                                                                                                        |
+| --------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `force-app/main/default/classes/MetadataDependencyService.cls`                          | Create | Tooling API HTTP layer - fetches `MetadataComponentDependency`, handles QueryMore, HTTP 414 split/retry        |
+| `force-app/main/default/classes/MetadataDependencyService.cls-meta.xml`                 | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/DependencyNotificationService.cls`                      | Create | Platform Event publisher with OrgLimits auto-suppress                                                          |
+| `force-app/main/default/classes/DependencyNotificationService.cls-meta.xml`             | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/DependencyNodeCleanupBatch.cls`                         | Create | Batch deletes node records for a job; optionally deletes job record                                            |
+| `force-app/main/default/classes/DependencyNodeCleanupBatch.cls-meta.xml`                | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/DependencyQueueable.cls`                                | Create | Main async engine - traversal, guardrails, cycle detection, self-chain                                         |
+| `force-app/main/default/classes/DependencyQueueable.cls-meta.xml`                       | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/ScanResultFileQueueable.cls`                            | Create | Serializes nodes to ContentVersion JSON, transitions job to Completed                                          |
+| `force-app/main/default/classes/ScanResultFileQueueable.cls-meta.xml`                   | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/ScanSummaryQueueable.cls`                               | Create | Builds plain-English Scan_Summary_Text**c from Result_Summary**c                                               |
+| `force-app/main/default/classes/ScanSummaryQueueable.cls-meta.xml`                      | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/MetadataDependencyServiceTest.cls`                      | Create | Unit tests for Tooling API service                                                                             |
+| `force-app/main/default/classes/MetadataDependencyServiceTest.cls-meta.xml`             | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/DependencyNotificationServiceTest.cls`                  | Create | Unit tests for notification service                                                                            |
+| `force-app/main/default/classes/DependencyNotificationServiceTest.cls-meta.xml`         | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/DependencyNodeCleanupBatchTest.cls`                     | Create | Unit tests for cleanup batch                                                                                   |
+| `force-app/main/default/classes/DependencyNodeCleanupBatchTest.cls-meta.xml`            | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/DependencyQueueableTest.cls`                            | Create | Unit tests for async engine                                                                                    |
+| `force-app/main/default/classes/DependencyQueueableTest.cls-meta.xml`                   | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/ScanResultFileQueueableTest.cls`                        | Create | Unit tests for serializer                                                                                      |
+| `force-app/main/default/classes/ScanResultFileQueueableTest.cls-meta.xml`               | Create | API version 66.0                                                                                               |
+| `force-app/main/default/classes/ScanSummaryQueueableTest.cls`                           | Create | Unit tests for summary generator                                                                               |
+| `force-app/main/default/classes/ScanSummaryQueueableTest.cls-meta.xml`                  | Create | API version 66.0                                                                                               |
+| `MetaMapper_Code_Review_v17.md`                                                         | Create | Code review document for Phase 4 classes                                                                       |
 | `force-app/main/default/objects/Metadata_Scan_Job__c/fields/Job_Type__c.field-meta.xml` | Create | Picklist field: `Dependency_Map` (default), `Text_Search` - prepares data model for future text search feature |
 
 ---
 
-## Task 0: Data Model Prep - Job_Type__c
+## Task 0: Data Model Prep - Job_Type\_\_c
 
 **Files:**
+
 - Create: `force-app/main/default/objects/Metadata_Scan_Job__c/fields/Job_Type__c.field-meta.xml`
 
 Adds a picklist field to `Metadata_Scan_Job__c` distinguishing dependency-map jobs from future text-search jobs. Adding it now avoids a breaking schema change when text search is built. All Phase 4 engine classes default to `Dependency_Map` and ignore this field - no routing logic needed yet.
 
-- [ ] **Step 1: Create Job_Type__c field metadata**
+- [ ] **Step 1: Create Job_Type\_\_c field metadata**
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Job_Type__c</fullName>
-    <description>Distinguishes the type of scan job. Dependency_Map = structural metadata dependency traversal (current engine). Text_Search = reserved for future content-based metadata search feature. Defaults to Dependency_Map on all existing and new jobs.</description>
+    <description
+  >Distinguishes the type of scan job. Dependency_Map = structural metadata dependency traversal (current engine). Text_Search = reserved for future content-based metadata search feature. Defaults to Dependency_Map on all existing and new jobs.</description>
     <externalId>false</externalId>
     <label>Job Type</label>
     <required>false</required>
@@ -138,6 +140,7 @@ git commit -m "feat: add Job_Type__c picklist to Metadata_Scan_Job__c for future
 ## Task 1: MetadataDependencyService
 
 **Files:**
+
 - Create: `force-app/main/default/classes/MetadataDependencyService.cls`
 - Create: `force-app/main/default/classes/MetadataDependencyService.cls-meta.xml`
 
@@ -146,7 +149,7 @@ This class implements `IMetadataDependencyService`. It makes HTTP callouts to th
 - [ ] **Step 1: Create the cls-meta.xml**
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
     <status>Active</status>
@@ -383,6 +386,7 @@ public without sharing class MetadataDependencyService implements IMetadataDepen
 - [ ] **Step 3: Create DependencyOptions.cls update check**
 
 `DependencyOptions` must have these fields (verify the existing class matches - do not rewrite if it already has them):
+
 - `Id jobId`
 - `Boolean activeFlowsOnly`
 - `Integer lastResultCount` - updated by service after each callout
@@ -400,6 +404,7 @@ Open `force-app/main/default/classes/DependencyOptions.cls` and confirm `lastRes
 ## Task 2: DependencyNotificationService
 
 **Files:**
+
 - Create: `force-app/main/default/classes/DependencyNotificationService.cls`
 - Create: `force-app/main/default/classes/DependencyNotificationService.cls-meta.xml`
 
@@ -519,6 +524,7 @@ public without sharing class DependencyNotificationService implements IScanNotif
 ## Task 3: DependencyNodeCleanupBatch
 
 **Files:**
+
 - Create: `force-app/main/default/classes/DependencyNodeCleanupBatch.cls`
 - Create: `force-app/main/default/classes/DependencyNodeCleanupBatch.cls-meta.xml`
 
@@ -591,6 +597,7 @@ public without sharing class DependencyNodeCleanupBatch
 ## Task 4: DependencyQueueable
 
 **Files:**
+
 - Create: `force-app/main/default/classes/DependencyQueueable.cls`
 - Create: `force-app/main/default/classes/DependencyQueueable.cls-meta.xml`
 
@@ -937,17 +944,20 @@ public without sharing class DependencyQueueable implements Queueable, Database.
 `fetchDependencies` must return a `Map<String, List<Metadata_Dependency__c>>` keyed by `RefMetadataComponentId` (the parent ID from the Tooling API response) so `DependencyQueueable` can set `Parent_Dependency__c` correctly on each child node.
 
 Update `MetadataDependencyService`:
+
 - Change return type of `fetchDependencies()` and `IMetadataDependencyService` interface to `Map<String, List<Metadata_Dependency__c>>`
 - In `buildNode()`, add a transient helper: store `RefMetadataComponentId` temporarily so the map can be built in `parseAndFollowQueryMore()`
 - Update `DependencyQueueable` to consume the map, setting `child.Parent_Dependency__c` to the parent node's record ID (looked up from `parentById` map)
 
 Updated `IMetadataDependencyService`:
+
 ```java
 Map<String, List<Metadata_Dependency__c>> fetchDependencies(
     List<String> metadataIds, DependencyOptions opts);
 ```
 
 Updated `MetadataDependencyService.parseAndFollowQueryMore` (key change):
+
 ```java
 // Group results by RefMetadataComponentId (parent)
 Map<String, List<Metadata_Dependency__c>> byParent =
@@ -967,6 +977,7 @@ for (Object rec : records) {
 ## Task 5: ScanResultFileQueueable
 
 **Files:**
+
 - Create: `force-app/main/default/classes/ScanResultFileQueueable.cls`
 - Create: `force-app/main/default/classes/ScanResultFileQueueable.cls-meta.xml`
 
@@ -1160,6 +1171,7 @@ public without sharing class ScanResultFileQueueable implements Queueable {
 ## Task 6: ScanSummaryQueueable
 
 **Files:**
+
 - Create: `force-app/main/default/classes/ScanSummaryQueueable.cls`
 - Create: `force-app/main/default/classes/ScanSummaryQueueable.cls-meta.xml`
 
@@ -1700,6 +1712,7 @@ After all classes and test classes are written:
 - [ ] **Step 1: Create MetaMapper_Code_Review_v17.md**
 
 Copy the structure from `MetaMapper_Code_Review_v16.md` (same header, review instructions, and Known Invalid Findings appendix). Update:
+
 - Header: v17, Round 1 (first review of Phase 4 classes), date today
 - Phase description: Phase 4 - Engine Core
 - Classes section: one `### ClassName` section per class with its Purpose and full code

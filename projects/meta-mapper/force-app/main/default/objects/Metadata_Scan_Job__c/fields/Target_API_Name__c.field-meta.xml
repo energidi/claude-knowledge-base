@@ -1,7 +1,8 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Target_API_Name__c</fullName>
-    <description>The developer/API name of the metadata component to scan (e.g. Account.My_Field__c). Must match the exact API name as it appears in Salesforce Setup. Required.</description>
+    <description
+  >The developer/API name of the metadata component to scan (e.g. Account.My_Field__c). Must match the exact API name as it appears in Salesforce Setup. Required.</description>
     <label>Component API Name</label>
     <length>255</length>
     <required>true</required>

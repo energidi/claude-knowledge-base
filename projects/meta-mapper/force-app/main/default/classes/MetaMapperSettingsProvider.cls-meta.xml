@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Reads the single MetaMapper_Settings__mdt Default record and caches it in a static variable so all callers within the same Apex transaction share one SOQL query. Implements IMetaMapperSettingsProvider. Call via the interface, not directly, to allow test substitution.</description>
+    <description
+  >Reads the single MetaMapper_Settings__mdt Default record and caches it in a static variable so all callers within the same Apex transaction share one SOQL query. Implements IMetaMapperSettingsProvider. Call via the interface, not directly, to allow test substitution.</description>
     <status>Active</status>
 </ApexClass>

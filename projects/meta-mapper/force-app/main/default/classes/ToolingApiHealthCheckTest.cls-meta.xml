@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Unit tests for ToolingApiHealthCheck.verify(). Uses mock HTTP callouts to cover all six status-code paths: AUTHORIZED, UNAUTHORIZED, PERMISSION_SET_MISSING, CALLOUT_FORBIDDEN, UNREACHABLE, and TIMEOUT.</description>
+    <description
+  >Unit tests for ToolingApiHealthCheck.verify(). Uses mock HTTP callouts to cover all six status-code paths: AUTHORIZED, UNAUTHORIZED, PERMISSION_SET_MISSING, CALLOUT_FORBIDDEN, UNREACHABLE, and TIMEOUT.</description>
     <status>Active</status>
 </ApexClass>

@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>One-shot Queueable that serializes completed scan results to a Salesforce File and transitions the job to Completed. Enqueued only by the final DependencyQueueable execution. Uses Savepoint/rollback pattern - failure transitions job to Failed (terminal, not retryable). Must NOT be enqueued more than once per job.</description>
+    <description
+  >One-shot Queueable that serializes completed scan results to a Salesforce File and transitions the job to Completed. Enqueued only by the final DependencyQueueable execution. Uses Savepoint/rollback pattern - failure transitions job to Failed (terminal, not retryable). Must NOT be enqueued more than once per job.</description>
     <status>Active</status>
 </ApexClass>

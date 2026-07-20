@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <description
+  >Unit test class for MetaMapperSettingsProvider. Covers static per-transaction cache-identity reuse across repeated getSettings() calls and the @TestVisible clearCache() reset seam. No DML, no callouts, no SeeAllData.</description>
+    <status>Active</status>
+</ApexClass>

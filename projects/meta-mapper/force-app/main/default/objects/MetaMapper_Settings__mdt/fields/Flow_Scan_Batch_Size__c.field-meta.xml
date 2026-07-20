@@ -1,7 +1,8 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Flow_Scan_Batch_Size__c</fullName>
-    <description>Batch size used for scans where Active Flows Only is enabled. Lower than the standard setting because each Flow node requires a separate Tooling API callout to validate its version status. Default: 15.</description>
+    <description
+  >Batch size used for scans where Active Flows Only is enabled. Lower than the standard setting because each Flow node requires a separate Tooling API callout to validate its version status. Default: 15.</description>
     <label>Analysis Speed (Flow Jobs)</label>
     <precision>10</precision>
     <required>false</required>

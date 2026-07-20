@@ -1,191 +1,377 @@
 <template>
-    <div class="progress-container">
+  <div class="progress-container">
+    <!-- Streaming API quota admin banner (empApi subscribe failure due to client limit) -->
+    <template lwc:if={showStreamingQuotaBanner}>
+      <div
+        class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small"
+        role="alert"
+      >
+        <p>
+          Live updates unavailable - your org has reached the Streaming API
+          client limit. Progress will refresh every 5 seconds.
+        </p>
+        <button
+          class="slds-button slds-button_icon slds-notify__close"
+          onclick={dismissStreamingQuotaBanner}
+          aria-label="Dismiss streaming quota notice"
+          title="Dismiss"
+        >
+          <lightning-icon
+            icon-name="utility:close"
+            size="small"
+          ></lightning-icon>
+        </button>
+      </div>
+    </template>
 
-        <!-- Streaming API quota admin banner (empApi subscribe failure due to client limit) -->
-        <template lwc:if={showStreamingQuotaBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="alert">
-                <p>Live updates unavailable - your org has reached the Streaming API client limit. Progress will refresh every 5 seconds.</p>
-                <button class="slds-button slds-button_icon slds-notify__close" onclick={dismissStreamingQuotaBanner}
-                    aria-label="Dismiss streaming quota notice" title="Dismiss">
-                    <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
-                </button>
-            </div>
-        </template>
+    <!-- Long-running scan banner (> 15 min) -->
+    <template lwc:if={showLongRunningBanner}>
+      <div
+        class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small"
+        role="alert"
+      >
+        <p>
+          This scan is taking longer than usual.
+          <a
+            href="javascript:void(0);"
+            tabindex="0"
+            role="button"
+            onclick={handleViewPartialResults}
+            onkeydown={handleViewPartialResultsKeyDown}
+          >
+            View partial results so far</a
+          >
+          - this will not cancel the scan.
+        </p>
+        <button
+          class="slds-button slds-button_icon slds-notify__close"
+          onclick={dismissLongRunningBanner}
+          aria-label="Dismiss long-running notice"
+          title="Dismiss"
+        >
+          <lightning-icon
+            icon-name="utility:close"
+            size="small"
+          ></lightning-icon>
+        </button>
+      </div>
+    </template>
 
-        <!-- Long-running scan banner (> 15 min) -->
-        <template lwc:if={showLongRunningBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_info slds-var-m-bottom_small" role="alert">
-                <p>This scan is taking longer than usual.
-                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewPartialResults} onkeydown={handleViewPartialResultsKeyDown}> View partial results so far</a> - this will not cancel the scan.
-                </p>
-                <button class="slds-button slds-button_icon slds-notify__close" onclick={dismissLongRunningBanner}
-                    aria-label="Dismiss long-running notice" title="Dismiss">
-                    <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
-                </button>
-            </div>
-        </template>
+    <!-- 60-min poll termination banner -->
+    <template lwc:if={showTimeoutBanner}>
+      <div
+        class="slds-notify slds-notify_alert slds-theme_warning"
+        role="alert"
+        aria-live="assertive"
+      >
+        <p>
+          This scan has been running for over an hour. It may be stuck.
+          <a
+            href="javascript:void(0);"
+            tabindex="0"
+            role="button"
+            onclick={handleViewPartialResults}
+            onkeydown={handleViewPartialResultsKeyDown}
+          >
+            View partial results</a
+          >
+          or
+          <a
+            href="javascript:void(0);"
+            tabindex="0"
+            role="button"
+            onclick={handleStartNew}
+            onkeydown={handleStartNewKeyDown}
+          >
+            Start a new scan</a
+          >.
+        </p>
+      </div>
+    </template>
 
-        <!-- 60-min poll termination banner -->
-        <template lwc:if={showTimeoutBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_warning" role="alert" aria-live="assertive">
-                <p>This scan has been running for over an hour. It may be stuck.
-                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewPartialResults} onkeydown={handleViewPartialResultsKeyDown}> View partial results</a> or
-                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleStartNew} onkeydown={handleStartNewKeyDown}> Start a new scan</a>.
-                </p>
-            </div>
-        </template>
-
-        <!-- Paused warning banner -->
-        <template lwc:if={isPaused}>
-            <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-bottom_small" role="alert">
-                <p>{pauseBannerText}</p>
-                <div class="slds-var-m-top_x-small slds-grid slds-grid_vertical-align-center">
-                    <lightning-button label="Resume at a slower speed" variant="neutral"
-                        disabled={resumeLoading} onclick={handleResumeSlower}></lightning-button>
-                    <template lwc:if={resumeSlowerActive}>
-                        <lightning-spinner size="small" alternative-text="Resuming..." class="slds-var-m-left_x-small"></lightning-spinner>
-                    </template>
-                    <lightning-button label={resumeCurrentLabel} variant="neutral" class="slds-var-m-left_x-small"
-                        disabled={resumeLoading} onclick={handleResumeCurrent}></lightning-button>
-                    <template lwc:if={resumeCurrentActive}>
-                        <lightning-spinner size="small" alternative-text="Resuming..." class="slds-var-m-left_x-small"></lightning-spinner>
-                    </template>
-                </div>
-            </div>
-        </template>
-
-        <!-- Static target API name display (truncated at 50 chars, full name in tooltip) -->
-        <template lwc:if={showApiNameDisplay}>
-            <div class="api-name-display slds-text-body_small slds-text-color_weak" title={fullApiNameTitle}>
-                {displayApiName}
-            </div>
-        </template>
-
-        <!-- Status label + elapsed time (flex row on desktop, flex column on mobile < 768px) -->
-        <div class="status-elapsed-wrapper">
-            <template lwc:if={showStatusLabel}>
-                <div class="status-label" aria-live="polite">
-                    <span>{statusLabel}</span>
-                </div>
-            </template>
-            <template lwc:if={showElapsed}>
-                <div class="elapsed-row">
-                    <span class="elapsed-label">Elapsed: {elapsedFormatted}</span>
-                </div>
-            </template>
+    <!-- Paused warning banner -->
+    <template lwc:if={isPaused}>
+      <div
+        class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-bottom_small"
+        role="alert"
+      >
+        <p>{pauseBannerText}</p>
+        <div
+          class="slds-var-m-top_x-small slds-grid slds-grid_vertical-align-center"
+        >
+          <lightning-button
+            label="Resume at a slower speed"
+            variant="neutral"
+            disabled={resumeLoading}
+            onclick={handleResumeSlower}
+          ></lightning-button>
+          <template lwc:if={resumeSlowerActive}>
+            <lightning-spinner
+              size="small"
+              alternative-text="Resuming..."
+              class="slds-var-m-left_x-small"
+            ></lightning-spinner>
+          </template>
+          <lightning-button
+            label={resumeCurrentLabel}
+            variant="neutral"
+            class="slds-var-m-left_x-small"
+            disabled={resumeLoading}
+            onclick={handleResumeCurrent}
+          ></lightning-button>
+          <template lwc:if={resumeCurrentActive}>
+            <lightning-spinner
+              size="small"
+              alternative-text="Resuming..."
+              class="slds-var-m-left_x-small"
+            ></lightning-spinner>
+          </template>
         </div>
+      </div>
+    </template>
 
-        <!-- View partial results link + Start new scan (Cancelled state) -->
-        <template lwc:if={isCancelled}>
-            <div class="slds-var-m-top_x-small">
-                <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewPartialResults} onkeydown={handleViewPartialResultsKeyDown}>View partial results</a>
-            </div>
-            <div class="slds-var-m-top_medium">
-                <lightning-button variant="brand" label="Start new scan"
-                    onclick={handleStartNew}></lightning-button>
-            </div>
-        </template>
+    <!-- Static target API name display (truncated at 50 chars, full name in tooltip) -->
+    <template lwc:if={showApiNameDisplay}>
+      <div
+        class="api-name-display slds-text-body_small slds-text-color_weak"
+        title={fullApiNameTitle}
+      >
+        {displayApiName}
+      </div>
+    </template>
 
-        <!-- Failed state: error summary expander + view partial results + start new scan -->
-        <template lwc:if={isFailed}>
-            <template lwc:if={hasFailedErrorLog}>
-                <div class="slds-var-m-top_x-small">
-                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={toggleFullError} onkeydown={toggleFullErrorKeyDown}>{failedErrorToggleLabel}</a>
-                    <template lwc:if={showFullError}>
-                        <div class="slds-var-m-top_x-small slds-text-body_small slds-theme_shade slds-var-p-around_small">{failedErrorLog}</div>
-                    </template>
-                </div>
-            </template>
-            <div class="slds-var-m-top_x-small">
-                <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewPartialResults} onkeydown={handleViewPartialResultsKeyDown}>View partial results</a>
-            </div>
-            <div class="slds-var-m-top_medium">
-                <lightning-button variant="brand" label="Start a new scan"
-                    onclick={handleStartNew}></lightning-button>
-            </div>
-        </template>
-
-        <!-- Progress bar or spinner -->
-        <template lwc:if={showProgressBar}>
-            <div class="slds-var-m-vertical_small" data-id="progressBarWrapper" tabindex="-1">
-                <lightning-progress-bar value={progressValue} size="large"></lightning-progress-bar>
-            </div>
-        </template>
-        <template lwc:if={showProgressSpinner}>
-            <div class="slds-var-m-vertical_small slds-align_absolute-center">
-                <lightning-spinner variant="brand" size="small" alternative-text="Scanning..."></lightning-spinner>
-            </div>
-        </template>
-
-        <!-- PE suppression notice -->
-        <template lwc:if={showPollingNotice}>
-            <p class="slds-text-body_small slds-text-color_weak" aria-live="polite">{pollingNoticeText}</p>
-        </template>
-
-        <!-- Poll failure warning banner (3-4 consecutive failures) -->
-        <template lwc:if={showPollWarningBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-top_small" role="alert">
-                <p>Progress updates are having trouble reaching the server. The scan is still running - retrying...</p>
-            </div>
-        </template>
-
-        <!-- Poll failure error banner (5+ consecutive failures) -->
-        <template lwc:if={showPollErrorBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_error slds-var-m-top_small" role="alert">
-                <p>Progress updates have stopped. Check your network connection.
-                    <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleRetryPolling} onkeydown={handleRetryPollingKeyDown}> Retry polling</a>
-                </p>
-            </div>
-        </template>
-
-        <!-- Cancel button -->
-        <template lwc:if={showCancelButton}>
-            <div class="slds-var-m-top_medium">
-                <lightning-button class="cancel-btn" variant="destructive-text" label={cancelLabel}
-                    disabled={cancelButtonDisabled} onclick={handleCancelClick}>
-                </lightning-button>
-                <template lwc:if={showCancellingSubtext}>
-                    <lightning-spinner size="x-small" alternative-text="Cancelling..." class="slds-var-m-left_x-small"></lightning-spinner>
-                    <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_x-small">
-                        Stopping at next checkpoint...
-                    </p>
-                </template>
-            </div>
-        </template>
-
-        <!-- Cancel confirmation modal -->
-        <template lwc:if={showCancelModal}>
-            <section role="dialog" tabindex="-1" aria-labelledby="cancelModalTitle"
-                aria-modal="true" class="slds-modal slds-fade-in-open">
-                <div class="slds-modal__container">
-                    <header class="slds-modal__header">
-                        <button class="slds-button slds-button_icon slds-modal__close"
-                            aria-label="Close" onclick={handleKeepRunning}>
-                            <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
-                        </button>
-                        <h2 id="cancelModalTitle" class="slds-modal__title">Stop this analysis?</h2>
-                    </header>
-                    <div class="slds-modal__content slds-var-p-around_medium">
-                        <p>The job will stop at the next checkpoint. Partial results already found will remain available.</p>
-                    </div>
-                    <footer class="slds-modal__footer">
-                        <button class="slds-button slds-button_neutral" data-id="keepRunningBtn"
-                            aria-label="Keep the scan running - do not cancel"
-                            onclick={handleKeepRunning}>Keep Running</button>
-                        <lightning-button label="Stop Analysis" variant="destructive" class="slds-var-m-left_x-small"
-                            aria-label="Confirm. Stop the analysis now."
-                            onclick={handleConfirmCancel}></lightning-button>
-                    </footer>
-                </div>
-            </section>
-            <div class="slds-backdrop slds-backdrop_open"></div>
-        </template>
-
-        <!-- Cancel timeout banner -->
-        <template lwc:if={showCancelTimeoutBanner}>
-            <div class="slds-notify slds-notify_alert slds-theme_info" role="alert" aria-live="assertive">
-                <p>Cancellation is taking longer than expected. The scan will stop when the current step finishes. You can try cancelling again if this persists.</p>
-            </div>
-        </template>
+    <!-- Status label + elapsed time (flex row on desktop, flex column on mobile < 768px) -->
+    <div class="status-elapsed-wrapper">
+      <template lwc:if={showStatusLabel}>
+        <div class="status-label" aria-live="polite">
+          <span>{statusLabel}</span>
+        </div>
+      </template>
+      <template lwc:if={showElapsed}>
+        <div class="elapsed-row">
+          <span class="elapsed-label">Elapsed: {elapsedFormatted}</span>
+        </div>
+      </template>
     </div>
+
+    <!-- View partial results link + Start new scan (Cancelled state) -->
+    <template lwc:if={isCancelled}>
+      <div class="slds-var-m-top_x-small">
+        <a
+          href="javascript:void(0);"
+          tabindex="0"
+          role="button"
+          onclick={handleViewPartialResults}
+          onkeydown={handleViewPartialResultsKeyDown}
+          >View partial results</a
+        >
+      </div>
+      <div class="slds-var-m-top_medium">
+        <lightning-button
+          variant="brand"
+          label="Start new scan"
+          onclick={handleStartNew}
+        ></lightning-button>
+      </div>
+    </template>
+
+    <!-- Failed state: error summary expander + view partial results + start new scan -->
+    <template lwc:if={isFailed}>
+      <template lwc:if={hasFailedErrorLog}>
+        <div class="slds-var-m-top_x-small">
+          <a
+            href="javascript:void(0);"
+            tabindex="0"
+            role="button"
+            onclick={toggleFullError}
+            onkeydown={toggleFullErrorKeyDown}
+            >{failedErrorToggleLabel}</a
+          >
+          <template lwc:if={showFullError}>
+            <div
+              class="slds-var-m-top_x-small slds-text-body_small slds-theme_shade slds-var-p-around_small"
+            >
+              {failedErrorLog}
+            </div>
+          </template>
+        </div>
+      </template>
+      <div class="slds-var-m-top_x-small">
+        <a
+          href="javascript:void(0);"
+          tabindex="0"
+          role="button"
+          onclick={handleViewPartialResults}
+          onkeydown={handleViewPartialResultsKeyDown}
+          >View partial results</a
+        >
+      </div>
+      <div class="slds-var-m-top_medium">
+        <lightning-button
+          variant="brand"
+          label="Start a new scan"
+          onclick={handleStartNew}
+        ></lightning-button>
+      </div>
+    </template>
+
+    <!-- Progress bar or spinner -->
+    <template lwc:if={showProgressBar}>
+      <div
+        class="slds-var-m-vertical_small"
+        data-id="progressBarWrapper"
+        tabindex="-1"
+      >
+        <lightning-progress-bar
+          value={progressValue}
+          size="large"
+        ></lightning-progress-bar>
+      </div>
+    </template>
+    <template lwc:if={showProgressSpinner}>
+      <div class="slds-var-m-vertical_small slds-align_absolute-center">
+        <lightning-spinner
+          variant="brand"
+          size="small"
+          alternative-text="Scanning..."
+        ></lightning-spinner>
+      </div>
+    </template>
+
+    <!-- PE suppression notice -->
+    <template lwc:if={showPollingNotice}>
+      <p class="slds-text-body_small slds-text-color_weak" aria-live="polite">
+        {pollingNoticeText}
+      </p>
+    </template>
+
+    <!-- Poll failure warning banner (3-4 consecutive failures) -->
+    <template lwc:if={showPollWarningBanner}>
+      <div
+        class="slds-notify slds-notify_alert slds-theme_warning slds-var-m-top_small"
+        role="alert"
+      >
+        <p>
+          Progress updates are having trouble reaching the server. The scan is
+          still running - retrying...
+        </p>
+      </div>
+    </template>
+
+    <!-- Poll failure error banner (5+ consecutive failures) -->
+    <template lwc:if={showPollErrorBanner}>
+      <div
+        class="slds-notify slds-notify_alert slds-theme_error slds-var-m-top_small"
+        role="alert"
+      >
+        <p>
+          Progress updates have stopped. Check your network connection.
+          <a
+            href="javascript:void(0);"
+            tabindex="0"
+            role="button"
+            onclick={handleRetryPolling}
+            onkeydown={handleRetryPollingKeyDown}
+          >
+            Retry polling</a
+          >
+        </p>
+      </div>
+    </template>
+
+    <!-- Cancel button -->
+    <template lwc:if={showCancelButton}>
+      <div class="slds-var-m-top_medium">
+        <lightning-button
+          class="cancel-btn"
+          variant="destructive-text"
+          label={cancelLabel}
+          disabled={cancelButtonDisabled}
+          onclick={handleCancelClick}
+        >
+        </lightning-button>
+        <template lwc:if={showCancellingSubtext}>
+          <lightning-spinner
+            size="x-small"
+            alternative-text="Cancelling..."
+            class="slds-var-m-left_x-small"
+          ></lightning-spinner>
+          <p
+            class="slds-text-body_small slds-text-color_weak slds-var-m-top_x-small"
+          >
+            Stopping at next checkpoint...
+          </p>
+        </template>
+      </div>
+    </template>
+
+    <!-- Cancel confirmation modal -->
+    <template lwc:if={showCancelModal}>
+      <section
+        role="dialog"
+        tabindex="-1"
+        aria-labelledby="cancelModalTitle"
+        aria-modal="true"
+        class="slds-modal slds-fade-in-open"
+        onkeydown={handleCancelModalKeyDown}
+      >
+        <div class="slds-modal__container">
+          <header class="slds-modal__header">
+            <button
+              class="slds-button slds-button_icon slds-modal__close"
+              aria-label="Close"
+              onclick={handleKeepRunning}
+            >
+              <lightning-icon
+                icon-name="utility:close"
+                size="small"
+              ></lightning-icon>
+            </button>
+            <h2 id="cancelModalTitle" class="slds-modal__title">
+              Stop this analysis?
+            </h2>
+          </header>
+          <div class="slds-modal__content slds-var-p-around_medium">
+            <p>
+              The job will stop at the next checkpoint. Partial results already
+              found will remain available.
+            </p>
+          </div>
+          <footer class="slds-modal__footer">
+            <button
+              class="slds-button slds-button_neutral"
+              data-id="keepRunningBtn"
+              aria-label="Keep the scan running - do not cancel"
+              onclick={handleKeepRunning}
+            >
+              Keep Running
+            </button>
+            <lightning-button
+              label="Stop Analysis"
+              variant="destructive"
+              class="slds-var-m-left_x-small"
+              aria-label="Confirm. Stop the analysis now."
+              onclick={handleConfirmCancel}
+            ></lightning-button>
+          </footer>
+        </div>
+      </section>
+      <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
+
+    <!-- Cancel timeout banner -->
+    <template lwc:if={showCancelTimeoutBanner}>
+      <div
+        class="slds-notify slds-notify_alert slds-theme_info"
+        role="alert"
+        aria-live="assertive"
+      >
+        <p>
+          Cancellation is taking longer than expected. The scan will stop when
+          the current step finishes. You can try cancelling again if this
+          persists.
+        </p>
+      </div>
+    </template>
+  </div>
 </template>

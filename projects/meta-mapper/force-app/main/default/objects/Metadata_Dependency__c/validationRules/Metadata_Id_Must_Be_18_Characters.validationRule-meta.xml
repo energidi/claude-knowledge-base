@@ -1,8 +1,11 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ValidationRule xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Metadata_Id_Must_Be_18_Characters</fullName>
     <active>true</active>
-    <description>Enforces that Metadata_Id__c is exactly 18 characters when populated. Blank values are allowed - the root dependency node is inserted without a Tooling API ID and has its Metadata_Id__c populated by the engine after the first callout resolves the component. The ISBLANK guard ensures the root node insert is not rejected. Do not disable - the two-tier cycle detection relies on all IDs being exactly 18 characters for delimiter-safe string containment checks.</description>
-    <errorConditionFormula>IF(NOT(ISBLANK(Metadata_Id__c)), LEN(Metadata_Id__c) &lt;&gt; 18, FALSE)</errorConditionFormula>
-    <errorMessage>When populated, Metadata ID must be exactly 18 characters. Blank is valid for root nodes only.</errorMessage>
+    <description
+  >Enforces that Metadata_Id__c is exactly 18 characters when populated. Blank values are allowed - the root dependency node is inserted without a Tooling API ID and has its Metadata_Id__c populated by the engine after the first callout resolves the component. The ISBLANK guard ensures the root node insert is not rejected. Do not disable - the two-tier cycle detection relies on all IDs being exactly 18 characters for delimiter-safe string containment checks.</description>
+    <errorConditionFormula
+  >IF(NOT(ISBLANK(Metadata_Id__c)), LEN(Metadata_Id__c) &lt;&gt; 18, FALSE)</errorConditionFormula>
+    <errorMessage
+  >When populated, Metadata ID must be exactly 18 characters. Blank is valid for root nodes only.</errorMessage>
 </ValidationRule>

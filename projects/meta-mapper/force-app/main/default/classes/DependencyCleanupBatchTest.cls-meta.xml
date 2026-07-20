@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Unit tests for DependencyCleanupBatch. Covers the retention filter (only expired Failed/Cancelled jobs targeted, all other statuses preserved) and the 5-submission backlog cap with its admin-visible notice.</description>
+    <description
+  >Unit tests for DependencyCleanupBatch. Covers the retention filter (only expired Failed/Cancelled jobs targeted, all other statuses preserved) and the 5-submission backlog cap with its admin-visible notice.</description>
     <status>Active</status>
 </ApexClass>

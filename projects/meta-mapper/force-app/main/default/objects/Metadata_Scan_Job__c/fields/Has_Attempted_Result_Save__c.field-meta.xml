@@ -1,7 +1,8 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Has_Attempted_Result_Save__c</fullName>
-    <description>Set to true at the start of ScanResultFileQueueable.execute(), before any DML, so it is committed outside the savepoint scope. Allows the LWC to distinguish a serializer failure (traversal completed but saving failed) from a mid-traversal engine failure - both result in Status = Failed with no Result_File_Id__c, but only the serializer path has this flag set. When true and Result_File_Id__c is null, the LWC shows the "Download Partial Results" option. Do not edit manually.</description>
+    <description
+  >Set to true at the start of ScanResultFileQueueable.execute(), before any DML, so it is committed outside the savepoint scope. Allows the LWC to distinguish a serializer failure (traversal completed but saving failed) from a mid-traversal engine failure - both result in Status = Failed with no Result_File_Id__c, but only the serializer path has this flag set. When true and Result_File_Id__c is null, the LWC shows the "Download Partial Results" option. Do not edit manually.</description>
     <defaultValue>false</defaultValue>
     <label>Has Attempted Result Save</label>
     <type>Checkbox</type>

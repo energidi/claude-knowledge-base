@@ -1,162 +1,237 @@
 <template>
-    <!-- Pre-flight spinner -->
-    <template lwc:if={isCheckingHealth}>
-        <div class="slds-align_absolute-center full-height">
-            <lightning-spinner variant="brand" size="medium"
-                aria-label="Checking MetaMapper connection..."
-                alternative-text="Checking MetaMapper connection...">
-            </lightning-spinner>
-        </div>
-    </template>
+  <!-- Pre-flight spinner -->
+  <template lwc:if={isCheckingHealth}>
+    <div class="slds-align_absolute-center full-height">
+      <lightning-spinner
+        variant="brand"
+        size="medium"
+        aria-label="Checking MetaMapper connection..."
+        alternative-text="Checking MetaMapper connection..."
+      >
+      </lightning-spinner>
+    </div>
+  </template>
 
-    <!-- Deep-link loading state -->
-    <template lwc:if={isDeepLinkLoading}>
-        <div class="slds-align_absolute-center full-height">
-            <lightning-spinner variant="brand" size="large" aria-label="Loading scan result..." alternative-text="Loading scan..."></lightning-spinner>
-        </div>
-    </template>
+  <!-- Deep-link loading state -->
+  <template lwc:if={isDeepLinkLoading}>
+    <div class="slds-align_absolute-center full-height">
+      <lightning-spinner
+        variant="brand"
+        size="large"
+        aria-label="Loading scan result..."
+        alternative-text="Loading scan..."
+      ></lightning-spinner>
+    </div>
+  </template>
 
-    <!-- Pre-flight error states -->
-    <template lwc:if={showPreflightError}>
+  <!-- Pre-flight error states -->
+  <template lwc:if={showPreflightError}>
+    <div class="slds-var-p-around_medium">
+      <lightning-card>
         <div class="slds-var-p-around_medium">
-            <lightning-card>
-                <div class="slds-var-p-around_medium">
-                    <lightning-icon icon-name="utility:error" variant="error" size="medium"
-                        class="slds-var-m-right_small"></lightning-icon>
-                    <p class="slds-text-heading_small slds-var-m-bottom_small">{preflightErrorTitle}</p>
-                    <p>{preflightErrorBody}</p>
-                    <template lwc:if={showLearnMoreLink}>
-                        <button class="slds-button slds-button_neutral slds-var-m-top_small"
-                            onclick={handleLearnMore}>Learn more</button>
-                    </template>
-                    <template lwc:if={showRetryButton}>
-                        <lightning-button label="Retry" variant="brand"
-                            onclick={runHealthCheck} class="slds-var-m-top_small">
-                        </lightning-button>
-                    </template>
-                </div>
-            </lightning-card>
+          <lightning-icon
+            icon-name="utility:error"
+            variant="error"
+            size="medium"
+            class="slds-var-m-right_small"
+          ></lightning-icon>
+          <p class="slds-text-heading_small slds-var-m-bottom_small">
+            {preflightErrorTitle}
+          </p>
+          <p>{preflightErrorBody}</p>
+          <template lwc:if={showLearnMoreLink}>
+            <button
+              class="slds-button slds-button_neutral slds-var-m-top_small"
+              onclick={handleLearnMore}
+            >
+              Learn more
+            </button>
+          </template>
+          <template lwc:if={showRetryButton}>
+            <lightning-button
+              label="Retry"
+              variant="brand"
+              onclick={runHealthCheck}
+              class="slds-var-m-top_small"
+            >
+            </lightning-button>
+          </template>
         </div>
+      </lightning-card>
+    </div>
+  </template>
+
+  <!-- Learn more modal -->
+  <template lwc:if={showLearnMoreModal}>
+    <section
+      role="dialog"
+      tabindex="-1"
+      aria-labelledby="learnMoreTitle"
+      aria-modal="true"
+      aria-label="MetaMapper setup instructions"
+      class="slds-modal slds-fade-in-open"
+      onkeydown={handleLearnMoreKeyDown}
+    >
+      <div class="slds-modal__container">
+        <header class="slds-modal__header">
+          <button
+            class="slds-button slds-button_icon slds-modal__close"
+            title="Close"
+            onclick={closeLearnMore}
+            aria-label="Close"
+          >
+            <lightning-icon
+              icon-name="utility:close"
+              size="small"
+            ></lightning-icon>
+          </button>
+          <h2 id="learnMoreTitle" class="slds-modal__title">
+            MetaMapper Setup Instructions
+          </h2>
+        </header>
+        <div
+          class="slds-modal__content slds-var-p-around_medium setup-modal-content"
+        >
+          <h3 class="slds-text-heading_small slds-var-m-bottom_small">
+            Named Credential Setup
+          </h3>
+          <ol class="slds-list_ordered">
+            <li>Go to Setup → Named Credentials → MetaMapper_Tooling_API</li>
+            <li>Click "Edit" on the MetaMapper_Tooling_API Named Credential</li>
+            <li>Under External Credential Principal, click "Authorize"</li>
+            <li>
+              Complete the OAuth flow with your Salesforce admin credentials
+            </li>
+            <li>Return to MetaMapper and click Retry</li>
+          </ol>
+        </div>
+        <footer class="slds-modal__footer">
+          <lightning-button
+            label="Close"
+            variant="neutral"
+            onclick={closeLearnMore}
+          ></lightning-button>
+        </footer>
+      </div>
+    </section>
+    <div class="slds-backdrop slds-backdrop_open"></div>
+  </template>
+
+  <!-- First-time guided tour -->
+  <template lwc:if={showTour}>
+    <section
+      role="dialog"
+      tabindex="-1"
+      aria-label="MetaMapper first-time tour"
+      aria-modal="true"
+      class="slds-modal slds-fade-in-open tour-modal"
+      onkeydown={handleTourKeyDown}
+    >
+      <div class="slds-modal__container meta-mapper-tour-container">
+        <header class="slds-modal__header">
+          <button
+            class="slds-button slds-button_icon slds-modal__close"
+            title="Close tour"
+            aria-label="Close tour"
+            onclick={closeTour}
+          >
+            <lightning-icon
+              icon-name="utility:close"
+              size="small"
+            ></lightning-icon>
+          </button>
+          <h2 class="slds-modal__title">{tourSlideTitle}</h2>
+        </header>
+        <div class="slds-modal__content slds-var-p-around_medium">
+          <div tabindex="-1" lwc:ref="tourSlideBody">
+            <p>{tourSlideBody}</p>
+          </div>
+          <p
+            class="slds-text-body_small slds-var-m-top_medium slds-text-color_weak"
+          >
+            Slide {tourSlide} of 3
+          </p>
+        </div>
+        <footer class="slds-modal__footer">
+          <lightning-input
+            type="checkbox"
+            label="Don't show again. I understand MetaMapper basics."
+            name="tour-dont-show"
+            checked={tourDontShow}
+            onchange={handleTourDontShowChange}
+            class="slds-var-m-bottom_small"
+          >
+          </lightning-input>
+          <template lwc:if={showTourPrev}>
+            <lightning-button
+              label={tourPrevLabel}
+              aria-label={tourPrevAriaLabel}
+              variant="neutral"
+              onclick={handleTourPrev}
+            ></lightning-button>
+          </template>
+          <lightning-button
+            label={tourNextLabel}
+            aria-label={tourNextAriaLabel}
+            variant="brand"
+            class="slds-var-m-left_x-small"
+            onclick={handleTourNext}
+          ></lightning-button>
+        </footer>
+      </div>
+    </section>
+    <div class="slds-backdrop slds-backdrop_open"></div>
+  </template>
+
+  <!-- Main application -->
+  <template lwc:if={showApp}>
+    <!-- Toast notifications -->
+    <template lwc:if={toastMessage}>
+      <div class={toastClass} role="alert">
+        <p>{toastMessage}</p>
+      </div>
     </template>
 
-    <!-- Learn more modal -->
-    <template lwc:if={showLearnMoreModal}>
-        <section role="dialog" tabindex="-1" aria-labelledby="learnMoreTitle"
-            aria-modal="true" aria-label="MetaMapper setup instructions"
-            class="slds-modal slds-fade-in-open" onkeydown={handleLearnMoreKeyDown}>
-            <div class="slds-modal__container">
-                <header class="slds-modal__header">
-                    <button class="slds-button slds-button_icon slds-modal__close"
-                        title="Close" onclick={closeLearnMore} aria-label="Close">
-                        <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
-                    </button>
-                    <h2 id="learnMoreTitle" class="slds-modal__title">MetaMapper Setup Instructions</h2>
-                </header>
-                <div class="slds-modal__content slds-var-p-around_medium setup-modal-content">
-                    <h3 class="slds-text-heading_small slds-var-m-bottom_small">Named Credential Setup</h3>
-                    <ol class="slds-list_ordered">
-                        <li>Go to Setup → Named Credentials → MetaMapper_Tooling_API</li>
-                        <li>Click "Edit" on the MetaMapper_Tooling_API Named Credential</li>
-                        <li>Under External Credential Principal, click "Authorize"</li>
-                        <li>Complete the OAuth flow with your Salesforce admin credentials</li>
-                        <li>Return to MetaMapper and click Retry</li>
-                    </ol>
-                </div>
-                <footer class="slds-modal__footer">
-                    <lightning-button label="Close" variant="neutral" onclick={closeLearnMore}></lightning-button>
-                </footer>
-            </div>
-        </section>
-        <div class="slds-backdrop slds-backdrop_open"></div>
+    <!-- View: Search -->
+    <template lwc:if={isSearchView}>
+      <c-meta-mapper-search
+        onjobcreated={handleJobCreated}
+        onviewrunningscan={handleViewRunningScan}
+      >
+      </c-meta-mapper-search>
     </template>
 
-    <!-- First-time guided tour -->
-    <template lwc:if={showTour}>
-        <section role="dialog" tabindex="-1" aria-label="MetaMapper first-time tour"
-            aria-modal="true" class="slds-modal slds-fade-in-open tour-modal"
-            onkeydown={handleTourKeyDown}>
-            <div class="slds-modal__container meta-mapper-tour-container">
-                <header class="slds-modal__header">
-                    <button class="slds-button slds-button_icon slds-modal__close"
-                        title="Close tour" aria-label="Close tour" onclick={closeTour}>
-                        <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
-                    </button>
-                    <h2 class="slds-modal__title">{tourSlideTitle}</h2>
-                </header>
-                <div class="slds-modal__content slds-var-p-around_medium">
-                    <div tabindex="-1" lwc:ref="tourSlideBody">
-                        <p>{tourSlideBody}</p>
-                    </div>
-                    <p class="slds-text-body_small slds-var-m-top_medium slds-text-color_weak">
-                        Slide {tourSlide} of 3
-                    </p>
-                </div>
-                <footer class="slds-modal__footer">
-                    <lightning-input type="checkbox"
-                        label="Don't show again. I understand MetaMapper basics."
-                        name="tour-dont-show"
-                        checked={tourDontShow}
-                        onchange={handleTourDontShowChange}
-                        class="slds-var-m-bottom_small">
-                    </lightning-input>
-                    <template lwc:if={showTourPrev}>
-                        <lightning-button label={tourPrevLabel} aria-label={tourPrevAriaLabel} variant="neutral"
-                            onclick={handleTourPrev}></lightning-button>
-                    </template>
-                    <lightning-button label={tourNextLabel} aria-label={tourNextAriaLabel} variant="brand"
-                        class="slds-var-m-left_x-small" onclick={handleTourNext}></lightning-button>
-                </footer>
-            </div>
-        </section>
-        <div class="slds-backdrop slds-backdrop_open"></div>
+    <!-- View: Progress -->
+    <template lwc:if={isProgressView}>
+      <c-meta-mapper-progress
+        job-id={jobId}
+        job={job}
+        max-components-cap={maxComponentsCap}
+        batch-size-in-use={_batchSizeInUse}
+        is-pe-suppression-active={_isPeSuppressionActive}
+        onviewpartialresults={handleViewPartialResults}
+        onstartnewscan={handleStartNew}
+        onjobstatusupdated={handleJobStatusPolled}
+        onshowerror={handleShowError}
+      >
+      </c-meta-mapper-progress>
     </template>
 
-    <!-- Main application -->
-    <template lwc:if={showApp}>
-        <!-- Toast notifications -->
-        <template lwc:if={toastMessage}>
-            <div class={toastClass} role="alert">
-                <p>{toastMessage}</p>
-            </div>
-        </template>
-
-        <!-- View: Search -->
-        <template lwc:if={isSearchView}>
-            <c-meta-mapper-search
-                onjobcreated={handleJobCreated}
-                onviewrunningscan={handleViewRunningScan}>
-            </c-meta-mapper-search>
-        </template>
-
-        <!-- View: Progress -->
-        <template lwc:if={isProgressView}>
-            <c-meta-mapper-progress
-                job-id={jobId}
-                job={job}
-                max-components-cap={maxComponentsCap}
-                batch-size-in-use={_batchSizeInUse}
-                is-pe-suppression-active={_isPeSuppressionActive}
-                onviewpartialresults={handleViewPartialResults}
-                onstartnewscan={handleStartNew}
-                onjobstatusupdated={handleJobStatusPolled}
-                onshowerror={handleShowError}>
-            </c-meta-mapper-progress>
-        </template>
-
-        <!-- View: Results -->
-        <template lwc:if={isResultsView}>
-            <c-meta-mapper-results
-                job-id={jobId}
-                job={job}
-                org-id={orgId}
-                retention-hours={retentionHours}
-                is-pe-suppression-active={_isPeSuppressionActive}
-                onstartnewscan={handleStartNew}
-                onshowerror={handleShowError}
-                onshowtoast={handleShowToast}
-                onfiltersreset={handleFiltersReset}
-                onaskcopilot={handleAskCopilot}>
-            </c-meta-mapper-results>
-        </template>
+    <!-- View: Results -->
+    <template lwc:if={isResultsView}>
+      <c-meta-mapper-results
+        job-id={jobId}
+        job={job}
+        org-id={orgId}
+        retention-hours={retentionHours}
+        is-pe-suppression-active={_isPeSuppressionActive}
+        onstartnewscan={handleStartNew}
+        onshowerror={handleShowError}
+        onshowtoast={handleShowToast}
+        onfiltersreset={handleFiltersReset}
+        onaskcopilot={handleAskCopilot}
+      >
+      </c-meta-mapper-results>
     </template>
+  </template>
 </template>

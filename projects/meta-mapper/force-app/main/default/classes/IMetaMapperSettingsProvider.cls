@@ -13,12 +13,11 @@
  *
  */
 public interface IMetaMapperSettingsProvider {
-
-    /**
-     * Returns the Default MetaMapper_Settings__mdt record.
-     * Result is cached in a static variable - safe to call multiple times per transaction.
-     *
-     * @return  The Default MetaMapper_Settings__mdt record with all custom fields
-     */
-    MetaMapper_Settings__mdt getSettings();
+  /**
+   * Returns the Default MetaMapper_Settings__mdt record.
+   * Result is cached in a static variable - safe to call multiple times per transaction.
+   *
+   * @return  The Default MetaMapper_Settings__mdt record with all custom fields
+   */
+  MetaMapper_Settings__mdt getSettings();
 }

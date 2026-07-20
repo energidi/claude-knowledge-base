@@ -1,8 +1,9 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Retention_Hours__c</fullName>
-    <description>How many hours to keep Failed and Cancelled scan records before automatic deletion by the nightly cleanup batch. Completed scan results are managed by the ring buffer (Max_Stored_Jobs__c) and are not subject to this time limit. Default: 72. Minimum 1. Recommended: 72+ hours for diagnostic use.</description>
-    <label>Retention Hours</label>
+    <description
+  >How many hours to keep Failed and Cancelled scan records before automatic deletion by the nightly cleanup batch. Completed scan results are managed by the ring buffer (Max_Stored_Jobs__c) and are not subject to this time limit. Default: 72. Minimum 1. Recommended: 72+ hours for diagnostic use.</description>
+    <label>Keep failed/cancelled jobs for (hours)</label>
     <precision>10</precision>
     <required>false</required>
     <scale>0</scale>

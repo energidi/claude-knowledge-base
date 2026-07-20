@@ -1,6 +1,7 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Lightweight one-shot Queueable that generates the plain-English Scan_Summary_Text__c from Component_Type_Counts__c. Enqueued only by ScanResultFileQueueable after the Completed transition. Checks Status__c equals Completed as its first operation and exits immediately otherwise - protects against running on a job whose serializer rolled back.</description>
+    <description
+  >Lightweight one-shot Queueable that generates the plain-English Scan_Summary_Text__c from Component_Type_Counts__c. Enqueued only by ScanResultFileQueueable after the Completed transition. Checks Status__c equals Completed as its first operation and exits immediately otherwise - protects against running on a job whose serializer rolled back.</description>
     <status>Active</status>
 </ApexClass>

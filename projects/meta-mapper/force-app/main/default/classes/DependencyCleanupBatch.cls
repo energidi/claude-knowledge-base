@@ -22,108 +22,137 @@
  *
  *
  */
-public without sharing class DependencyCleanupBatch
-    implements Database.Batchable<SObject>, Database.Stateful {
+public without sharing class DependencyCleanupBatch implements Database.Batchable<SObject>, Database.Stateful {
+  // Maximum MetadataDependencyDeletionBatch submissions per finish() call.
+  // Salesforce platform limit is exactly 5 Database.executeBatch() calls per transaction.
+  private static final Integer MAX_BATCH_SUBMISSIONS = 5;
 
-    // Maximum MetadataDependencyDeletionBatch submissions per finish() call.
-    // Salesforce platform limit is exactly 5 Database.executeBatch() calls per transaction.
-    private static final Integer MAX_BATCH_SUBMISSIONS = 5;
+  // Accumulated expired job IDs across all execute() invocations.
+  // Database.Stateful is required: without it, Apex discards instance state between
+  // chunk invocations and finish() receives an empty list, firing zero child batches.
+  private List<Id> expiredJobIds = new List<Id>();
 
-    // Accumulated expired job IDs across all execute() invocations.
-    // Database.Stateful is required: without it, Apex discards instance state between
-    // chunk invocations and finish() receives an empty list, firing zero child batches.
-    private List<Id> expiredJobIds = new List<Id>();
+  public Database.QueryLocator start(Database.BatchableContext ctx) {
+    MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider()
+      .getSettings();
+    Integer retentionHours = settings.Retention_Hours__c != null
+      ? ((Decimal) settings.Retention_Hours__c).intValue()
+      : 72;
+    // Enforce minimum: a retention window of 0 would delete all Failed/Cancelled jobs
+    // immediately, preventing any post-failure diagnostics.
+    retentionHours = Math.max(retentionHours, 1);
+    DateTime threshold = DateTime.now().addHours(-retentionHours);
+    return new MetadataScanJobSelector().getClosedJobsBefore(threshold);
+  }
 
-    public Database.QueryLocator start(Database.BatchableContext ctx) {
-        MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
-        Integer retentionHours = settings.Retention_Hours__c != null
-            ? ((Decimal) settings.Retention_Hours__c).intValue() : 72;
-        // Enforce minimum: a retention window of 0 would delete all Failed/Cancelled jobs
-        // immediately, preventing any post-failure diagnostics.
-        retentionHours = Math.max(retentionHours, 1);
-        DateTime threshold = DateTime.now().addHours(-retentionHours);
-        return new MetadataScanJobSelector().getClosedJobsBefore(threshold);
+  public void execute(Database.BatchableContext ctx, List<SObject> scope) {
+    // No DML: accumulate IDs only. MetadataDependencyDeletionBatch handles all deletion.
+    // Database.Stateful preserves expiredJobIds across chunk invocations.
+    for (SObject record : scope) {
+      expiredJobIds.add((Id) record.get('Id'));
+    }
+  }
+
+  public void finish(Database.BatchableContext ctx) {
+    if (expiredJobIds.isEmpty()) {
+      return;
     }
 
-    public void execute(Database.BatchableContext ctx, List<SObject> scope) {
-        // No DML: accumulate IDs only. MetadataDependencyDeletionBatch handles all deletion.
-        // Database.Stateful preserves expiredJobIds across chunk invocations.
-        for (SObject record : scope) {
-            expiredJobIds.add((Id) record.get('Id'));
-        }
+    MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider()
+      .getSettings();
+    Integer configuredChunkSize = settings.Cleanup_Chunk_Size__c != null
+      ? ((Decimal) settings.Cleanup_Chunk_Size__c).intValue()
+      : 2000;
+    // Database.executeBatch throws LimitException when batchSize > 2000.
+    Integer chunkSize = Math.min(Math.max(configuredChunkSize, 1), 2000);
+    if (chunkSize != configuredChunkSize) {
+      // Append admin-visible warning to the first expired job so it appears in the UI.
+      // The job has not yet been deleted at this point (MetadataDependencyDeletionBatch runs after).
+      String clampWarn =
+        '[' +
+        System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') +
+        '] ' +
+        'Cleanup_Chunk_Size__c is set to ' +
+        configuredChunkSize +
+        ', which exceeds the Salesforce batch scope limit of 2,000. ' +
+        'Clamped to 2,000. Update Cleanup_Chunk_Size__c in MetaMapper Settings to 2,000 or lower to suppress this warning.';
+      System.debug(
+        LoggingLevel.WARN,
+        'DependencyCleanupBatch.finish: ' + clampWarn
+      );
+      appendNoticeToJob(expiredJobIds[0], clampWarn);
     }
 
-    public void finish(Database.BatchableContext ctx) {
-        if (expiredJobIds.isEmpty()) {
-            return;
-        }
-
-        MetaMapper_Settings__mdt settings = new MetaMapperSettingsProvider().getSettings();
-        Integer configuredChunkSize = settings.Cleanup_Chunk_Size__c != null
-            ? ((Decimal) settings.Cleanup_Chunk_Size__c).intValue() : 2000;
-        // Database.executeBatch throws LimitException when batchSize > 2000.
-        Integer chunkSize = Math.min(Math.max(configuredChunkSize, 1), 2000);
-        if (chunkSize != configuredChunkSize) {
-            // Append admin-visible warning to the first expired job so it appears in the UI.
-            // The job has not yet been deleted at this point (MetadataDependencyDeletionBatch runs after).
-            String clampWarn = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] '
-                + 'Cleanup_Chunk_Size__c is set to ' + configuredChunkSize
-                + ', which exceeds the Salesforce batch scope limit of 2,000. '
-                + 'Clamped to 2,000. Update Cleanup_Chunk_Size__c in MetaMapper Settings to 2,000 or lower to suppress this warning.';
-            System.debug(LoggingLevel.WARN, 'DependencyCleanupBatch.finish: ' + clampWarn);
-            appendNoticeToJob(expiredJobIds[0], clampWarn);
-        }
-
-        // "attempted" (not "submitted") gates the MAX_BATCH_SUBMISSIONS break: the platform's
-        // 5-executeBatch()-per-transaction ceiling counts every invocation attempt, whether it
-        // succeeds or throws (caught below). Gating on "submitted" (successes only) would let a
-        // caught executeBatch() failure silently push the real call count past the platform limit.
-        Integer attempted = 0;
-        Integer submitted = 0;
-        for (Id jobId : expiredJobIds) {
-            if (attempted >= MAX_BATCH_SUBMISSIONS) {
-                Integer backlogCount = expiredJobIds.size() - attempted;
-                String backlogMsg = '[' + System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') + '] '
-                    + 'Cleanup backlog: ' + backlogCount
-                    + ' additional expired job(s) will be processed in subsequent nightly runs.';
-                System.debug(LoggingLevel.INFO, 'DependencyCleanupBatch.finish: ' + backlogMsg);
-                // Write to the oldest remaining unsubmitted job so admins see the notice in the UI.
-                appendNoticeToJob(jobId, backlogMsg);
-                break;
-            }
-            attempted++;
-            try {
-                Database.executeBatch(
-                    new MetadataDependencyDeletionBatch(
-                        jobId, MetadataDependencyDeletionBatch.CleanupMode.NODES_AND_JOB),
-                    chunkSize
-                );
-                submitted++;
-            } catch (Exception e) {
-                System.debug(LoggingLevel.WARN,
-                    'DependencyCleanupBatch.finish: failed to schedule MetadataDependencyDeletionBatch '
-                    + 'for job ' + jobId + ': ' + e.getMessage());
-            }
-        }
+    // "attempted" (not "submitted") gates the MAX_BATCH_SUBMISSIONS break: the platform's
+    // 5-executeBatch()-per-transaction ceiling counts every invocation attempt, whether it
+    // succeeds or throws (caught below). Gating on "submitted" (successes only) would let a
+    // caught executeBatch() failure silently push the real call count past the platform limit.
+    Integer attempted = 0;
+    Integer submitted = 0;
+    for (Id jobId : expiredJobIds) {
+      if (attempted >= MAX_BATCH_SUBMISSIONS) {
+        Integer backlogCount = expiredJobIds.size() - attempted;
+        String backlogMsg =
+          '[' +
+          System.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'') +
+          '] ' +
+          'Cleanup backlog: ' +
+          backlogCount +
+          ' additional expired job(s) will be processed in subsequent nightly runs.';
+        System.debug(
+          LoggingLevel.INFO,
+          'DependencyCleanupBatch.finish: ' + backlogMsg
+        );
+        // Write to the oldest remaining unsubmitted job so admins see the notice in the UI.
+        appendNoticeToJob(jobId, backlogMsg);
+        break;
+      }
+      attempted++;
+      try {
+        Database.executeBatch(
+          new MetadataDependencyDeletionBatch(
+            jobId,
+            MetadataDependencyDeletionBatch.CleanupMode.NODES_AND_JOB
+          ),
+          chunkSize
+        );
+        submitted++;
+      } catch (Exception e) {
+        System.debug(
+          LoggingLevel.WARN,
+          'DependencyCleanupBatch.finish: failed to schedule MetadataDependencyDeletionBatch ' +
+            'for job ' +
+            jobId +
+            ': ' +
+            e.getMessage()
+        );
+      }
     }
+  }
 
-    // -------------------------------------------------------------------------
-    // Private - helpers
-    // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Private - helpers
+  // -------------------------------------------------------------------------
 
-    private void appendNoticeToJob(Id jobId, String notice) {
-        try {
-            Metadata_Scan_Job__c job =
-                new MetadataScanJobSelector().getByIdForLogAppend(jobId);
-            if (job != null) {
-                job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
-                    job.Scan_Diagnostic_Log__c, notice);
-                update job;
-            }
-        } catch (Exception e) {
-            System.debug(LoggingLevel.WARN,
-                'DependencyCleanupBatch.appendNoticeToJob: update failed for job '
-                + jobId + ' - ' + e.getMessage());
-        }
+  private void appendNoticeToJob(Id jobId, String notice) {
+    try {
+      Metadata_Scan_Job__c job = new MetadataScanJobSelector()
+        .getByIdForLogAppend(jobId);
+      if (job != null) {
+        job.Scan_Diagnostic_Log__c = SupplementalScanResult.appendNoticeSafe(
+          job.Scan_Diagnostic_Log__c,
+          notice
+        );
+        update job;
+      }
+    } catch (Exception e) {
+      System.debug(
+        LoggingLevel.WARN,
+        'DependencyCleanupBatch.appendNoticeToJob: update failed for job ' +
+          jobId +
+          ' - ' +
+          e.getMessage()
+      );
     }
+  }
 }

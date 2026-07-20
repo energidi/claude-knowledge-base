@@ -1,7 +1,8 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Target_Parent_Object__c</fullName>
-    <description>The API name of the parent object, required when Target_Metadata_Type__c is CustomField. Used to scope the Tooling API query to a specific object. Optional for all other metadata types.</description>
+    <description
+  >The API name of the parent object, required when Target_Metadata_Type__c is CustomField. Used to scope the Tooling API query to a specific object. Optional for all other metadata types.</description>
     <label>Target Object</label>
     <length>255</length>
     <required>false</required>

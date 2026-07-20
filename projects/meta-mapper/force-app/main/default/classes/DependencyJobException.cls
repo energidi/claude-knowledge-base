@@ -8,4 +8,5 @@
  *
  *
  */
-public class DependencyJobException extends Exception {}
+public class DependencyJobException extends Exception {
+}

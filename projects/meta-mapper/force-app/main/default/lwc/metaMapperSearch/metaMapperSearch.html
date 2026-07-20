@@ -1,147 +1,229 @@
 <template>
-    <lightning-card title="MetaMapper - Analyze Dependencies">
-        <div class="slds-var-p-around_medium">
+  <lightning-card title="MetaMapper - Analyze Dependencies">
+    <div class="slds-var-p-around_medium">
+      <!-- Metadata Type picklist -->
+      <div class="slds-form-element slds-var-m-bottom_small">
+        <lightning-combobox
+          name="metadataType"
+          label="Metadata Type"
+          required
+          placeholder="Select metadata type"
+          value={selectedType}
+          options={typeOptions}
+          onchange={handleTypeChange}
+        >
+        </lightning-combobox>
+      </div>
 
-            <!-- Metadata Type picklist -->
-            <div class="slds-form-element slds-var-m-bottom_small">
-                <lightning-combobox
-                    name="metadataType"
-                    label="Metadata Type"
-                    required
-                    placeholder="Select metadata type"
-                    value={selectedType}
-                    options={typeOptions}
-                    onchange={handleTypeChange}>
-                </lightning-combobox>
-            </div>
+      <!-- API Name input -->
+      <div class="slds-form-element slds-var-m-bottom_small">
+        <lightning-input
+          type="text"
+          name="apiName"
+          label="API Name"
+          required
+          pattern="^[A-Za-z][A-Za-z0-9_.]*$"
+          placeholder={apiNamePlaceholder}
+          value={apiName}
+          message-when-value-missing="Enter the API name of the component you want to scan."
+          message-when-pattern-mismatch="Use the exact API name as it appears in Salesforce Setup (e.g. Account.My_Field__c)."
+          onblur={handleApiNameBlur}
+          onchange={handleApiNameChange}
+        >
+        </lightning-input>
+        <template lwc:if={showValidationRuleHelp}>
+          <p class="slds-form-element__help slds-text-color_weak">
+            Validation Rule API names do not include the parent object. Enter
+            just the developer name as shown in Setup (e.g. Validate_Phone).
+          </p>
+        </template>
+        <template lwc:if={_hasWhitespaceHint}>
+          <p class="slds-form-element__help slds-text-color_weak">
+            Remove extra spaces from the API name.
+          </p>
+        </template>
+      </div>
 
-            <!-- API Name input -->
-            <div class="slds-form-element slds-var-m-bottom_small">
-                <lightning-input
-                    type="text"
-                    name="apiName"
-                    label="API Name"
-                    required
-                    pattern="^[A-Za-z][A-Za-z0-9_.]*$"
-                    placeholder={apiNamePlaceholder}
-                    value={apiName}
-                    message-when-value-missing="Enter the API name of the component you want to scan."
-                    message-when-pattern-mismatch="Use the exact API name as it appears in Salesforce Setup (e.g. Account.My_Field__c)."
-                    onblur={handleApiNameBlur}
-                    onchange={handleApiNameChange}>
-                </lightning-input>
-                <template lwc:if={showValidationRuleHelp}>
-                    <p class="slds-form-element__help slds-text-color_weak">
-                        Validation Rule API names do not include the parent object. Enter just the developer name as shown in Setup (e.g. Validate_Phone).
-                    </p>
+      <!-- Target Object typeahead (CustomField only) -->
+      <template lwc:if={showTargetObject}>
+        <div
+          class="slds-form-element slds-var-m-bottom_small typeahead-container"
+        >
+          <label class="slds-form-element__label" for="targetObject">
+            <abbr class="slds-required" title="required">*</abbr>Target Object
+          </label>
+          <div
+            class="slds-form-element__control slds-input-has-icon slds-input-has-icon_right"
+          >
+            <template lwc:if={typeaheadLoading}>
+              <lightning-spinner
+                size="x-small"
+                class="slds-icon slds-input__icon slds-input__icon_right"
+              ></lightning-spinner>
+            </template>
+            <input
+              id="targetObject"
+              type="text"
+              class="slds-input"
+              placeholder="e.g. Account"
+              value={targetObject}
+              oninput={handleTargetObjectInput}
+              onblur={handleTargetObjectBlur}
+              onkeydown={handleTypeaheadKeydown}
+              autocomplete="off"
+              aria-autocomplete="list"
+              aria-expanded={typeaheadOpen}
+              aria-controls="typeahead-listbox"
+              aria-activedescendant={activeTypeaheadOptionId}
+            />
+          </div>
+          <template lwc:if={typeaheadOpen}>
+            <div
+              id="typeahead-listbox"
+              class="slds-dropdown slds-dropdown_length-5 slds-dropdown_fluid meta-mapper-typeahead-dropdown"
+              role="listbox"
+            >
+              <ul
+                class="slds-listbox slds-listbox_vertical"
+                role="presentation"
+              >
+                <template lwc:if={typeaheadResults.length}>
+                  <template for:each={typeaheadResults} for:item="result">
+                    <li
+                      key={result.value}
+                      id={result.optionId}
+                      role="option"
+                      class="slds-listbox__item"
+                      aria-selected={result.isFocused}
+                      data-value={result.value}
+                      onmousedown={handleTypeaheadSelect}
+                    >
+                      <span class="slds-media__body">{result.label}</span>
+                    </li>
+                  </template>
                 </template>
-                <template lwc:if={_hasWhitespaceHint}>
-                    <p class="slds-form-element__help slds-text-color_weak">
-                        Remove extra spaces from the API name.
-                    </p>
+                <template lwc:else>
+                  <li class="slds-listbox__item slds-is-disabled" role="option">
+                    <span class="slds-media__body"
+                      >(No matching objects found)</span
+                    >
+                  </li>
                 </template>
+              </ul>
             </div>
-
-            <!-- Target Object typeahead (CustomField only) -->
-            <template lwc:if={showTargetObject}>
-                <div class="slds-form-element slds-var-m-bottom_small typeahead-container">
-                    <label class="slds-form-element__label" for="targetObject">
-                        <abbr class="slds-required" title="required">*</abbr>Target Object
-                    </label>
-                    <div class="slds-form-element__control slds-input-has-icon slds-input-has-icon_right">
-                        <template lwc:if={typeaheadLoading}>
-                            <lightning-spinner size="x-small" class="slds-icon slds-input__icon slds-input__icon_right"></lightning-spinner>
-                        </template>
-                        <input id="targetObject" type="text" class="slds-input"
-                            placeholder="e.g. Account" value={targetObject}
-                            oninput={handleTargetObjectInput} onblur={handleTargetObjectBlur}
-                            onkeydown={handleTypeaheadKeydown}
-                            autocomplete="off" aria-autocomplete="list" aria-expanded={typeaheadOpen}
-                            aria-controls="typeahead-listbox" aria-activedescendant={activeTypeaheadOptionId} />
-                    </div>
-                    <template lwc:if={typeaheadOpen}>
-                        <div id="typeahead-listbox" class="slds-dropdown slds-dropdown_length-5 slds-dropdown_fluid meta-mapper-typeahead-dropdown" role="listbox">
-                            <ul class="slds-listbox slds-listbox_vertical" role="presentation">
-                                <template lwc:if={typeaheadResults.length}>
-                                    <template for:each={typeaheadResults} for:item="result">
-                                        <li key={result.value} id={result.optionId} role="option"
-                                            class="slds-listbox__item" aria-selected={result.isFocused}
-                                            data-value={result.value} onmousedown={handleTypeaheadSelect}>
-                                            <span class="slds-media__body">{result.label}</span>
-                                        </li>
-                                    </template>
-                                </template>
-                                <template lwc:else>
-                                    <li class="slds-listbox__item slds-is-disabled" role="option">
-                                        <span class="slds-media__body">(No matching objects found)</span>
-                                    </li>
-                                </template>
-                            </ul>
-                        </div>
-                    </template>
-                    <template lwc:if={targetObjectError}>
-                        <p class="slds-form-element__help slds-has-error" role="alert">{targetObjectError}</p>
-                    </template>
-                    <template lwc:if={typeaheadCalloutError}>
-                        <p class="slds-form-element__help">Could not load object list. Type the object API name manually.</p>
-                    </template>
-                </div>
-            </template>
-
-            <!-- Active Flows checkbox -->
-            <div class="slds-form-element slds-var-m-bottom_small">
-                <lightning-input type="checkbox" name="activeFlows"
-                    label="Only analyze active Flow versions"
-                    checked={activeFlowsOnly}
-                    field-level-help="When checked, inactive and deprecated Flow versions are excluded from results. This reduces scan scope and processing time. Uncheck to include all Flow versions, including inactive ones."
-                    onchange={handleActiveFlowsChange}>
-                </lightning-input>
-            </div>
-
-            <!-- Complexity preview (non-blocking) -->
-            <template lwc:if={_complexityLoading}>
-                <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small">
-                    <lightning-spinner size="x-small" alternative-text="Estimating scope..." style="display:inline-block;vertical-align:middle;margin-right:4px;"></lightning-spinner>
-                    Estimating scope...
-                </p>
-            </template>
-            <template lwc:if={complexityBucket}>
-                <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small">
-                    Estimated scan scope: <strong>{complexityBucket}</strong> based on historical averages for this metadata type.
-                </p>
-            </template>
-
-            <!-- Submit button -->
-            <div class="slds-var-m-top_medium submit-btn-wrapper">
-                <lightning-button class="submit-btn" variant="brand" label={submitLabel}
-                    disabled={isSubmitDisabled} onclick={handleSubmit}>
-                </lightning-button>
-            </div>
-
-            <!-- Submission error banner (concurrency / storage rejection) - rendered below the
-                 Submit button per spec so it reads as a response to the submit action. -->
-            <template lwc:if={submissionError}>
-                <div class="slds-notify slds-notify_alert slds-theme_error slds-var-m-top_small" role="alert">
-                    <span class="slds-assistive-text">Error</span>
-                    <p>{submissionError}
-                        <template lwc:if={isRunningScanError}>
-                            <template lwc:if={viewScanLoading}>
-                                <lightning-spinner size="x-small" variant="inverse" alternative-text="Loading"></lightning-spinner>
-                            </template>
-                            <template lwc:else>
-                                <a href="javascript:void(0);" tabindex="0" role="button" onclick={handleViewRunningScan} onkeydown={handleViewRunningScanKeyDown} class="slds-m-left_x-small"> View the running scan</a>
-                            </template>
-                            <template lwc:if={viewScanError}>
-                                <span class="slds-m-left_x-small">{viewScanError}</span>
-                            </template>
-                        </template>
-                    </p>
-                    <button class="slds-button slds-button_icon slds-button_icon-inverse slds-notify__close"
-                        onclick={dismissError} title="Dismiss" aria-label="Dismiss error">
-                        <lightning-icon icon-name="utility:close" size="small"></lightning-icon>
-                    </button>
-                </div>
-            </template>
+          </template>
+          <template lwc:if={targetObjectError}>
+            <p class="slds-form-element__help slds-has-error" role="alert">
+              {targetObjectError}
+            </p>
+          </template>
+          <template lwc:if={typeaheadCalloutError}>
+            <p class="slds-form-element__help">
+              Could not load object list. Type the object API name manually.
+            </p>
+          </template>
         </div>
-    </lightning-card>
+      </template>
+
+      <!-- Active Flows checkbox -->
+      <div class="slds-form-element slds-var-m-bottom_small">
+        <lightning-input
+          type="checkbox"
+          name="activeFlows"
+          label="Only analyze active Flow versions"
+          checked={isActiveFlowsOnly}
+          field-level-help="When checked, inactive and deprecated Flow versions are excluded from results. This reduces scan scope and processing time. Uncheck to include all Flow versions, including inactive ones."
+          onchange={handleActiveFlowsChange}
+        >
+        </lightning-input>
+      </div>
+
+      <!-- Complexity preview (non-blocking) -->
+      <template lwc:if={_complexityLoading}>
+        <p
+          class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small"
+        >
+          <lightning-spinner
+            size="x-small"
+            alternative-text="Estimating scope..."
+            style="
+              display: inline-block;
+              vertical-align: middle;
+              margin-right: 4px;
+            "
+          ></lightning-spinner>
+          Estimating scope...
+        </p>
+      </template>
+      <template lwc:if={complexityBucket}>
+        <p
+          class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small"
+        >
+          Estimated scan scope: <strong>{complexityBucket}</strong> based on
+          historical averages for this metadata type.
+        </p>
+      </template>
+
+      <!-- Submit button -->
+      <div class="slds-var-m-top_medium submit-btn-wrapper">
+        <lightning-button
+          class="submit-btn"
+          variant="brand"
+          label={submitLabel}
+          disabled={isSubmitDisabled}
+          onclick={handleSubmit}
+        >
+        </lightning-button>
+      </div>
+
+      <!-- Submission error banner (concurrency / storage rejection) - rendered below the
+                 Submit button per spec so it reads as a response to the submit action. -->
+      <template lwc:if={submissionError}>
+        <div
+          class="slds-notify slds-notify_alert slds-theme_error slds-var-m-top_small"
+          role="alert"
+        >
+          <span class="slds-assistive-text">Error</span>
+          <p>
+            {submissionError}
+            <template lwc:if={isRunningScanError}>
+              <template lwc:if={viewScanLoading}>
+                <lightning-spinner
+                  size="x-small"
+                  variant="inverse"
+                  alternative-text="Loading"
+                ></lightning-spinner>
+              </template>
+              <template lwc:else>
+                <a
+                  href="javascript:void(0);"
+                  tabindex="0"
+                  role="button"
+                  onclick={handleViewRunningScan}
+                  onkeydown={handleViewRunningScanKeyDown}
+                  class="slds-m-left_x-small"
+                >
+                  View the running scan</a
+                >
+              </template>
+              <template lwc:if={viewScanError}>
+                <span class="slds-m-left_x-small">{viewScanError}</span>
+              </template>
+            </template>
+          </p>
+          <button
+            class="slds-button slds-button_icon slds-button_icon-inverse slds-notify__close"
+            onclick={dismissError}
+            title="Dismiss"
+            aria-label="Dismiss error"
+          >
+            <lightning-icon
+              icon-name="utility:close"
+              size="small"
+            ></lightning-icon>
+          </button>
+        </div>
+      </template>
+    </div>
+  </lightning-card>
 </template>

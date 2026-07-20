@@ -1,126 +1,178 @@
 <template>
-    <template if:true={isOpen}>
-        <div
-            class="panel-container"
-            role={dialogRole}
-            aria-modal={panelAriaModal}
-            aria-label={panelAriaLabel}
-            onkeydown={handleKeydown}
+  <template if:true={isOpen}>
+    <div
+      class="panel-container"
+      role={dialogRole}
+      aria-modal={panelAriaModal}
+      aria-label={panelAriaLabel}
+      onkeydown={handleKeydown}
+    >
+      <!-- Header -->
+      <div class="panel-header">
+        <h2 class="panel-title" title={selectedNode.Metadata_Name__c}>
+          {selectedNode.Metadata_Name__c}
+        </h2>
+        <button
+          class="close-btn"
+          aria-label="Close panel"
+          onclick={handleClose}
         >
-            <!-- Header -->
-            <div class="panel-header">
-                <h2 class="panel-title" title={selectedNode.Metadata_Name__c}>{selectedNode.Metadata_Name__c}</h2>
-                <button class="close-btn" aria-label="Close panel" onclick={handleClose}>
-                    <lightning-icon icon-name="utility:close" size="x-small" alternative-text="Close"></lightning-icon>
-                </button>
-            </div>
+          <lightning-icon
+            icon-name="utility:close"
+            size="x-small"
+            alternative-text="Close"
+          ></lightning-icon>
+        </button>
+      </div>
 
-            <!-- Body -->
-            <div class="panel-body">
-
-                <!-- Type -->
-                <div class="field-row">
-                    <span class="field-label">Type</span>
-                    <span class="field-value">{selectedNode.Metadata_Type__c}</span>
-                </div>
-
-                <!-- Depth -->
-                <div class="field-row">
-                    <span class="field-label">Depth</span>
-                    <span class="field-value">{selectedNode.Dependency_Depth__c}</span>
-                </div>
-
-                <!-- Source -->
-                <div class="field-row">
-                    <span class="field-label">Source</span>
-                    <span class="field-value">{selectedNode.Discovery_Source__c}</span>
-                </div>
-
-                <!-- Confidence (Supplemental only) -->
-                <template if:true={showConfidenceBadge}>
-                    <div class="field-row">
-                        <span class="field-label">Confidence</span>
-                        <span class={confidenceBadgeClass}>{confidenceScore}%</span>
-                        <template if:true={showConfidenceWarning}>
-                            <span class="confidence-warning-text">Verify manually before making changes.</span>
-                        </template>
-                    </div>
-                </template>
-
-                <!-- Flags -->
-                <template if:true={selectedNode.Is_Circular__c}>
-                    <div class="flag-row">
-                        <lightning-icon icon-name="utility:rotate" size="x-small" aria-hidden="true"></lightning-icon>
-                        <span>Circular dependency - these components depend on each other in a loop.</span>
-                    </div>
-                </template>
-
-                <template if:true={selectedNode.Is_Dynamic_Reference__c}>
-                    <div class="flag-row">
-                        <lightning-icon icon-name="utility:warning" size="x-small" aria-hidden="true" class="icon-dynamic"></lightning-icon>
-                        <span>Dynamic reference - cannot be statically resolved. Verify manually.</span>
-                    </div>
-                </template>
-
-                <!-- Context pills -->
-                <template if:true={hasPills}>
-                    <div class="section">
-                        <h3 class="section-title">Details</h3>
-                        <ul class="pills-list">
-                            <template for:each={pillsList} for:item="pill">
-                                <li key={pill} class="pill-item">{pill}</li>
-                            </template>
-                        </ul>
-                    </div>
-                </template>
-
-                <!-- Ancestor breadcrumb chain -->
-                <template if:true={hasBreadcrumbs}>
-                    <div class="section">
-                        <h3 class="section-title">Path from root</h3>
-                        <div class="breadcrumb-chain">
-                            <template for:each={visibleBreadcrumbs} for:item="bc">
-                                <span key={bc.id} class="breadcrumb-item" title={bc.name}>{bc.name}</span>
-                                <span key={bc.sepId} class="breadcrumb-sep" aria-hidden="true">›</span>
-                            </template>
-                            <span class="breadcrumb-item breadcrumb-current">{selectedNode.Metadata_Name__c}</span>
-                        </div>
-                        <template if:true={hasHiddenBreadcrumbs}>
-                            <button class="show-all-ancestors" onclick={handleToggleAncestors}>
-                                {showAllAncestorsLabel}
-                            </button>
-                        </template>
-                    </div>
-                </template>
-
-            </div>
-
-            <!-- Footer actions -->
-            <div class="panel-footer">
-                <button
-                    class={setupButtonClass}
-                    onclick={handleOpenInSetup}
-                    aria-disabled={setupButtonAriaDisabled}
-                    title={setupButtonTitle}
-                    aria-label="Open in Setup"
-                >
-                    <lightning-icon icon-name="utility:settings" size="x-small" aria-hidden="true"></lightning-icon>
-                    Open in Setup
-                </button>
-
-                <button class="slds-button slds-button_neutral copy-link-btn" onclick={handleCopyLink}>
-                    <template if:false={_copyLinkSuccess}>
-                        <lightning-icon icon-name="utility:copy" size="x-small" aria-hidden="true"></lightning-icon>
-                        Copy Link
-                    </template>
-                    <template if:true={_copyLinkSuccess}>
-                        <lightning-icon icon-name="utility:check" size="x-small" aria-hidden="true"></lightning-icon>
-                        Link copied!
-                    </template>
-                </button>
-
-                <span aria-live="polite" class="slds-assistive-text copy-link-live"></span>
-            </div>
+      <!-- Body -->
+      <div class="panel-body">
+        <!-- Type -->
+        <div class="field-row">
+          <span class="field-label">Type</span>
+          <span class="field-value">{selectedNode.Metadata_Type__c}</span>
         </div>
-    </template>
+
+        <!-- Depth -->
+        <div class="field-row">
+          <span class="field-label">Depth</span>
+          <span class="field-value">{selectedNode.Dependency_Depth__c}</span>
+        </div>
+
+        <!-- Source -->
+        <div class="field-row">
+          <span class="field-label">Source</span>
+          <span class="field-value">{selectedNode.Discovery_Source__c}</span>
+        </div>
+
+        <!-- Confidence (Supplemental only) -->
+        <template if:true={showConfidenceBadge}>
+          <div class="field-row">
+            <span class="field-label">Confidence</span>
+            <span class={confidenceBadgeClass}>{confidenceScore}%</span>
+            <template if:true={showConfidenceWarning}>
+              <span class="confidence-warning-text"
+                >Verify manually before making changes.</span
+              >
+            </template>
+          </div>
+        </template>
+
+        <!-- Flags -->
+        <template if:true={selectedNode.Is_Circular__c}>
+          <div class="flag-row">
+            <lightning-icon
+              icon-name="utility:rotate"
+              size="x-small"
+              aria-hidden="true"
+            ></lightning-icon>
+            <span
+              >Circular dependency - these components depend on each other in a
+              loop.</span
+            >
+          </div>
+        </template>
+
+        <template if:true={selectedNode.Is_Dynamic_Reference__c}>
+          <div class="flag-row">
+            <lightning-icon
+              icon-name="utility:warning"
+              size="x-small"
+              aria-hidden="true"
+              class="icon-dynamic"
+            ></lightning-icon>
+            <span
+              >Dynamic reference - cannot be statically resolved. Verify
+              manually.</span
+            >
+          </div>
+        </template>
+
+        <!-- Context pills -->
+        <template if:true={hasPills}>
+          <div class="section">
+            <h3 class="section-title">Details</h3>
+            <ul class="pills-list">
+              <template for:each={pillsList} for:item="pill">
+                <li key={pill} class="pill-item">{pill}</li>
+              </template>
+            </ul>
+          </div>
+        </template>
+
+        <!-- Ancestor breadcrumb chain -->
+        <template if:true={hasBreadcrumbs}>
+          <div class="section">
+            <h3 class="section-title">Path from root</h3>
+            <div class="breadcrumb-chain">
+              <template for:each={visibleBreadcrumbs} for:item="bc">
+                <span key={bc.id} class="breadcrumb-item" title={bc.name}
+                  >{bc.name}</span
+                >
+                <span key={bc.sepId} class="breadcrumb-sep" aria-hidden="true"
+                  >›</span
+                >
+              </template>
+              <span class="breadcrumb-item breadcrumb-current"
+                >{selectedNode.Metadata_Name__c}</span
+              >
+            </div>
+            <template if:true={hasHiddenBreadcrumbs}>
+              <button
+                class="show-all-ancestors"
+                onclick={handleToggleAncestors}
+              >
+                {showAllAncestorsLabel}
+              </button>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <!-- Footer actions -->
+      <div class="panel-footer">
+        <button
+          class={setupButtonClass}
+          onclick={handleOpenInSetup}
+          aria-disabled={setupButtonAriaDisabled}
+          title={setupButtonTitle}
+          aria-label="Open in Setup"
+        >
+          <lightning-icon
+            icon-name="utility:settings"
+            size="x-small"
+            aria-hidden="true"
+          ></lightning-icon>
+          Open in Setup
+        </button>
+
+        <button
+          class="slds-button slds-button_neutral copy-link-btn"
+          onclick={handleCopyLink}
+        >
+          <template if:false={_copyLinkSuccess}>
+            <lightning-icon
+              icon-name="utility:copy"
+              size="x-small"
+              aria-hidden="true"
+            ></lightning-icon>
+            Copy Link
+          </template>
+          <template if:true={_copyLinkSuccess}>
+            <lightning-icon
+              icon-name="utility:check"
+              size="x-small"
+              aria-hidden="true"
+            ></lightning-icon>
+            Link copied!
+          </template>
+        </button>
+
+        <span
+          aria-live="polite"
+          class="slds-assistive-text copy-link-live"
+        ></span>
+      </div>
+    </div>
+  </template>
 </template>

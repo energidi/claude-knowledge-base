@@ -1,43 +1,43 @@
 .export-container {
-    padding: var(--slds-g-spacing-2, 0.5rem) 0;
+  padding: var(--slds-g-spacing-2, 0.5rem) 0;
 }
 
 .export-primary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .export-count {
-    font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
-    color: var(--slds-g-color-neutral-base-30, #706e6b);
-    margin: var(--slds-g-spacing-2, 0.5rem) 0 0;
+  font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
+  color: var(--slds-g-color-neutral-base-30, #706e6b);
+  margin: var(--slds-g-spacing-2, 0.5rem) 0 0;
 }
 
 .export-advanced {
-    margin-top: var(--slds-g-spacing-4, 1rem);
+  margin-top: var(--slds-g-spacing-4, 1rem);
 }
 
 .toggle-advanced {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: var(--slds-g-font-scale-base, 0.8125rem);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--slds-g-font-scale-base, 0.8125rem);
 }
 
 .advanced-content {
-    margin-top: var(--slds-g-spacing-2, 0.5rem);
-    padding: var(--slds-g-spacing-3, 0.75rem);
-    background: var(--slds-g-color-neutral-base-95, #f3f2f2);
-    border-radius: var(--slds-g-radius-border-1, 4px);
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+  margin-top: var(--slds-g-spacing-2, 0.5rem);
+  padding: var(--slds-g-spacing-3, 0.75rem);
+  background: var(--slds-g-color-neutral-base-95, #f3f2f2);
+  border-radius: var(--slds-g-radius-border-1, 4px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .advanced-note {
-    font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
-    color: var(--slds-g-color-neutral-base-30, #706e6b);
-    margin: 0;
+  font-size: var(--slds-g-font-scale-neg-1, 0.75rem);
+  color: var(--slds-g-color-neutral-base-30, #706e6b);
+  margin: 0;
 }

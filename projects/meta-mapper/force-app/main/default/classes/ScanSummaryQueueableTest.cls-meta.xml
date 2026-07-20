@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Unit tests for ScanSummaryQueueable. Covers the Status guard (non-Completed job exits immediately without updating Scan_Summary_Text__c) and Component_Type_Counts__c JSON parsing for plain-English summary generation.</description>
+    <description
+  >Unit tests for ScanSummaryQueueable. Covers the Status guard (non-Completed job exits immediately without updating Scan_Summary_Text__c) and Component_Type_Counts__c JSON parsing for plain-English summary generation.</description>
     <status>Active</status>
 </ApexClass>

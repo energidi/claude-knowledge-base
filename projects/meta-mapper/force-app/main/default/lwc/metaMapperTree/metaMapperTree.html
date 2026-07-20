@@ -1,160 +1,196 @@
 <template>
-    <!-- backdrop to close context menu on outside click -->
-    <template if:true={_contextMenu}>
-        <div class="context-backdrop" onclick={handleBackdropClick}></div>
+  <!-- backdrop to close context menu on outside click -->
+  <template if:true={_contextMenu}>
+    <div class="context-backdrop" onclick={handleBackdropClick}></div>
+  </template>
+
+  <div class="tree-root" onkeydown={handleKeyDown}>
+    <!-- Search bar -->
+    <div class="search-bar">
+      <lightning-input
+        type="search"
+        label="Search components"
+        variant="label-hidden"
+        placeholder="Search components..."
+        value={_searchTerm}
+        onchange={handleSearch}
+        class="search-input"
+      ></lightning-input>
+      <template if:true={hasSearchTerm}>
+        <lightning-button-icon
+          icon-name="utility:clear"
+          alternative-text="Clear search"
+          title="Clear search"
+          size="small"
+          variant="bare"
+          onclick={handleClearSearch}
+          class="clear-btn"
+        ></lightning-button-icon>
+      </template>
+      <span aria-live="polite" class="slds-assistive-text"
+        >{_locatingText}</span
+      >
+      <template if:true={_locatingNode}>
+        <span class="locating-indicator" aria-hidden="true"
+          >Locating node...</span
+        >
+      </template>
+    </div>
+
+    <!-- Filter-empty state: nodes exist but all filtered out -->
+    <template if:true={showFilterEmpty}>
+      <div class="filter-empty-state" role="status">
+        <lightning-icon
+          icon-name="utility:filter"
+          size="medium"
+          aria-hidden="true"
+        ></lightning-icon>
+        <p class="filter-empty-title">
+          No components match your current filters.
+        </p>
+        <p class="filter-empty-body">
+          Try adjusting your type, level, or confidence filters to see results.
+        </p>
+      </div>
     </template>
 
-    <div class="tree-root" onkeydown={handleKeyDown}>
-        <!-- Search bar -->
-        <div class="search-bar">
-            <lightning-input
-                type="search"
-                label="Search components"
-                variant="label-hidden"
-                placeholder="Search components..."
-                value={_searchTerm}
-                onchange={handleSearch}
-                class="search-input"
-            ></lightning-input>
-            <template if:true={hasSearchTerm}>
-                <lightning-button-icon
-                    icon-name="utility:clear"
-                    alternative-text="Clear search"
-                    title="Clear search"
-                    size="small"
-                    variant="bare"
-                    onclick={handleClearSearch}
-                    class="clear-btn"
-                ></lightning-button-icon>
-            </template>
-            <span aria-live="polite" class="slds-assistive-text">{_locatingText}</span>
-            <template if:true={_locatingNode}>
-                <span class="locating-indicator" aria-hidden="true">Locating node...</span>
-            </template>
-        </div>
-
-        <!-- Filter-empty state: nodes exist but all filtered out -->
-        <template if:true={showFilterEmpty}>
-            <div class="filter-empty-state" role="status">
-                <lightning-icon icon-name="utility:filter" size="medium" aria-hidden="true"></lightning-icon>
-                <p class="filter-empty-title">No components match your current filters.</p>
-                <p class="filter-empty-body">Try adjusting your type, level, or confidence filters to see results.</p>
-            </div>
-        </template>
-
-        <!-- Scroll container with role="tree" -->
-        <div
-            class="tree-scroll-container"
-            role="tree"
-            aria-label="Dependency tree"
-            tabindex="0"
-            onscroll={handleScroll}
-        >
-            <div style={spacerStyle}>
-                <div style={offsetStyle}>
-                    <template for:each={visibleRows} for:item="row">
-                        <div
-                            key={row.Id}
-                            role="treeitem"
-                            class={row.rowClass}
-                            aria-level={row.ariaLevel}
-                            aria-expanded={row.ariaExpanded}
-                            aria-selected={row.ariaSelected}
-                            data-node-id={row.Metadata_Id__c}
-                            tabindex={row.tabIndex}
-                            style={row.indentStyle}
-                            onclick={handleRowClick}
-                            oncontextmenu={handleRightClick}
-                            onkeydown={handleRowKeyDown}
-                        >
-                            <!-- Chevron -->
-                            <template if:true={row.hasChildren}>
-                                <span
-                                    class="chevron-btn"
-                                    data-node-id={row.Metadata_Id__c}
-                                    onclick={handleChevronClick}
-                                    role="button"
-                                    tabindex="-1"
-                                    aria-label="Toggle expand"
-                                >
-                                    <template if:true={row.isExpanded}>
-                                        <lightning-icon
-                                            icon-name="utility:chevrondown"
-                                            size="x-small"
-                                            class="chevron-icon"
-                                        ></lightning-icon>
-                                    </template>
-                                    <template if:false={row.isExpanded}>
-                                        <lightning-icon
-                                            icon-name="utility:chevronright"
-                                            size="x-small"
-                                            class="chevron-icon"
-                                        ></lightning-icon>
-                                    </template>
-                                </span>
-                            </template>
-                            <template if:false={row.hasChildren}>
-                                <span class="chevron-placeholder"></span>
-                            </template>
-
-                            <!-- Type icon -->
-                            <lightning-icon
-                                icon-name={row.icon}
-                                size="x-small"
-                                class="type-icon"
-                                alternative-text={row.Metadata_Type__c}
-                                title={row.Metadata_Type__c}
-                            ></lightning-icon>
-
-                            <!-- Label (segments computed in JS so search matches can be wrapped in <mark>) -->
-                            <span class="node-label" title={row.Metadata_Name__c}>
-                                <template for:each={row.nameSegments} for:item="seg">
-                                    <template if:true={seg.isMatch}>
-                                        <mark key={seg.key}>{seg.text}</mark>
-                                    </template>
-                                    <template if:false={seg.isMatch}>
-                                        <span key={seg.key}>{seg.text}</span>
-                                    </template>
-                                </template>
-                            </span>
-
-                            <!-- Badges -->
-                            <template if:true={row.Is_Circular__c}>
-                                <lightning-icon
-                                    icon-name="utility:rotate"
-                                    size="x-small"
-                                    class="badge-icon badge-circular"
-                                    alternative-text="Circular dependency"
-                                    title="Circular dependency"
-                                ></lightning-icon>
-                            </template>
-                            <template if:true={row.Is_Dynamic_Reference__c}>
-                                <lightning-icon
-                                    icon-name="utility:warning"
-                                    size="x-small"
-                                    class="badge-icon badge-dynamic"
-                                    alternative-text="Dynamic reference - verify manually"
-                                    title="Dynamic reference - verify manually"
-                                ></lightning-icon>
-                            </template>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-
-        <!-- Context menu -->
-        <template if:true={_contextMenu}>
+    <!-- Scroll container with role="tree" -->
+    <div
+      class="tree-scroll-container"
+      role="tree"
+      aria-label="Dependency tree"
+      tabindex="0"
+      onscroll={handleScroll}
+    >
+      <div style={spacerStyle}>
+        <div style={offsetStyle}>
+          <template for:each={visibleRows} for:item="row">
             <div
-                class="context-menu"
-                style={contextMenuStyle}
-                role="menu"
-                onkeydown={handleMenuKeyDown}
+              key={row.Id}
+              role="treeitem"
+              class={row.rowClass}
+              aria-level={row.ariaLevel}
+              aria-expanded={row.ariaExpanded}
+              aria-selected={row.ariaSelected}
+              data-node-id={row.Metadata_Id__c}
+              tabindex={row.tabIndex}
+              style={row.indentStyle}
+              onclick={handleRowClick}
+              oncontextmenu={handleRightClick}
+              onkeydown={handleRowKeyDown}
             >
-                <div role="menuitem" tabindex="0" class="menu-item" onclick={handleCopyApiName} onkeydown={handleTreeMenuItemKeyDown}>Copy API Name</div>
-                <div role="menuitem" tabindex="-1" class="menu-item" onclick={handleCollapseSubtree} onkeydown={handleTreeMenuItemKeyDown}>{collapseSubtreeLabel}</div>
-                <div role="menuitem" tabindex="-1" class="menu-item" onclick={handleViewInGraph} onkeydown={handleTreeMenuItemKeyDown}>View path in Graph</div>
+              <!-- Chevron -->
+              <template if:true={row.hasChildren}>
+                <span
+                  class="chevron-btn"
+                  data-node-id={row.Metadata_Id__c}
+                  onclick={handleChevronClick}
+                  role="button"
+                  tabindex="-1"
+                  aria-label="Toggle expand"
+                >
+                  <template if:true={row.isExpanded}>
+                    <lightning-icon
+                      icon-name="utility:chevrondown"
+                      size="x-small"
+                      class="chevron-icon"
+                    ></lightning-icon>
+                  </template>
+                  <template if:false={row.isExpanded}>
+                    <lightning-icon
+                      icon-name="utility:chevronright"
+                      size="x-small"
+                      class="chevron-icon"
+                    ></lightning-icon>
+                  </template>
+                </span>
+              </template>
+              <template if:false={row.hasChildren}>
+                <span class="chevron-placeholder"></span>
+              </template>
+
+              <!-- Type icon -->
+              <lightning-icon
+                icon-name={row.icon}
+                size="x-small"
+                class="type-icon"
+                alternative-text={row.Metadata_Type__c}
+                title={row.Metadata_Type__c}
+              ></lightning-icon>
+
+              <!-- Label (segments computed in JS so search matches can be wrapped in <mark>) -->
+              <span class="node-label" title={row.Metadata_Name__c}>
+                <template for:each={row.nameSegments} for:item="seg">
+                  <template if:true={seg.isMatch}>
+                    <mark key={seg.key}>{seg.text}</mark>
+                  </template>
+                  <template if:false={seg.isMatch}>
+                    <span key={seg.key}>{seg.text}</span>
+                  </template>
+                </template>
+              </span>
+
+              <!-- Badges -->
+              <template if:true={row.Is_Circular__c}>
+                <lightning-icon
+                  icon-name="utility:rotate"
+                  size="x-small"
+                  class="badge-icon badge-circular"
+                  alternative-text="Circular dependency"
+                  title="Circular dependency"
+                ></lightning-icon>
+              </template>
+              <template if:true={row.Is_Dynamic_Reference__c}>
+                <lightning-icon
+                  icon-name="utility:warning"
+                  size="x-small"
+                  class="badge-icon badge-dynamic"
+                  alternative-text="Dynamic reference - verify manually"
+                  title="Dynamic reference - verify manually"
+                ></lightning-icon>
+              </template>
             </div>
-        </template>
+          </template>
+        </div>
+      </div>
     </div>
+
+    <!-- Context menu -->
+    <template if:true={_contextMenu}>
+      <div
+        class="context-menu"
+        style={contextMenuStyle}
+        role="menu"
+        onkeydown={handleMenuKeyDown}
+      >
+        <div
+          role="menuitem"
+          tabindex="0"
+          class="menu-item"
+          onclick={handleCopyApiName}
+          onkeydown={handleTreeMenuItemKeyDown}
+        >
+          Copy API Name
+        </div>
+        <div
+          role="menuitem"
+          tabindex="-1"
+          class="menu-item"
+          onclick={handleCollapseSubtree}
+          onkeydown={handleTreeMenuItemKeyDown}
+        >
+          {collapseSubtreeLabel}
+        </div>
+        <div
+          role="menuitem"
+          tabindex="-1"
+          class="menu-item"
+          onclick={handleViewInGraph}
+          onkeydown={handleTreeMenuItemKeyDown}
+        >
+          View path in Graph
+        </div>
+      </div>
+    </template>
+  </div>
 </template>

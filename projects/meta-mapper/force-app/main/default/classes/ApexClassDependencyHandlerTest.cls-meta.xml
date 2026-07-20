@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Unit tests for ApexClassDependencyHandler. Covers findSupplemental() input handling (empty, null, blank-name nodes) and confirms the CMT entity scan completes without throwing for a valid ApexClass node.</description>
+    <description
+  >Unit tests for ApexClassDependencyHandler. Covers findSupplemental() input handling (empty, null, blank-name nodes) and confirms the CMT entity scan completes without throwing for a valid ApexClass node.</description>
     <status>Active</status>
 </ApexClass>

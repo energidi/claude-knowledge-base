@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Unit tests for DependencyTypeHandlerFactory. Covers handler routing per metadata type, case-insensitive lookup, and the no-op fallback for unregistered/null types.</description>
+    <description
+  >Unit tests for DependencyTypeHandlerFactory. Covers handler routing per metadata type, case-insensitive lookup, and the no-op fallback for unregistered/null types.</description>
     <status>Active</status>
 </ApexClass>

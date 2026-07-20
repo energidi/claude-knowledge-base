@@ -1,8 +1,9 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Min_Free_Storage_MB__c</fullName>
-    <description>Minimum free data storage in megabytes required before a new scan is accepted. Checked at scan submission using org storage limits. If free storage is below this value the scan is rejected with a clear message. Default: 50MB.</description>
-    <label>Minimum Free Storage (MB)</label>
+    <description
+  >Minimum free data storage in megabytes required before a new scan is accepted. Checked at scan submission using org storage limits. If free storage is below this value the scan is rejected with a clear message. Default: 50MB.</description>
+    <label>Minimum free storage required (MB)</label>
     <precision>10</precision>
     <required>false</required>
     <scale>0</scale>

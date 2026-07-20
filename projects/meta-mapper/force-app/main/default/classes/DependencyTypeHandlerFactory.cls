@@ -24,59 +24,63 @@
  *
  */
 public without sharing class DependencyTypeHandlerFactory {
+  private static final IDependencyTypeHandler NO_OP = new NoOpHandler();
 
-    private static final IDependencyTypeHandler NO_OP = new NoOpHandler();
+  // Lazy-initialized handler cache: populated on first getHandler() call per type
+  private static final Map<String, IDependencyTypeHandler> HANDLER_CACHE = new Map<String, IDependencyTypeHandler>();
 
-    // Lazy-initialized handler cache: populated on first getHandler() call per type
-    private static final Map<String, IDependencyTypeHandler> HANDLER_CACHE =
-        new Map<String, IDependencyTypeHandler>();
-
-    /**
-     * Returns the registered handler for the given metadata type,
-     * or a no-op handler if no registration exists.
-     * Handler instances are cached after first creation.
-     *
-     * @param metadataType  Metadata type string (e.g. 'CustomField', 'ApexClass')
-     * @return              IDependencyTypeHandler - never null
-     */
-    public IDependencyTypeHandler getHandler(String metadataType) {
-        // Normalize to lowercase so 'CustomField' and 'customfield' resolve to the same handler.
-        // The Tooling API returns type names in PascalCase, but defensive normalization prevents
-        // duplicate cache entries if callers pass inconsistently-cased type strings.
-        String normalizedType = metadataType != null ? metadataType.toLowerCase() : '';
-        if (HANDLER_CACHE.containsKey(normalizedType)) {
-            return HANDLER_CACHE.get(normalizedType);
-        }
-        IDependencyTypeHandler handler = instantiate(normalizedType);
-        if (handler != null) {
-            HANDLER_CACHE.put(normalizedType, handler);
-            return handler;
-        }
-        // Cache NO_OP for this type to avoid re-evaluating on every future call
-        HANDLER_CACHE.put(normalizedType, NO_OP);
-        return NO_OP;
+  /**
+   * Returns the registered handler for the given metadata type,
+   * or a no-op handler if no registration exists.
+   * Handler instances are cached after first creation.
+   *
+   * @param metadataType  Metadata type string (e.g. 'CustomField', 'ApexClass')
+   * @return              IDependencyTypeHandler - never null
+   */
+  public IDependencyTypeHandler getHandler(String metadataType) {
+    // Normalize to lowercase so 'CustomField' and 'customfield' resolve to the same handler.
+    // The Tooling API returns type names in PascalCase, but defensive normalization prevents
+    // duplicate cache entries if callers pass inconsistently-cased type strings.
+    String normalizedType = metadataType != null
+      ? metadataType.toLowerCase()
+      : '';
+    if (HANDLER_CACHE.containsKey(normalizedType)) {
+      return HANDLER_CACHE.get(normalizedType);
     }
-
-    private IDependencyTypeHandler instantiate(String normalizedType) {
-        if (normalizedType == 'customfield')  return new CustomFieldDependencyHandler();
-        if (normalizedType == 'apexclass')    return new ApexClassDependencyHandler();
-        if (normalizedType == 'apextrigger')  return new ApexClassDependencyHandler();
-        if (normalizedType == 'flow')         return new FlowDependencyHandler();
-        return null;
+    IDependencyTypeHandler handler = instantiate(normalizedType);
+    if (handler != null) {
+      HANDLER_CACHE.put(normalizedType, handler);
+      return handler;
     }
+    // Cache NO_OP for this type to avoid re-evaluating on every future call
+    HANDLER_CACHE.put(normalizedType, NO_OP);
+    return NO_OP;
+  }
 
-    /**
-     * No-op handler returned for metadata types with no registered supplemental logic.
-     * Returns an empty SupplementalScanResult - the engine treats this as "no supplemental
-     * dependencies found". Cached after first miss so instantiation is not repeated
-     * for every unregistered type encountered in the same Queueable execution.
-     */
-    private class NoOpHandler implements IDependencyTypeHandler {
-        public SupplementalScanResult findSupplemental(
-            Id jobId,
-            List<Metadata_Dependency__c> nodesOfType
-        ) {
-            return new SupplementalScanResult();
-        }
+  private IDependencyTypeHandler instantiate(String normalizedType) {
+    if (normalizedType == 'customfield')
+      return new CustomFieldDependencyHandler();
+    if (normalizedType == 'apexclass')
+      return new ApexClassDependencyHandler();
+    if (normalizedType == 'apextrigger')
+      return new ApexClassDependencyHandler();
+    if (normalizedType == 'flow')
+      return new FlowDependencyHandler();
+    return null;
+  }
+
+  /**
+   * No-op handler returned for metadata types with no registered supplemental logic.
+   * Returns an empty SupplementalScanResult - the engine treats this as "no supplemental
+   * dependencies found". Cached after first miss so instantiation is not repeated
+   * for every unregistered type encountered in the same Queueable execution.
+   */
+  private class NoOpHandler implements IDependencyTypeHandler {
+    public SupplementalScanResult findSupplemental(
+      Id jobId,
+      List<Metadata_Dependency__c> nodesOfType
+    ) {
+      return new SupplementalScanResult();
     }
+  }
 }

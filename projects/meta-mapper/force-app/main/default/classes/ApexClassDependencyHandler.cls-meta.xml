@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Supplemental handler for ApexClass nodes. Finds Custom Metadata Type references not returned by MetadataComponentDependency (85% confidence). Flags Is_Dynamic_Reference__c = true on dynamic Apex string references that cannot be statically resolved. Implements IDependencyTypeHandler.</description>
+    <description
+  >Supplemental handler for ApexClass nodes. Finds Custom Metadata Type references not returned by MetadataComponentDependency (85% confidence). Flags Is_Dynamic_Reference__c = true on dynamic Apex string references that cannot be statically resolved. Implements IDependencyTypeHandler.</description>
     <status>Active</status>
 </ApexClass>

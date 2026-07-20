@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>MetaMapper home page. Hosts the metaMapperApp Lightning web component for metadata dependency analysis. Requires the MetaMapper Admin permission set. See setup/SETUP.md for post-install configuration steps.</description>
+    <description
+  >MetaMapper home page. Hosts the metaMapperApp Lightning web component for metadata dependency analysis. Requires the MetaMapper Admin permission set. See setup/SETUP.md for post-install configuration steps.</description>
     <masterLabel>MetaMapper Home</masterLabel>
     <pageType>AppPage</pageType>
     <flexiPageRegions>

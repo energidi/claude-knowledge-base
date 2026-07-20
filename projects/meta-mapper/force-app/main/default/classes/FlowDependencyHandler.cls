@@ -38,28 +38,27 @@
  *
  */
 public without sharing class FlowDependencyHandler implements IDependencyTypeHandler {
-
-    public SupplementalScanResult findSupplemental(
-        Id jobId,
-        List<Metadata_Dependency__c> nodesOfType
-    ) {
-        SupplementalScanResult result = new SupplementalScanResult();
-        if (nodesOfType == null || nodesOfType.isEmpty()) {
-            return result;
-        }
-
-        // Known gap notice: subflow parent detection requires Tooling API XML parsing,
-        // which is not yet implemented. Emitted on every call; appendErrorsSafe deduplicates
-        // the base message at the Scan_Diagnostic_Log__c write layer, consistent with how
-        // CustomFieldDependencyHandler handles its deferred-gap notice. No static Set required.
-        result.addError(
-            'FlowDependencyHandler: subflow parent detection (SubFlow XML elements) is not implemented. '
-            + 'Active-version subflow edges are covered by MetadataComponentDependency. '
-            + 'Inactive-version subflow edges and any gaps in the Tooling API path may be missing.'
-        );
-
-        // No supplemental SOQL queries are currently implemented for Flow.
-        // Future: SubFlow element detection via FlowElement Tooling API query.
-        return result;
+  public SupplementalScanResult findSupplemental(
+    Id jobId,
+    List<Metadata_Dependency__c> nodesOfType
+  ) {
+    SupplementalScanResult result = new SupplementalScanResult();
+    if (nodesOfType == null || nodesOfType.isEmpty()) {
+      return result;
     }
+
+    // Known gap notice: subflow parent detection requires Tooling API XML parsing,
+    // which is not yet implemented. Emitted on every call; appendErrorsSafe deduplicates
+    // the base message at the Scan_Diagnostic_Log__c write layer, consistent with how
+    // CustomFieldDependencyHandler handles its deferred-gap notice. No static Set required.
+    result.addError(
+      'FlowDependencyHandler: subflow parent detection (SubFlow XML elements) is not implemented. ' +
+        'Active-version subflow edges are covered by MetadataComponentDependency. ' +
+        'Inactive-version subflow edges and any gaps in the Tooling API path may be missing.'
+    );
+
+    // No supplemental SOQL queries are currently implemented for Flow.
+    // Future: SubFlow element detection via FlowElement Tooling API query.
+    return result;
+  }
 }

@@ -30,217 +30,247 @@
  *
  */
 public without sharing class MetadataTypeDescribeService {
+  /**
+   * CMT field name suffixes conventionally used to store custom field API name references.
+   * Centralised here so CustomFieldDependencyHandler and any future field-scanning handler share
+   * one definition - a suffix added here is automatically picked up by all consumers.
+   */
+  public static final Set<String> CMT_FIELD_REF_SUFFIXES = new Set<String>{
+    'field__c',
+    'lookup__c',
+    'field_api_name__c',
+    'field_name__c'
+  };
 
-    /**
-     * CMT field name suffixes conventionally used to store custom field API name references.
-     * Centralised here so CustomFieldDependencyHandler and any future field-scanning handler share
-     * one definition - a suffix added here is automatically picked up by all consumers.
-     */
-    public static final Set<String> CMT_FIELD_REF_SUFFIXES = new Set<String>{
-        'field__c', 'lookup__c', 'field_api_name__c', 'field_name__c'
-    };
+  /**
+   * CMT field name suffixes conventionally used to store Apex class name references.
+   * Used by ApexClassDependencyHandler; separated from CMT_FIELD_REF_SUFFIXES because the two
+   * sets scan for different dependency types and must not be mixed.
+   */
+  public static final Set<String> CMT_CLASS_REF_SUFFIXES = new Set<String>{
+    'class__c',
+    'handler__c',
+    'type__c',
+    'instance__c'
+  };
 
-    /**
-     * CMT field name suffixes conventionally used to store Apex class name references.
-     * Used by ApexClassDependencyHandler; separated from CMT_FIELD_REF_SUFFIXES because the two
-     * sets scan for different dependency types and must not be mixed.
-     */
-    public static final Set<String> CMT_CLASS_REF_SUFFIXES = new Set<String>{
-        'class__c', 'handler__c', 'type__c', 'instance__c'
-    };
+  private static List<EntityDefinition> cachedCmtEntities;
+  private static Map<String, Map<String, Schema.SObjectField>> cachedFieldMaps;
+  // Collects describe failure messages from getFieldMap() and preloadFieldMaps() catch blocks.
+  // Callers drain this list after preload/describe calls via drainDescribeErrors() and add
+  // the messages to SupplementalScanResult.errors so they reach Scan_Diagnostic_Log__c.
+  private static List<String> describeFailed = new List<String>();
+  // Tracks entity names that already have a failure entry in describeFailed.
+  // Used in the preloadFieldMaps batch-failure fallback to skip entities that were already
+  // reported, preventing near-identical messages flooding Scan_Diagnostic_Log__c.
+  // Separate from describeFailed to avoid fragile string-parsing for dedup keying.
+  private static Set<String> failedEntityNames = new Set<String>();
+  // Guards against duplicate CPU-exceeded messages in the preloadFieldMaps fallback loop.
+  // Multiple batch-describe failures in the same execution can each trigger the CPU guard;
+  // without this flag the same message would accumulate in describeFailed once per failed chunk.
+  // Reset in clearCache() so tests start with a clean state.
+  private static Boolean fallbackCpuReported = false;
 
-    private static List<EntityDefinition>                        cachedCmtEntities;
-    private static Map<String, Map<String, Schema.SObjectField>> cachedFieldMaps;
-    // Collects describe failure messages from getFieldMap() and preloadFieldMaps() catch blocks.
-    // Callers drain this list after preload/describe calls via drainDescribeErrors() and add
-    // the messages to SupplementalScanResult.errors so they reach Scan_Diagnostic_Log__c.
-    private static List<String>  describeFailed     = new List<String>();
-    // Tracks entity names that already have a failure entry in describeFailed.
-    // Used in the preloadFieldMaps batch-failure fallback to skip entities that were already
-    // reported, preventing near-identical messages flooding Scan_Diagnostic_Log__c.
-    // Separate from describeFailed to avoid fragile string-parsing for dedup keying.
-    private static Set<String>   failedEntityNames  = new Set<String>();
-    // Guards against duplicate CPU-exceeded messages in the preloadFieldMaps fallback loop.
-    // Multiple batch-describe failures in the same execution can each trigger the CPU guard;
-    // without this flag the same message would accumulate in describeFailed once per failed chunk.
-    // Reset in clearCache() so tests start with a clean state.
-    private static Boolean       fallbackCpuReported = false;
-
-    /**
-     * Returns all Custom Metadata Type EntityDefinition records, cached for the current
-     * transaction. Both CustomFieldDependencyHandler and ApexClassDependencyHandler scan all CMT entities -
-     * this avoids two identical EntityDefinition queries per execution.
-     *
-     * @return  List of EntityDefinition records for all CMT types (%__mdt)
-     */
-    public static List<EntityDefinition> getCmtEntities() {
-        if (cachedCmtEntities == null) {
-            cachedCmtEntities = [
-                SELECT QualifiedApiName
-                FROM EntityDefinition
-                WHERE IsCustomizable = true
-                AND QualifiedApiName LIKE '%__mdt'
-                LIMIT 2000
-            ];
-        }
-        return cachedCmtEntities;
+  /**
+   * Returns all Custom Metadata Type EntityDefinition records, cached for the current
+   * transaction. Both CustomFieldDependencyHandler and ApexClassDependencyHandler scan all CMT entities -
+   * this avoids two identical EntityDefinition queries per execution.
+   *
+   * @return  List of EntityDefinition records for all CMT types (%__mdt)
+   */
+  public static List<EntityDefinition> getCmtEntities() {
+    if (cachedCmtEntities == null) {
+      cachedCmtEntities = [
+        SELECT QualifiedApiName
+        FROM EntityDefinition
+        WHERE IsCustomizable = TRUE AND QualifiedApiName LIKE '%__mdt'
+        LIMIT 2000
+      ];
+      // Truncation notice: unlike MAX_CMT_ENTITIES_PER_EXECUTION (which logs when it
+      // defers entities), this LIMIT was previously silent. In an org with more than
+      // 2,000 CMT entity definitions, entities beyond the cap are never scanned by any
+      // handler with no admin-visible signal that coverage is incomplete.
+      if (cachedCmtEntities.size() == 2000) {
+        describeFailed.add(
+          'MetadataTypeDescribeService.getCmtEntities: this org has 2,000 or more ' +
+            'Custom Metadata Type entity definitions; the EntityDefinition query LIMIT was reached. ' +
+            'Some CMT entities may not be scanned for dependencies.'
+        );
+      }
     }
+    return cachedCmtEntities;
+  }
 
-    /**
-     * Batch-warms the field map cache for a list of CMT entity names.
-     * Calls Schema.describeSObjects() in chunks of 100 (platform limit per call)
-     * so that the N handler-loop iterations that follow only hit the in-memory cache.
-     *
-     * Without this, each iteration calls getFieldMap() which issues one describeSObjects()
-     * per entity - O(N) expensive describe calls in the hot Queueable path. Calling this
-     * once before the loop converts N describes into ceil(N/100) batched calls.
-     *
-     * Already-cached entities are skipped. Safe to call multiple times.
-     *
-     * @param entityNames  QualifiedApiName list from getCmtEntities()
-     */
-    public static void preloadFieldMaps(List<String> entityNames) {
-        if (entityNames == null || entityNames.isEmpty()) {
-            return;
+  /**
+   * Batch-warms the field map cache for a list of CMT entity names.
+   * Calls Schema.describeSObjects() in chunks of 100 (platform limit per call)
+   * so that the N handler-loop iterations that follow only hit the in-memory cache.
+   *
+   * Without this, each iteration calls getFieldMap() which issues one describeSObjects()
+   * per entity - O(N) expensive describe calls in the hot Queueable path. Calling this
+   * once before the loop converts N describes into ceil(N/100) batched calls.
+   *
+   * Already-cached entities are skipped. Safe to call multiple times.
+   *
+   * @param entityNames  QualifiedApiName list from getCmtEntities()
+   */
+  public static void preloadFieldMaps(List<String> entityNames) {
+    if (entityNames == null || entityNames.isEmpty()) {
+      return;
+    }
+    if (cachedFieldMaps == null) {
+      cachedFieldMaps = new Map<String, Map<String, Schema.SObjectField>>();
+    }
+    List<String> toDescribe = new List<String>();
+    for (String name : entityNames) {
+      if (!cachedFieldMaps.containsKey(name)) {
+        toDescribe.add(name);
+      }
+    }
+    if (toDescribe.isEmpty()) {
+      return;
+    }
+    // Schema.describeSObjects accepts up to 100 types per call.
+    // Process in 100-name chunks and cache each result immediately.
+    Integer batchSize = 100;
+    for (Integer i = 0; i < toDescribe.size(); i += batchSize) {
+      List<String> chunk = new List<String>();
+      for (Integer j = i; j < Math.min(i + batchSize, toDescribe.size()); j++) {
+        chunk.add(toDescribe[j]);
+      }
+      try {
+        Schema.DescribeSObjectResult[] results = Schema.describeSObjects(chunk);
+        for (Integer k = 0; k < results.size(); k++) {
+          cachedFieldMaps.put(chunk[k], results[k].fields.getMap());
         }
-        if (cachedFieldMaps == null) {
-            cachedFieldMaps = new Map<String, Map<String, Schema.SObjectField>>();
-        }
-        List<String> toDescribe = new List<String>();
-        for (String name : entityNames) {
-            if (!cachedFieldMaps.containsKey(name)) {
-                toDescribe.add(name);
+      } catch (Exception e) {
+        // Batch failed (e.g. one namespace-protected type in chunk).
+        // Fall back to per-entity describe so one bad type doesn't block the rest.
+        // Note: this converts 1 batch call into up to chunk.size() individual calls.
+        // In orgs with many namespace-protected CMT types, this may add CPU pressure.
+        // Batch failed (e.g. one namespace-protected type). Log at debug only - do not
+        // add to describeFailed here. The fallback per-entity calls below will add their
+        // own failures to describeFailed if they also fail. Adding batchMsg unconditionally
+        // would produce a false alarm when per-entity fallback succeeds for all entities.
+        System.debug(
+          LoggingLevel.WARN,
+          'MetadataTypeDescribeService.preloadFieldMaps: batch describe failed for ' +
+            chunk.size() +
+            ' entities; falling back to per-entity describes. ' +
+            'Cause: ' +
+            e.getMessage()
+        );
+        // failedEntityNames is maintained by getFieldMap() catch blocks and tracks
+        // which entities have already produced a failure entry in describeFailed.
+        // This avoids the fragile string-parsing dedup that previously extracted
+        // entity names from formatted error message strings.
+        for (String name : chunk) {
+          // CPU guard: batch failure in an org with many namespace-protected CMT types
+          // can trigger N individual describe calls - one per entity in the chunk.
+          // Break early rather than consuming the remaining CPU budget.
+          if (
+            (Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= 0.70
+          ) {
+            // Emit the message at most once per transaction regardless of how many
+            // chunks trigger the CPU guard. Without this, one message per failed chunk
+            // accumulates in describeFailed and floods Scan_Diagnostic_Log__c.
+            if (!fallbackCpuReported) {
+              String cpuMsg =
+                'MetadataTypeDescribeService.preloadFieldMaps: CPU budget exceeded ' +
+                'during fallback per-entity describe; remaining entities in chunk skipped.';
+              System.debug(LoggingLevel.WARN, cpuMsg);
+              describeFailed.add(cpuMsg);
+              fallbackCpuReported = true;
             }
+            break;
+          }
+          if (
+            !cachedFieldMaps.containsKey(name) &&
+            !failedEntityNames.contains(name)
+          ) {
+            getFieldMap(name);
+          }
         }
-        if (toDescribe.isEmpty()) {
-            return;
-        }
-        // Schema.describeSObjects accepts up to 100 types per call.
-        // Process in 100-name chunks and cache each result immediately.
-        Integer batchSize = 100;
-        for (Integer i = 0; i < toDescribe.size(); i += batchSize) {
-            List<String> chunk = new List<String>();
-            for (Integer j = i; j < Math.min(i + batchSize, toDescribe.size()); j++) {
-                chunk.add(toDescribe[j]);
-            }
-            try {
-                Schema.DescribeSObjectResult[] results = Schema.describeSObjects(chunk);
-                for (Integer k = 0; k < results.size(); k++) {
-                    cachedFieldMaps.put(chunk[k], results[k].fields.getMap());
-                }
-            } catch (Exception e) {
-                // Batch failed (e.g. one namespace-protected type in chunk).
-                // Fall back to per-entity describe so one bad type doesn't block the rest.
-                // Note: this converts 1 batch call into up to chunk.size() individual calls.
-                // In orgs with many namespace-protected CMT types, this may add CPU pressure.
-                // Batch failed (e.g. one namespace-protected type). Log at debug only - do not
-                // add to describeFailed here. The fallback per-entity calls below will add their
-                // own failures to describeFailed if they also fail. Adding batchMsg unconditionally
-                // would produce a false alarm when per-entity fallback succeeds for all entities.
-                System.debug(LoggingLevel.WARN,
-                    'MetadataTypeDescribeService.preloadFieldMaps: batch describe failed for '
-                    + chunk.size() + ' entities; falling back to per-entity describes. '
-                    + 'Cause: ' + e.getMessage());
-                // failedEntityNames is maintained by getFieldMap() catch blocks and tracks
-                // which entities have already produced a failure entry in describeFailed.
-                // This avoids the fragile string-parsing dedup that previously extracted
-                // entity names from formatted error message strings.
-                for (String name : chunk) {
-                    // CPU guard: batch failure in an org with many namespace-protected CMT types
-                    // can trigger N individual describe calls - one per entity in the chunk.
-                    // Break early rather than consuming the remaining CPU budget.
-                    if ((Decimal) Limits.getCpuTime() / Limits.getLimitCpuTime() >= 0.70) {
-                        // Emit the message at most once per transaction regardless of how many
-                        // chunks trigger the CPU guard. Without this, one message per failed chunk
-                        // accumulates in describeFailed and floods Scan_Diagnostic_Log__c.
-                        if (!fallbackCpuReported) {
-                            String cpuMsg = 'MetadataTypeDescribeService.preloadFieldMaps: CPU budget exceeded '
-                                + 'during fallback per-entity describe; remaining entities in chunk skipped.';
-                            System.debug(LoggingLevel.WARN, cpuMsg);
-                            describeFailed.add(cpuMsg);
-                            fallbackCpuReported = true;
-                        }
-                        break;
-                    }
-                    if (!cachedFieldMaps.containsKey(name) && !failedEntityNames.contains(name)) {
-                        getFieldMap(name);
-                    }
-                }
-            }
-        }
+      }
     }
+  }
 
-    /**
-     * Returns the field map for a single CMT SObject type, using Schema.describeSObjects()
-     * scoped only to the requested type. Results are cached per entity name.
-     *
-     * Replaces the former getGlobalDescribe() approach which loaded every object in the org.
-     * Schema.describeSObjects(List<String>) describes only the specified types, keeping
-     * CPU and heap consumption proportional to the number of CMT types actually scanned.
-     *
-     * Prefer calling preloadFieldMaps() once before iterating over many entities rather
-     * than calling this method in a loop - that batches the describe cost into ceil(N/100)
-     * calls instead of N individual calls.
-     *
-     * @param entityName  QualifiedApiName of the CMT type (e.g. 'MyConfig__mdt')
-     * @return            Map of field API name (lowercase) to SObjectField, or null if
-     *                    the entity is not describable
-     */
-    public static Map<String, Schema.SObjectField> getFieldMap(String entityName) {
-        if (cachedFieldMaps == null) {
-            cachedFieldMaps = new Map<String, Map<String, Schema.SObjectField>>();
-        }
-        if (!cachedFieldMaps.containsKey(entityName)) {
-            try {
-                Schema.DescribeSObjectResult[] results = Schema.describeSObjects(
-                    new List<String>{ entityName }
-                );
-                cachedFieldMaps.put(
-                    entityName,
-                    results != null && !results.isEmpty()
-                        ? results[0].fields.getMap()
-                        : null
-                );
-            } catch (Exception e) {
-                // Entity not describable (e.g. namespace-protected); treat as no fields.
-                // Failure is recorded in describeFailed so callers can surface it to
-                // Scan_Diagnostic_Log__c via drainDescribeErrors() - previously silent.
-                String failMsg = 'MetadataTypeDescribeService: could not describe entity "'
-                    + entityName + '": ' + e.getMessage()
-                    + '. CMT fields for this entity will not be scanned.';
-                System.debug(LoggingLevel.WARN, failMsg);
-                describeFailed.add(failMsg);
-                failedEntityNames.add(entityName);
-                cachedFieldMaps.put(entityName, null);
-            }
-        }
-        return cachedFieldMaps.get(entityName);
+  /**
+   * Returns the field map for a single CMT SObject type, using Schema.describeSObjects()
+   * scoped only to the requested type. Results are cached per entity name.
+   *
+   * Replaces the former getGlobalDescribe() approach which loaded every object in the org.
+   * Schema.describeSObjects(List<String>) describes only the specified types, keeping
+   * CPU and heap consumption proportional to the number of CMT types actually scanned.
+   *
+   * Prefer calling preloadFieldMaps() once before iterating over many entities rather
+   * than calling this method in a loop - that batches the describe cost into ceil(N/100)
+   * calls instead of N individual calls.
+   *
+   * @param entityName  QualifiedApiName of the CMT type (e.g. 'MyConfig__mdt')
+   * @return            Map of field API name (lowercase) to SObjectField, or null if
+   *                    the entity is not describable
+   */
+  public static Map<String, Schema.SObjectField> getFieldMap(
+    String entityName
+  ) {
+    if (cachedFieldMaps == null) {
+      cachedFieldMaps = new Map<String, Map<String, Schema.SObjectField>>();
     }
+    if (!cachedFieldMaps.containsKey(entityName)) {
+      try {
+        Schema.DescribeSObjectResult[] results = Schema.describeSObjects(
+          new List<String>{ entityName }
+        );
+        cachedFieldMaps.put(
+          entityName,
+          results != null && !results.isEmpty()
+            ? results[0].fields.getMap()
+            : null
+        );
+      } catch (Exception e) {
+        // Entity not describable (e.g. namespace-protected); treat as no fields.
+        // Failure is recorded in describeFailed so callers can surface it to
+        // Scan_Diagnostic_Log__c via drainDescribeErrors() - previously silent.
+        String failMsg =
+          'MetadataTypeDescribeService: could not describe entity "' +
+          entityName +
+          '": ' +
+          e.getMessage() +
+          '. CMT fields for this entity will not be scanned.';
+        System.debug(LoggingLevel.WARN, failMsg);
+        describeFailed.add(failMsg);
+        failedEntityNames.add(entityName);
+        cachedFieldMaps.put(entityName, null);
+      }
+    }
+    return cachedFieldMaps.get(entityName);
+  }
 
-    /**
-     * Returns and clears all describe failure messages accumulated since the last drain.
-     * Call this after preloadFieldMaps() and after the entity loop to retrieve any
-     * describe failures and add them to SupplementalScanResult.errors for user visibility.
-     *
-     * @return  List of failure messages (may be empty); list is cleared on return.
-     */
-    public static List<String> drainDescribeErrors() {
-        List<String> drained = describeFailed.clone();
-        describeFailed.clear();
-        return drained;
-    }
+  /**
+   * Returns and clears all describe failure messages accumulated since the last drain.
+   * Call this after preloadFieldMaps() and after the entity loop to retrieve any
+   * describe failures and add them to SupplementalScanResult.errors for user visibility.
+   *
+   * @return  List of failure messages (may be empty); list is cleared on return.
+   */
+  public static List<String> drainDescribeErrors() {
+    List<String> drained = describeFailed.clone();
+    describeFailed.clear();
+    return drained;
+  }
 
-    /**
-     * Clears all static caches. Called only in test context to allow
-     * tests to inject different describe data between test methods.
-     * Never call this in production code.
-     */
-    @TestVisible
-    private static void clearCache() {
-        cachedCmtEntities   = null;
-        cachedFieldMaps     = null;
-        describeFailed      = new List<String>();
-        failedEntityNames   = new Set<String>();
-        fallbackCpuReported = false;
-    }
+  /**
+   * Clears all static caches. Called only in test context to allow
+   * tests to inject different describe data between test methods.
+   * Never call this in production code.
+   */
+  @TestVisible
+  private static void clearCache() {
+    cachedCmtEntities = null;
+    cachedFieldMaps = null;
+    describeFailed = new List<String>();
+    failedEntityNames = new Set<String>();
+    fallbackCpuReported = false;
+  }
 }

@@ -10,430 +10,556 @@
  */
 @IsTest
 private class DependencyJobControllerTest {
+  // -----------------------------------------------------------------------
+  // Test data helpers
+  // -----------------------------------------------------------------------
 
-    // -----------------------------------------------------------------------
-    // Test data helpers
-    // -----------------------------------------------------------------------
+  private static Metadata_Scan_Job__c buildJob(String status) {
+    Metadata_Scan_Job__c job = new Metadata_Scan_Job__c(
+      Target_Metadata_Type__c = 'ApexClass',
+      Target_API_Name__c = 'TestClass',
+      Status__c = status,
+      Components_Analyzed__c = 0,
+      Processing_Cycle_Count__c = 0,
+      Last_Progress_Cycle__c = 0,
+      Last_Query_Row_Count__c = 0
+    );
+    insert job;
+    return job;
+  }
 
-    private static Metadata_Scan_Job__c buildJob(String status) {
-        Metadata_Scan_Job__c job = new Metadata_Scan_Job__c(
-            Target_Metadata_Type__c    = 'ApexClass',
-            Target_API_Name__c         = 'TestClass',
-            Status__c                  = status,
-            Components_Analyzed__c     = 0,
-            Processing_Cycle_Count__c = 0,
-            Last_Progress_Cycle__c   = 0,
-            Last_Query_Row_Count__c       = 0
+  // -----------------------------------------------------------------------
+  // createJob - input validation
+  // -----------------------------------------------------------------------
+
+  @IsTest
+  static void createJob_blankType_throws() {
+    try {
+      DependencyJobController.createJob('', 'MyClass', null, false);
+      Assert.fail('Expected DependencyJobException');
+    } catch (DependencyJobException e) {
+      Assert.isTrue(
+        e.getMessage().contains('required'),
+        'Message should mention required'
+      );
+    }
+  }
+
+  @IsTest
+  static void createJob_blankApiName_throws() {
+    try {
+      DependencyJobController.createJob('ApexClass', '', null, false);
+      Assert.fail('Expected DependencyJobException');
+    } catch (DependencyJobException e) {
+      Assert.isTrue(
+        e.getMessage().contains('required'),
+        'Message should mention required'
+      );
+    }
+  }
+
+  @IsTest
+  static void createJob_unsupportedType_throws() {
+    try {
+      DependencyJobController.createJob('UnknownType', 'MyClass', null, false);
+      Assert.fail('Expected DependencyJobException');
+    } catch (DependencyJobException e) {
+      Assert.isTrue(
+        e.getMessage().contains('Unsupported'),
+        'Message should mention unsupported'
+      );
+    }
+  }
+
+  @IsTest
+  static void createJob_customFieldWithoutObject_throws() {
+    try {
+      DependencyJobController.createJob(
+        'CustomField',
+        'My_Field__c',
+        null,
+        false
+      );
+      Assert.fail('Expected DependencyJobException');
+    } catch (DependencyJobException e) {
+      Assert.isTrue(
+        e.getMessage().contains('Target Object'),
+        'Message should mention Target Object'
+      );
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // createJob - success path
+  // -----------------------------------------------------------------------
+
+  @IsTest
+  static void createJob_apexClass_returnsJobId() {
+    Test.startTest();
+    Id jobId = DependencyJobController.createJob(
+      'ApexClass',
+      'MyService',
+      null,
+      false
+    );
+    Test.stopTest();
+
+    Assert.isNotNull(jobId, 'Job ID should be returned');
+    List<Metadata_Scan_Job__c> jobs = [
+      SELECT Status__c, Target_Metadata_Type__c, Target_API_Name__c
+      FROM Metadata_Scan_Job__c
+      WHERE Id = :jobId
+    ];
+    Assert.areEqual(1, jobs.size(), 'One job record should exist');
+    Assert.areEqual('Initializing', jobs[0].Status__c);
+    Assert.areEqual('ApexClass', jobs[0].Target_Metadata_Type__c);
+  }
+
+  @IsTest
+  static void createJob_customField_buildsFullApiName() {
+    Test.startTest();
+    Id jobId = DependencyJobController.createJob(
+      'CustomField',
+      'My_Field__c',
+      'Account',
+      false
+    );
+    Test.stopTest();
+
+    List<Metadata_Dependency__c> roots = [
+      SELECT Metadata_Name__c
+      FROM Metadata_Dependency__c
+      WHERE Metadata_Scan_Job__c = :jobId
+    ];
+    Assert.areEqual(1, roots.size());
+    Assert.areEqual('Account.My_Field__c', roots[0].Metadata_Name__c);
+  }
+
+  @IsTest
+  static void createJob_activeFlowsOnly_null_defaultsFalse() {
+    Test.startTest();
+    Id jobId = DependencyJobController.createJob(
+      'ApexClass',
+      'MyClass',
+      null,
+      null
+    );
+    Test.stopTest();
+
+    Metadata_Scan_Job__c job = [
+      SELECT Is_Active_Flows_Only__c
+      FROM Metadata_Scan_Job__c
+      WHERE Id = :jobId
+    ];
+    Assert.areEqual(false, job.Is_Active_Flows_Only__c);
+  }
+
+  @IsTest
+  static void createJob_atConcurrencyLimit_throws() {
+    // Finding #11: the secondary soft-lock (countActiveJobRecords) rejects new scan
+    // submissions when active Metadata_Scan_Job__c records in Initializing/Processing
+    // status meet or exceed Max_Concurrent_Jobs__c (default CMDT value = 2). No
+    // AsyncApexJob rows exist in this test context, so the primary countActiveQueueables
+    // check passes and the secondary job-record check is the one that fires.
+    // Note: the Max_Concurrent_Jobs__c <= 0 kill-switch branch (DependencyJobController.cls
+    // lines 143-147) is not covered here - MetaMapper_Settings__mdt is read-only in unit
+    // tests (matches the same documented limitation in DependencyCleanupBatchTest), so a
+    // CMDT value of 0 cannot be injected without a live org record configured that way.
+    // This is intentionally left as documented-untestable rather than silently uncovered.
+    buildJob('Processing');
+    buildJob('Processing');
+
+    try {
+      DependencyJobController.createJob('ApexClass', 'MyClass', null, false);
+      Assert.fail(
+        'Expected DependencyJobException when at the concurrency limit'
+      );
+    } catch (DependencyJobException e) {
+      Assert.isTrue(
+        e.getMessage().contains('already running'),
+        'Message should mention that a scan is already running'
+      );
+    }
+  }
+
+  @IsTest
+  static void createJob_restrictedUser_userModeDenies() {
+    // No MetaMapper_Admin permission set assigned - Standard User profile grants no
+    // CRUD/FLS on Metadata_Scan_Job__c. Proves WITH USER_MODE / "insert as user"
+    // actually enforces access, rather than assuming it (the previous header comment
+    // claimed implicit USER_MODE validation despite zero runAs calls anywhere in this file).
+    Profile standardProfile = [
+      SELECT Id
+      FROM Profile
+      WHERE Name = 'Standard User'
+      LIMIT 1
+    ];
+    User restrictedUser = new User(
+      LastName = 'Restricted',
+      Email = 'metamapper.restricted@example.com',
+      Username = 'metamapper.restricted' +
+        DateTime.now().getTime() +
+        '@example.com',
+      Alias = 'mmrstr',
+      TimeZoneSidKey = 'America/Los_Angeles',
+      LocaleSidKey = 'en_US',
+      EmailEncodingKey = 'UTF-8',
+      LanguageLocaleKey = 'en_US',
+      ProfileId = standardProfile.Id
+    );
+    insert restrictedUser;
+
+    System.runAs(restrictedUser) {
+      try {
+        DependencyJobController.createJob('ApexClass', 'MyClass', null, false);
+        Assert.fail(
+          'Expected an access-denied exception when the running user lacks ' +
+          'CRUD/FLS on Metadata_Scan_Job__c'
         );
-        insert job;
-        return job;
-    }
-
-    // -----------------------------------------------------------------------
-    // createJob - input validation
-    // -----------------------------------------------------------------------
-
-    @IsTest
-    static void createJob_blankType_throws() {
-        try {
-            DependencyJobController.createJob('', 'MyClass', null, false);
-            Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('required'), 'Message should mention required');
-        }
-    }
-
-    @IsTest
-    static void createJob_blankApiName_throws() {
-        try {
-            DependencyJobController.createJob('ApexClass', '', null, false);
-            Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('required'), 'Message should mention required');
-        }
-    }
-
-    @IsTest
-    static void createJob_unsupportedType_throws() {
-        try {
-            DependencyJobController.createJob('UnknownType', 'MyClass', null, false);
-            Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('Unsupported'), 'Message should mention unsupported');
-        }
-    }
-
-    @IsTest
-    static void createJob_customFieldWithoutObject_throws() {
-        try {
-            DependencyJobController.createJob('CustomField', 'My_Field__c', null, false);
-            Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('Target Object'), 'Message should mention Target Object');
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // createJob - success path
-    // -----------------------------------------------------------------------
-
-    @IsTest
-    static void createJob_apexClass_returnsJobId() {
-        Test.startTest();
-        Id jobId = DependencyJobController.createJob('ApexClass', 'MyService', null, false);
-        Test.stopTest();
-
-        Assert.isNotNull(jobId, 'Job ID should be returned');
-        List<Metadata_Scan_Job__c> jobs = [
-            SELECT Status__c, Target_Metadata_Type__c, Target_API_Name__c
-            FROM Metadata_Scan_Job__c WHERE Id = :jobId
-        ];
-        Assert.areEqual(1, jobs.size(), 'One job record should exist');
-        Assert.areEqual('Initializing', jobs[0].Status__c);
-        Assert.areEqual('ApexClass', jobs[0].Target_Metadata_Type__c);
-    }
-
-    @IsTest
-    static void createJob_customField_buildsFullApiName() {
-        Test.startTest();
-        Id jobId = DependencyJobController.createJob('CustomField', 'My_Field__c', 'Account', false);
-        Test.stopTest();
-
-        List<Metadata_Dependency__c> roots = [
-            SELECT Metadata_Name__c FROM Metadata_Dependency__c WHERE Metadata_Scan_Job__c = :jobId
-        ];
-        Assert.areEqual(1, roots.size());
-        Assert.areEqual('Account.My_Field__c', roots[0].Metadata_Name__c);
-    }
-
-    @IsTest
-    static void createJob_activeFlowsOnly_null_defaultsFalse() {
-        Test.startTest();
-        Id jobId = DependencyJobController.createJob('ApexClass', 'MyClass', null, null);
-        Test.stopTest();
-
-        Metadata_Scan_Job__c job = [SELECT Is_Active_Flows_Only__c FROM Metadata_Scan_Job__c WHERE Id = :jobId];
-        Assert.areEqual(false, job.Is_Active_Flows_Only__c);
-    }
-
-    @IsTest
-    static void createJob_atConcurrencyLimit_throws() {
-        // Finding #11: the secondary soft-lock (countActiveJobRecords) rejects new scan
-        // submissions when active Metadata_Scan_Job__c records in Initializing/Processing
-        // status meet or exceed Max_Concurrent_Jobs__c (default CMDT value = 2). No
-        // AsyncApexJob rows exist in this test context, so the primary countActiveQueueables
-        // check passes and the secondary job-record check is the one that fires.
-        // Note: the Max_Concurrent_Jobs__c <= 0 kill-switch branch (DependencyJobController.cls
-        // lines 143-147) is not covered here - MetaMapper_Settings__mdt is read-only in unit
-        // tests (matches the same documented limitation in DependencyCleanupBatchTest), so a
-        // CMDT value of 0 cannot be injected without a live org record configured that way.
-        // This is intentionally left as documented-untestable rather than silently uncovered.
-        buildJob('Processing');
-        buildJob('Processing');
-
-        try {
-            DependencyJobController.createJob('ApexClass', 'MyClass', null, false);
-            Assert.fail('Expected DependencyJobException when at the concurrency limit');
-        } catch (DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('already running'),
-                'Message should mention that a scan is already running');
-        }
-    }
-
-    @IsTest
-    static void createJob_restrictedUser_userModeDenies() {
-        // No MetaMapper_Admin permission set assigned - Standard User profile grants no
-        // CRUD/FLS on Metadata_Scan_Job__c. Proves WITH USER_MODE / "insert as user"
-        // actually enforces access, rather than assuming it (the previous header comment
-        // claimed implicit USER_MODE validation despite zero runAs calls anywhere in this file).
-        Profile standardProfile = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
-        User restrictedUser = new User(
-            LastName          = 'Restricted',
-            Email             = 'metamapper.restricted@example.com',
-            Username          = 'metamapper.restricted' + DateTime.now().getTime() + '@example.com',
-            Alias             = 'mmrstr',
-            TimeZoneSidKey    = 'America/Los_Angeles',
-            LocaleSidKey      = 'en_US',
-            EmailEncodingKey  = 'UTF-8',
-            LanguageLocaleKey = 'en_US',
-            ProfileId         = standardProfile.Id
+      } catch (Exception e) {
+        Assert.isTrue(
+          e instanceof System.NoAccessException,
+          'insert as user should throw System.NoAccessException for a user without ' +
+            'MetaMapper_Admin access, got ' +
+            e.getTypeName()
         );
-        insert restrictedUser;
-
-        System.runAs(restrictedUser) {
-            try {
-                DependencyJobController.createJob('ApexClass', 'MyClass', null, false);
-                Assert.fail('Expected an access-denied exception when the running user lacks '
-                    + 'CRUD/FLS on Metadata_Scan_Job__c');
-            } catch (Exception e) {
-                Assert.isTrue(e instanceof System.NoAccessException,
-                    'insert as user should throw System.NoAccessException for a user without '
-                    + 'MetaMapper_Admin access, got ' + e.getTypeName());
-            }
-        }
+      }
     }
+  }
 
-    // -----------------------------------------------------------------------
-    // getJobStatus
-    // -----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // getJobStatus
+  // -----------------------------------------------------------------------
 
-    @IsTest
-    static void getJobStatus_returnsRecord() {
-        Metadata_Scan_Job__c job = buildJob('Processing');
-        DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(job.Id);
-        Assert.isNotNull(result);
-        Assert.areEqual('Processing', result.job.Status__c);
-        // batchSizeInUse/isPeSuppressionActive drive the Paused-banner batch-size display and the
-        // LWC's PE-suppressed polling fallback - both must be populated, not just Status__c.
-        Assert.areEqual(false, result.isPeSuppressionActive,
-            'Platform Events should not be suppressed with default CMDT settings');
-        Assert.areEqual(50, result.batchSizeInUse,
-            'batchSizeInUse should default to the CMDT Scan_Batch_Size__c value when no override is set');
+  @IsTest
+  static void getJobStatus_returnsRecord() {
+    Metadata_Scan_Job__c job = buildJob('Processing');
+    DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(
+      job.Id
+    );
+    Assert.isNotNull(result);
+    Assert.areEqual('Processing', result.job.Status__c);
+    // batchSizeInUse/isPeSuppressionActive drive the Paused-banner batch-size display and the
+    // LWC's PE-suppressed polling fallback - both must be populated, not just Status__c.
+    Assert.areEqual(
+      false,
+      result.isPeSuppressionActive,
+      'Platform Events should not be suppressed with default CMDT settings'
+    );
+    Assert.areEqual(
+      50,
+      result.batchSizeInUse,
+      'batchSizeInUse should default to the CMDT Scan_Batch_Size__c value when no override is set'
+    );
+  }
+
+  @IsTest
+  static void getJobStatus_withBatchSizeOverride_reflectsOverride() {
+    Metadata_Scan_Job__c job = buildJob('Paused');
+    job.Batch_Size_Override__c = 25;
+    update job;
+    DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(
+      job.Id
+    );
+    Assert.isNotNull(result);
+    Assert.areEqual(
+      25,
+      result.batchSizeInUse,
+      'batchSizeInUse should reflect a non-null Batch_Size_Override__c on the job record'
+    );
+  }
+
+  @IsTest
+  static void getJobStatus_notFound_returnsNull() {
+    Id fakeId = '001000000000001AAA';
+    DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(
+      fakeId
+    );
+    Assert.isNull(result);
+  }
+
+  // -----------------------------------------------------------------------
+  // getNodeHierarchy - live records path
+  // -----------------------------------------------------------------------
+
+  @IsTest
+  static void getNodeHierarchy_processing_returnsLiveRecords() {
+    Metadata_Scan_Job__c job = buildJob('Processing');
+    Metadata_Dependency__c node = new Metadata_Dependency__c(
+      Metadata_Scan_Job__c = job.Id,
+      Metadata_Type__c = 'ApexClass',
+      Metadata_Name__c = 'TestClass',
+      Dependency_Depth__c = 0,
+      Has_Fetched_Dependencies__c = false,
+      Is_Circular__c = false,
+      Is_Dynamic_Reference__c = false,
+      Discovery_Source__c = 'ToolingAPI',
+      Ancestor_Path__c = '',
+      Unique_Component_Key__c = job.Id + ':root'
+    );
+    insert node;
+
+    List<Metadata_Dependency__c> result = DependencyJobController.getNodeHierarchy(
+      job.Id
+    );
+    Assert.areEqual(1, result.size());
+  }
+
+  @IsTest
+  static void getNodeHierarchy_completed_blankFileId_throws() {
+    Metadata_Scan_Job__c job = buildJob('Completed');
+    try {
+      DependencyJobController.getNodeHierarchy(job.Id);
+      Assert.fail('Expected DependencyJobException');
+    } catch (DependencyJobException e) {
+      Assert.isTrue(e.getMessage().contains('could not be found'));
     }
+  }
 
-    @IsTest
-    static void getJobStatus_withBatchSizeOverride_reflectsOverride() {
-        Metadata_Scan_Job__c job = buildJob('Paused');
-        job.Batch_Size_Override__c = 25;
-        update job;
-        DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(job.Id);
-        Assert.isNotNull(result);
-        Assert.areEqual(25, result.batchSizeInUse,
-            'batchSizeInUse should reflect a non-null Batch_Size_Override__c on the job record');
+  @IsTest
+  static void getNodeHierarchy_notFound_throws() {
+    try {
+      DependencyJobController.getNodeHierarchy('001000000000002AAA');
+      Assert.fail('Expected DependencyJobException');
+    } catch (DependencyJobException e) {
+      Assert.isTrue(e.getMessage().contains('not found'));
     }
+  }
 
-    @IsTest
-    static void getJobStatus_notFound_returnsNull() {
-        Id fakeId = '001000000000001AAA';
-        DependencyJobController.JobStatusResult result = DependencyJobController.getJobStatus(fakeId);
-        Assert.isNull(result);
+  // -----------------------------------------------------------------------
+  // getObjectList
+  // -----------------------------------------------------------------------
+
+  @IsTest
+  static void getObjectList_shortSearchTerm_returnsEmptyList() {
+    Test.startTest();
+    List<EntityDefinition> result = DependencyJobController.getObjectList('a');
+    Test.stopTest();
+
+    Assert.isTrue(
+      result.isEmpty(),
+      'Search terms under 2 characters should return an empty list without querying'
+    );
+  }
+
+  @IsTest
+  static void getObjectList_validTerm_returnsList() {
+    Test.startTest();
+    List<EntityDefinition> result = DependencyJobController.getObjectList(
+      'Acc'
+    );
+    Test.stopTest();
+
+    Assert.isNotNull(
+      result,
+      'A search term of 2+ characters should return a (possibly empty) list, not null'
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // cancelJob
+  // -----------------------------------------------------------------------
+
+  @IsTest
+  static void cancelJob_updatesStatus() {
+    Metadata_Scan_Job__c job = buildJob('Processing');
+    Test.startTest();
+    DependencyJobController.cancelJob(job.Id);
+    Test.stopTest();
+
+    Metadata_Scan_Job__c updated = [
+      SELECT Status__c
+      FROM Metadata_Scan_Job__c
+      WHERE Id = :job.Id
+    ];
+    Assert.areEqual('Cancelled', updated.Status__c);
+  }
+
+  @IsTest
+  static void cancelJob_completedJob_isNoop() {
+    // A Completed job must not be overwritten to Cancelled — the FOR UPDATE
+    // pre-check introduced in Round 70 guards this case.
+    Metadata_Scan_Job__c job = buildJob('Completed');
+    Test.startTest();
+    DependencyJobController.cancelJob(job.Id);
+    Test.stopTest();
+
+    Metadata_Scan_Job__c updated = [
+      SELECT Status__c
+      FROM Metadata_Scan_Job__c
+      WHERE Id = :job.Id
+    ];
+    Assert.areEqual(
+      'Completed',
+      updated.Status__c,
+      'Completed job must not be overwritten to Cancelled'
+    );
+  }
+
+  @IsTest
+  static void cancelJob_failedJob_isNoop() {
+    Metadata_Scan_Job__c job = buildJob('Failed');
+    Test.startTest();
+    DependencyJobController.cancelJob(job.Id);
+    Test.stopTest();
+
+    Metadata_Scan_Job__c updated = [
+      SELECT Status__c
+      FROM Metadata_Scan_Job__c
+      WHERE Id = :job.Id
+    ];
+    Assert.areEqual(
+      'Failed',
+      updated.Status__c,
+      'Failed job must not be overwritten to Cancelled'
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // resumeJob
+  // -----------------------------------------------------------------------
+
+  @IsTest
+  static void resumeJob_pausedJob_enqueues() {
+    Metadata_Scan_Job__c job = buildJob('Paused');
+    job.Pause_Reason__c = 'StallDetected';
+    update job;
+
+    Test.startTest();
+    DependencyJobController.resumeJob(job.Id, 25);
+    Test.stopTest();
+
+    Metadata_Scan_Job__c updated = [
+      SELECT Status__c, Batch_Size_Override__c, Pause_Reason__c
+      FROM Metadata_Scan_Job__c
+      WHERE Id = :job.Id
+    ];
+    Assert.areEqual('Processing', updated.Status__c);
+    Assert.areEqual(25, (Integer) updated.Batch_Size_Override__c);
+    Assert.isNull(
+      updated.Pause_Reason__c,
+      'Pause_Reason__c must be cleared on resume'
+    );
+  }
+
+  @IsTest
+  static void resumeJob_nonPausedJob_throws() {
+    Metadata_Scan_Job__c job = buildJob('Processing');
+    try {
+      DependencyJobController.resumeJob(job.Id, null);
+      Assert.fail('Expected DependencyJobException');
+    } catch (DependencyJobException e) {
+      Assert.isTrue(
+        e.getMessage().contains('Paused'),
+        'Message should mention Paused'
+      );
     }
+  }
 
-    // -----------------------------------------------------------------------
-    // getNodeHierarchy - live records path
-    // -----------------------------------------------------------------------
-
-    @IsTest
-    static void getNodeHierarchy_processing_returnsLiveRecords() {
-        Metadata_Scan_Job__c job = buildJob('Processing');
-        Metadata_Dependency__c node = new Metadata_Dependency__c(
-            Metadata_Scan_Job__c        = job.Id,
-            Metadata_Type__c            = 'ApexClass',
-            Metadata_Name__c            = 'TestClass',
-            Dependency_Depth__c         = 0,
-            Has_Fetched_Dependencies__c     = false,
-            Is_Circular__c              = false,
-            Is_Dynamic_Reference__c     = false,
-            Discovery_Source__c         = 'ToolingAPI',
-            Ancestor_Path__c            = '',
-            Unique_Component_Key__c = job.Id + ':root'
-        );
-        insert node;
-
-        List<Metadata_Dependency__c> result = DependencyJobController.getNodeHierarchy(job.Id);
-        Assert.areEqual(1, result.size());
+  @IsTest
+  static void resumeJob_notFound_throws() {
+    try {
+      DependencyJobController.resumeJob('001000000000003AAA', null);
+      Assert.fail('Expected DependencyJobException');
+    } catch (DependencyJobException e) {
+      Assert.isTrue(e.getMessage().contains('not found'));
     }
+  }
 
-    @IsTest
-    static void getNodeHierarchy_completed_blankFileId_throws() {
-        Metadata_Scan_Job__c job = buildJob('Completed');
-        try {
-            DependencyJobController.getNodeHierarchy(job.Id);
-            Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('could not be found'));
-        }
-    }
+  // -----------------------------------------------------------------------
+  // getComponentCount
+  // -----------------------------------------------------------------------
 
-    @IsTest
-    static void getNodeHierarchy_notFound_throws() {
-        try {
-            DependencyJobController.getNodeHierarchy('001000000000002AAA');
-            Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('not found'));
-        }
-    }
+  @IsTest
+  static void getComponentCount_blankApiName_returnsNull() {
+    String result = DependencyJobController.getComponentCount('');
+    Assert.isNull(result, 'Blank API name should return null');
+  }
 
-    // -----------------------------------------------------------------------
-    // getObjectList
-    // -----------------------------------------------------------------------
+  @IsTest
+  static void getComponentCount_validApiName_returnsSmallBucketForZeroRows() {
+    // MetadataComponentDependency is not writable in tests, so the query always returns 0
+    // rows against real data - which correctly maps to the "Small" bucket. A previous version
+    // of this test only asserted "null OR a valid bucket string", which passed identically
+    // whether the query threw (e.g. an invalid relationship-field reference) or succeeded -
+    // masking a real MALFORMED_QUERY defect for many review rounds. Asserting the exact
+    // expected bucket proves the query actually executes successfully end-to-end.
+    Test.startTest();
+    String result = DependencyJobController.getComponentCount('Account');
+    Test.stopTest();
 
-    @IsTest
-    static void getObjectList_shortSearchTerm_returnsEmptyList() {
-        Test.startTest();
-        List<EntityDefinition> result = DependencyJobController.getObjectList('a');
-        Test.stopTest();
+    Assert.areEqual(
+      'Small',
+      result,
+      'A zero-row MetadataComponentDependency count must resolve to the Small bucket - ' +
+      'null would indicate the underlying SOQL query is throwing'
+    );
+  }
 
-        Assert.isTrue(result.isEmpty(), 'Search terms under 2 characters should return an empty list without querying');
-    }
+  // -----------------------------------------------------------------------
+  // getActiveJobId
+  // -----------------------------------------------------------------------
 
-    @IsTest
-    static void getObjectList_validTerm_returnsList() {
-        Test.startTest();
-        List<EntityDefinition> result = DependencyJobController.getObjectList('Acc');
-        Test.stopTest();
+  @IsTest
+  static void getActiveJobId_withProcessingJob_returnsId() {
+    Metadata_Scan_Job__c job = buildJob('Processing');
+    Test.startTest();
+    Id result = DependencyJobController.getActiveJobId();
+    Test.stopTest();
+    Assert.areEqual(
+      job.Id,
+      result,
+      'Should return the ID of the active Processing job'
+    );
+  }
 
-        Assert.isNotNull(result, 'A search term of 2+ characters should return a (possibly empty) list, not null');
-    }
+  @IsTest
+  static void getActiveJobId_withInitializingJob_returnsId() {
+    Metadata_Scan_Job__c job = buildJob('Initializing');
+    Test.startTest();
+    Id result = DependencyJobController.getActiveJobId();
+    Test.stopTest();
+    Assert.areEqual(
+      job.Id,
+      result,
+      'Should return the ID of the active Initializing job'
+    );
+  }
 
-    // -----------------------------------------------------------------------
-    // cancelJob
-    // -----------------------------------------------------------------------
+  @IsTest
+  static void getActiveJobId_noActiveJob_returnsNull() {
+    buildJob('Completed');
+    Test.startTest();
+    Id result = DependencyJobController.getActiveJobId();
+    Test.stopTest();
+    Assert.isNull(
+      result,
+      'Should return null when no Initializing or Processing job exists'
+    );
+  }
 
-    @IsTest
-    static void cancelJob_updatesStatus() {
-        Metadata_Scan_Job__c job = buildJob('Processing');
-        Test.startTest();
-        DependencyJobController.cancelJob(job.Id);
-        Test.stopTest();
+  // -----------------------------------------------------------------------
+  // isCopilotEnabled
+  // -----------------------------------------------------------------------
 
-        Metadata_Scan_Job__c updated = [SELECT Status__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id];
-        Assert.areEqual('Cancelled', updated.Status__c);
-    }
+  @IsTest
+  static void isCopilotEnabled_returnsBoolean() {
+    // FeatureManagement.checkPermission returns false in test context.
+    // Verify a non-null Boolean is returned without exception.
+    Boolean result = DependencyJobController.isCopilotEnabled();
+    Assert.isNotNull(
+      result,
+      'isCopilotEnabled should return a Boolean, not null'
+    );
+  }
 
-    @IsTest
-    static void cancelJob_completedJob_isNoop() {
-        // A Completed job must not be overwritten to Cancelled — the FOR UPDATE
-        // pre-check introduced in Round 70 guards this case.
-        Metadata_Scan_Job__c job = buildJob('Completed');
-        Test.startTest();
-        DependencyJobController.cancelJob(job.Id);
-        Test.stopTest();
-
-        Metadata_Scan_Job__c updated = [SELECT Status__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id];
-        Assert.areEqual('Completed', updated.Status__c, 'Completed job must not be overwritten to Cancelled');
-    }
-
-    @IsTest
-    static void cancelJob_failedJob_isNoop() {
-        Metadata_Scan_Job__c job = buildJob('Failed');
-        Test.startTest();
-        DependencyJobController.cancelJob(job.Id);
-        Test.stopTest();
-
-        Metadata_Scan_Job__c updated = [SELECT Status__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id];
-        Assert.areEqual('Failed', updated.Status__c, 'Failed job must not be overwritten to Cancelled');
-    }
-
-    // -----------------------------------------------------------------------
-    // resumeJob
-    // -----------------------------------------------------------------------
-
-    @IsTest
-    static void resumeJob_pausedJob_enqueues() {
-        Metadata_Scan_Job__c job = buildJob('Paused');
-        job.Pause_Reason__c = 'StallDetected';
-        update job;
-
-        Test.startTest();
-        DependencyJobController.resumeJob(job.Id, 25);
-        Test.stopTest();
-
-        Metadata_Scan_Job__c updated = [
-            SELECT Status__c, Batch_Size_Override__c, Pause_Reason__c
-            FROM Metadata_Scan_Job__c WHERE Id = :job.Id
-        ];
-        Assert.areEqual('Processing', updated.Status__c);
-        Assert.areEqual(25, (Integer) updated.Batch_Size_Override__c);
-        Assert.isNull(updated.Pause_Reason__c, 'Pause_Reason__c must be cleared on resume');
-    }
-
-    @IsTest
-    static void resumeJob_nonPausedJob_throws() {
-        Metadata_Scan_Job__c job = buildJob('Processing');
-        try {
-            DependencyJobController.resumeJob(job.Id, null);
-            Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('Paused'), 'Message should mention Paused');
-        }
-    }
-
-    @IsTest
-    static void resumeJob_notFound_throws() {
-        try {
-            DependencyJobController.resumeJob('001000000000003AAA', null);
-            Assert.fail('Expected DependencyJobException');
-        } catch (DependencyJobException e) {
-            Assert.isTrue(e.getMessage().contains('not found'));
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // getComponentCount
-    // -----------------------------------------------------------------------
-
-    @IsTest
-    static void getComponentCount_blankApiName_returnsNull() {
-        String result = DependencyJobController.getComponentCount('');
-        Assert.isNull(result, 'Blank API name should return null');
-    }
-
-    @IsTest
-    static void getComponentCount_validApiName_returnsSmallBucketForZeroRows() {
-        // MetadataComponentDependency is not writable in tests, so the query always returns 0
-        // rows against real data - which correctly maps to the "Small" bucket. A previous version
-        // of this test only asserted "null OR a valid bucket string", which passed identically
-        // whether the query threw (e.g. an invalid relationship-field reference) or succeeded -
-        // masking a real MALFORMED_QUERY defect for many review rounds. Asserting the exact
-        // expected bucket proves the query actually executes successfully end-to-end.
-        Test.startTest();
-        String result = DependencyJobController.getComponentCount('Account');
-        Test.stopTest();
-
-        Assert.areEqual('Small', result,
-            'A zero-row MetadataComponentDependency count must resolve to the Small bucket - '
-            + 'null would indicate the underlying SOQL query is throwing');
-    }
-
-    // -----------------------------------------------------------------------
-    // getActiveJobId
-    // -----------------------------------------------------------------------
-
-    @IsTest
-    static void getActiveJobId_withProcessingJob_returnsId() {
-        Metadata_Scan_Job__c job = buildJob('Processing');
-        Test.startTest();
-        Id result = DependencyJobController.getActiveJobId();
-        Test.stopTest();
-        Assert.areEqual(job.Id, result, 'Should return the ID of the active Processing job');
-    }
-
-    @IsTest
-    static void getActiveJobId_withInitializingJob_returnsId() {
-        Metadata_Scan_Job__c job = buildJob('Initializing');
-        Test.startTest();
-        Id result = DependencyJobController.getActiveJobId();
-        Test.stopTest();
-        Assert.areEqual(job.Id, result, 'Should return the ID of the active Initializing job');
-    }
-
-    @IsTest
-    static void getActiveJobId_noActiveJob_returnsNull() {
-        buildJob('Completed');
-        Test.startTest();
-        Id result = DependencyJobController.getActiveJobId();
-        Test.stopTest();
-        Assert.isNull(result, 'Should return null when no Initializing or Processing job exists');
-    }
-
-    // -----------------------------------------------------------------------
-    // isCopilotEnabled
-    // -----------------------------------------------------------------------
-
-    @IsTest
-    static void isCopilotEnabled_returnsBoolean() {
-        // FeatureManagement.checkPermission returns false in test context.
-        // Verify a non-null Boolean is returned without exception.
-        Boolean result = DependencyJobController.isCopilotEnabled();
-        Assert.isNotNull(result, 'isCopilotEnabled should return a Boolean, not null');
-    }
-
-    @isTest
-    static void getOrgId_returnsNonBlankString() {
-        String orgId = DependencyJobController.getOrgId();
-        Assert.isNotNull(orgId, 'getOrgId should return a non-null String');
-        Assert.isFalse(String.isBlank(orgId), 'getOrgId should return a non-blank org ID');
-    }
+  @isTest
+  static void getOrgId_returnsNonBlankString() {
+    String orgId = DependencyJobController.getOrgId();
+    Assert.isNotNull(orgId, 'getOrgId should return a non-null String');
+    Assert.isFalse(
+      String.isBlank(orgId),
+      'getOrgId should return a non-blank org ID'
+    );
+  }
 }

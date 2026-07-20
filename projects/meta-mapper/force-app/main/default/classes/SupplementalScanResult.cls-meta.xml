@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Value object returned by IDependencyTypeHandler implementations. Wraps a list of discovered supplemental Metadata_Dependency__c records with a handler identifier for diagnostic logging.</description>
+    <description
+  >Value object returned by IDependencyTypeHandler implementations. Wraps a list of discovered supplemental Metadata_Dependency__c records with a handler identifier for diagnostic logging.</description>
     <status>Active</status>
 </ApexClass>

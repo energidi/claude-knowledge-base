@@ -1,6 +1,7 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>All SOQL queries against Metadata_Dependency__c and ContentVersion. Centralizes the nextUnprocessed(), dedupForResults(), listByJob(), and getResultFile() queries used by DependencyQueueable and ScanResultFileQueueable. Never called directly by the LWC.</description>
+    <description
+  >All SOQL queries against Metadata_Dependency__c and ContentVersion. Centralizes the nextUnprocessed(), dedupForResults(), listByJob(), and getResultFile() queries used by DependencyQueueable and ScanResultFileQueueable. Never called directly by the LWC.</description>
     <status>Active</status>
 </ApexClass>

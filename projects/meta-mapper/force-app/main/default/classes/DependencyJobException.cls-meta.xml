@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Custom exception for MetaMapper-specific errors. Extends Exception. Thrown by DependencyJobController and DependencyQueueable to distinguish MetaMapper errors from platform errors. Caught at @AuraEnabled boundaries and surfaced to the LWC as user-facing messages.</description>
+    <description
+  >Custom exception for MetaMapper-specific errors. Extends Exception. Thrown by DependencyJobController and DependencyQueueable to distinguish MetaMapper errors from platform errors. Caught at @AuraEnabled boundaries and surfaced to the LWC as user-facing messages.</description>
     <status>Active</status>
 </ApexClass>

@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
     <isExposed>false</isExposed>
-    <description>Export controls for CSV, JSON, and package.xml. Receives node list and job metadata as props from metaMapperResults. No direct Apex calls — all export logic runs client-side via Blob URLs. Primary exports (CSV, JSON) are always visible; package.xml is in a collapsible Advanced section. Namespace-prefixed managed package components are excluded from package.xml.</description>
+    <description
+  >Export controls for CSV, JSON, and package.xml. Receives node list and job metadata as props from metaMapperResults. No direct Apex calls — all export logic runs client-side via Blob URLs. Primary exports (CSV, JSON) are always visible; package.xml is in a collapsible Advanced section. Namespace-prefixed managed package components are excluded from package.xml.</description>
 </LightningComponentBundle>

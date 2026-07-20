@@ -1,4 +1,5 @@
 # MetaMapper LWC Components — Design Spec
+
 Date: 2026-06-12
 
 ## What We're Building
@@ -11,13 +12,13 @@ Full UX specification lives in `CLAUDE.md` under the UX Design Specification sec
 
 ## Build Decisions
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| Build phasing | Two phases | Phase 1 is independently deployable; lower risk per review gate |
-| Jest tests | Deferred post-Phase 2 review | Component APIs not stable until after review; visual validation is primary |
-| Shared logic | 3 service modules | Tree and Graph share filter state; one source of truth prevents silent divergence |
-| ECharts | Create static resource from npm | No CDN allowed; `echarts/dist/echarts.min.js` sourced from npm package |
-| Pre-implementation gate | `setup/CONTRAST_MATRIX.md` | CLAUDE.md requires WCAG AA verification before any LWC work |
+| Decision                | Choice                          | Rationale                                                                         |
+| ----------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
+| Build phasing           | Two phases                      | Phase 1 is independently deployable; lower risk per review gate                   |
+| Jest tests              | Deferred post-Phase 2 review    | Component APIs not stable until after review; visual validation is primary        |
+| Shared logic            | 3 service modules               | Tree and Graph share filter state; one source of truth prevents silent divergence |
+| ECharts                 | Create static resource from npm | No CDN allowed; `echarts/dist/echarts.min.js` sourced from npm package            |
+| Pre-implementation gate | `setup/CONTRAST_MATRIX.md`      | CLAUDE.md requires WCAG AA verification before any LWC work                       |
 
 ---
 
@@ -27,12 +28,12 @@ Full UX specification lives in `CLAUDE.md` under the UX Design Specification sec
 
 ### Components
 
-| Component | Responsibilities |
-|---|---|
-| `metaMapperApp` | Root shell. Owns `jobId` state. Manages the three-view state machine (search → progress → results). Owns `empApi` subscription for `Dependency_Scan_Status__e`. Distributes PE payloads to children via `scanstatuschange` custom event. Handles deep-link routing via `@wire(CurrentPageReference)`. Runs pre-flight `ToolingApiHealthCheck.verify()` on mount. |
-| `metaMapperSearch` | Input form. Metadata type picklist, API name field, typeahead object lookup (debounced 300ms, `EntityDefinition`), Active Flows checkbox. Complexity preview via `getComponentCount()`. Fires `jobcreated` event to App. |
-| `metaMapperProgress` | Progress bar + status label + elapsed time. Receives PE payloads from App via `scanstatuschange`. Polling fallback at 5s (Processing) / 10s (Paused). Cancel confirmation modal. Pause/resume banner with two resume buttons. Fires `jobcomplete`, `jobcancelled`, `jobpaused` to App. |
-| `metaMapperResults` | Tab container (Tree + Graph). Owns filter state (shared, persisted to `sessionStorage`). Owns selection state (transient). Owns `isTransitioning` flag. Calls `getNodeHierarchy()`. Hosts `metaMapperTree`, `metaMapperGraph`, `metaMapperComponentDetailsPanel`, `metaMapperExport`. Renders AI Summary card and Stats tile. **Note:** In Phase 1, Tree and Graph child slots render skeleton shimmer placeholders. They fire `tabready` immediately in `connectedCallback` (no data to render yet). Full implementations delivered in Phase 2. |
+| Component            | Responsibilities                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `metaMapperApp`      | Root shell. Owns `jobId` state. Manages the three-view state machine (search → progress → results). Owns `empApi` subscription for `Dependency_Scan_Status__e`. Distributes PE payloads to children via `scanstatuschange` custom event. Handles deep-link routing via `@wire(CurrentPageReference)`. Runs pre-flight `ToolingApiHealthCheck.verify()` on mount.                                                                                                                                                                                 |
+| `metaMapperSearch`   | Input form. Metadata type picklist, API name field, typeahead object lookup (debounced 300ms, `EntityDefinition`), Active Flows checkbox. Complexity preview via `getComponentCount()`. Fires `jobcreated` event to App.                                                                                                                                                                                                                                                                                                                         |
+| `metaMapperProgress` | Progress bar + status label + elapsed time. Receives PE payloads from App via `scanstatuschange`. Polling fallback at 5s (Processing) / 10s (Paused). Cancel confirmation modal. Pause/resume banner with two resume buttons. Fires `jobcomplete`, `jobcancelled`, `jobpaused` to App.                                                                                                                                                                                                                                                           |
+| `metaMapperResults`  | Tab container (Tree + Graph). Owns filter state (shared, persisted to `sessionStorage`). Owns selection state (transient). Owns `isTransitioning` flag. Calls `getNodeHierarchy()`. Hosts `metaMapperTree`, `metaMapperGraph`, `metaMapperComponentDetailsPanel`, `metaMapperExport`. Renders AI Summary card and Stats tile. **Note:** In Phase 1, Tree and Graph child slots render skeleton shimmer placeholders. They fire `tabready` immediately in `connectedCallback` (no data to render yet). Full implementations delivered in Phase 2. |
 
 ### Phase 1 File List
 
@@ -84,12 +85,12 @@ setup/
 
 ### Components
 
-| Component | Responsibilities |
-|---|---|
-| `metaMapperTree` | Virtual-rendered SLDS tree. Full-text search, type/level/confidence filters, collapse/expand per branch. Keyboard navigable. Fires `nodeselected`, `tabready`. ARIA: `role="tree"`, `role="treeitem"`, `aria-expanded`, `aria-level`. |
-| `metaMapperGraph` | ECharts force-directed graph. Loads ECharts from `ECharts` static resource via `loadScript`. Node click → Node Details Panel. Right-click context menu. Hover tooltip with pill rendering. Focus path to root. Virtual keyboard navigation (virtual focus index). Fires `nodeselected`, `tabready` (after ECharts `'finished'` event). |
-| `metaMapperComponentDetailsPanel` | Sidebar (desktop) or full-screen modal (mobile < 1024px). Breadcrumb resolution from flat node map prop. "Open in Setup" routing by type. "Copy Link" deep-link button. Fires `panelclosed`. |
-| `metaMapperExport` | CSV, JSON, package.xml client-side export. No Apex calls. Namespace detection regex: `^[A-Za-z][A-Za-z0-9]+__`. Default filename: `MetaMapper_[sanitized_name]_[YYYYMMDD]_[HHmm]`. |
+| Component                         | Responsibilities                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `metaMapperTree`                  | Virtual-rendered SLDS tree. Full-text search, type/level/confidence filters, collapse/expand per branch. Keyboard navigable. Fires `nodeselected`, `tabready`. ARIA: `role="tree"`, `role="treeitem"`, `aria-expanded`, `aria-level`.                                                                                                  |
+| `metaMapperGraph`                 | ECharts force-directed graph. Loads ECharts from `ECharts` static resource via `loadScript`. Node click → Node Details Panel. Right-click context menu. Hover tooltip with pill rendering. Focus path to root. Virtual keyboard navigation (virtual focus index). Fires `nodeselected`, `tabready` (after ECharts `'finished'` event). |
+| `metaMapperComponentDetailsPanel` | Sidebar (desktop) or full-screen modal (mobile < 1024px). Breadcrumb resolution from flat node map prop. "Open in Setup" routing by type. "Copy Link" deep-link button. Fires `panelclosed`.                                                                                                                                           |
+| `metaMapperExport`                | CSV, JSON, package.xml client-side export. No Apex calls. Namespace detection regex: `^[A-Za-z][A-Za-z0-9]+__`. Default filename: `MetaMapper_[sanitized_name]_[YYYYMMDD]_[HHmm]`.                                                                                                                                                     |
 
 ### ECharts Static Resource
 
@@ -101,6 +102,7 @@ force-app/main/default/staticresources/
 ```
 
 Steps:
+
 1. Add `"echarts": "^5.x"` to `package.json` dependencies
 2. `npm install`
 3. Copy `node_modules/echarts/dist/echarts.min.js` → `force-app/main/default/staticresources/ECharts/echarts.min.js`
@@ -164,15 +166,15 @@ export function isNamespacePrefixed(apiName, metadataType)  // namespace detecti
 
 Matrix covers all 8 node type colors from the spec:
 
-| Metadata Type | SLDS Token | Hex | On #FFFFFF | On #1B1B1B | WCAG AA |
-|---|---|---|---|---|---|
-| ApexClass/ApexTrigger | `--lwc-colorTextActionLabelActive` | `#0176d3` | TBD | TBD | TBD |
-| Flow | `--lwc-brandAccessibilityColor` | `#1b5297` | TBD | TBD | TBD |
-| CustomField | `--lwc-colorTextSuccess` | `#2e844a` | TBD | TBD | TBD |
-| ValidationRule | `--lwc-colorTextError` | `#ba0517` | TBD | TBD | TBD |
-| WorkflowRule | `--lwc-colorTextWarning` | `#dd7a01` | TBD | TBD | TBD |
-| Report | `--lwc-colorTextInverse` | `#444444` | TBD | TBD | TBD |
-| default | `--lwc-colorTextDefault` | `#3e3e3c` | TBD | TBD | TBD |
+| Metadata Type         | SLDS Token                         | Hex       | On #FFFFFF | On #1B1B1B | WCAG AA |
+| --------------------- | ---------------------------------- | --------- | ---------- | ---------- | ------- |
+| ApexClass/ApexTrigger | `--lwc-colorTextActionLabelActive` | `#0176d3` | TBD        | TBD        | TBD     |
+| Flow                  | `--lwc-brandAccessibilityColor`    | `#1b5297` | TBD        | TBD        | TBD     |
+| CustomField           | `--lwc-colorTextSuccess`           | `#2e844a` | TBD        | TBD        | TBD     |
+| ValidationRule        | `--lwc-colorTextError`             | `#ba0517` | TBD        | TBD        | TBD     |
+| WorkflowRule          | `--lwc-colorTextWarning`           | `#dd7a01` | TBD        | TBD        | TBD     |
+| Report                | `--lwc-colorTextInverse`           | `#444444` | TBD        | TBD        | TBD     |
+| default               | `--lwc-colorTextDefault`           | `#3e3e3c` | TBD        | TBD        | TBD     |
 
 Contrast ratios computed at implementation time using standard luminance formula.
 

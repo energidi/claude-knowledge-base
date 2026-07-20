@@ -1,7 +1,8 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Progress_Message__c</fullName>
-    <description>Human-readable description of what the scan engine was doing when this event was published (e.g. "Analyzing Flow dependencies..."). Displayed below the progress bar in the metaMapperProgress LWC.</description>
+    <description
+  >Human-readable description of what the scan engine was doing when this event was published (e.g. "Analyzing Flow dependencies..."). Displayed below the progress bar in the metaMapperProgress LWC.</description>
     <label>Progress Message</label>
     <length>255</length>
     <required>false</required>

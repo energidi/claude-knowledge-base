@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Unit tests for CustomFieldDependencyHandler. Covers findSupplemental() input handling and the deferred-scan notice, and exhaustively covers the static buildNode() helper (ancestor path construction, depth-guard null return, MD5 key fallback).</description>
+    <description
+  >Unit tests for CustomFieldDependencyHandler. Covers findSupplemental() input handling and the deferred-scan notice, and exhaustively covers the static buildNode() helper (ancestor path construction, depth-guard null return, MD5 key fallback).</description>
     <status>Active</status>
 </ApexClass>

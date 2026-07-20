@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Transaction-level cache for Custom Metadata Type describe data shared by supplemental dependency handlers. Provides CMT entity lists, field maps, and batch preloading via Schema.describeSObjects() to prevent duplicate describe calls from consuming CPU and heap. Used by CustomFieldDependencyHandler and ApexClassDependencyHandler.</description>
+    <description
+  >Transaction-level cache for Custom Metadata Type describe data shared by supplemental dependency handlers. Provides CMT entity lists, field maps, and batch preloading via Schema.describeSObjects() to prevent duplicate describe calls from consuming CPU and heap. Used by CustomFieldDependencyHandler and ApexClassDependencyHandler.</description>
     <status>Active</status>
 </ApexClass>

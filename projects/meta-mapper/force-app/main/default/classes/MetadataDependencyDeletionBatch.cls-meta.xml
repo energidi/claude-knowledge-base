@@ -1,6 +1,7 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Deletes Metadata_Dependency__c records in safe chunks (default 2,000) and optionally deletes the parent job. Invoked by DependencyCleanupBatch (NODES_AND_JOB mode) and ScanResultFileQueueable (NODES_ONLY mode). Constructor accepts CleanupMode enum instead of boolean to prevent silent argument-swap bugs.</description>
+    <description
+  >Deletes Metadata_Dependency__c records in safe chunks (default 2,000) and optionally deletes the parent job. Invoked by DependencyCleanupBatch (NODES_AND_JOB mode) and ScanResultFileQueueable (NODES_ONLY mode). Constructor accepts CleanupMode enum instead of boolean to prevent silent argument-swap bugs.</description>
     <status>Active</status>
 </ApexClass>

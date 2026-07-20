@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Unit tests for MetadataDependencyService. Covers IN-clause chunking, HTTP 5xx single retry, QueryMore pagination, INVALID_QUERY_LOCATOR cursor expiry handling, and HTTP 414/431 reactive split depth limit enforcement.</description>
+    <description
+  >Unit tests for MetadataDependencyService. Covers IN-clause chunking, HTTP 5xx single retry, QueryMore pagination, INVALID_QUERY_LOCATOR cursor expiry handling, and HTTP 414/431 reactive split depth limit enforcement.</description>
     <status>Active</status>
 </ApexClass>

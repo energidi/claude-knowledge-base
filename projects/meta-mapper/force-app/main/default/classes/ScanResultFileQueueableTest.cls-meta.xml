@@ -1,6 +1,7 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Unit tests for ScanResultFileQueueable. Covers serialization to ContentVersion, ring buffer deletion, MetadataDependencyDeletionBatch chaining in NODES_ONLY mode, and heap-check failure path.</description>
+    <description
+  >Unit tests for ScanResultFileQueueable. Covers serialization to ContentVersion, ring buffer deletion, MetadataDependencyDeletionBatch chaining in NODES_ONLY mode, and heap-check failure path.</description>
     <status>Active</status>
 </ApexClass>

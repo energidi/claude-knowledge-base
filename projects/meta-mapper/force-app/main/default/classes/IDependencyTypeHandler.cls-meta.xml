@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Interface for supplemental dependency handlers. Each implementation finds dependencies for one metadata type that MetadataComponentDependency does not return. Implementations: CustomFieldDependencyHandler, ApexClassDependencyHandler, FlowDependencyHandler. Invoked by DependencyQueueable after the main Tooling API batch.</description>
+    <description
+  >Interface for supplemental dependency handlers. Each implementation finds dependencies for one metadata type that MetadataComponentDependency does not return. Implementations: CustomFieldDependencyHandler, ApexClassDependencyHandler, FlowDependencyHandler. Invoked by DependencyQueueable after the main Tooling API batch.</description>
     <status>Active</status>
 </ApexClass>

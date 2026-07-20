@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Shared utility service module. Provides pure formatting functions used across MetaMapper LWC components: formatElapsed (elapsed time string from a CreatedDate), truncateAt (word-boundary truncation), truncateApiName (50-char API name truncation with ellipsis), sanitizeFilename (strips filesystem-unsafe characters from an API name), buildDefaultFilename (export filename builder, supports a partial-result suffix), countToBucket (maps a component count to a complexity bucket label), and renderPills (converts Dependency_Context__c JSON into plain-English pill text). No Apex calls, no UI, no state. Import specific named exports only.</description>
+    <description
+  >Shared utility service module. Provides pure formatting functions used across MetaMapper LWC components: formatElapsed (elapsed time string from a CreatedDate), truncateAt (word-boundary truncation), truncateApiName (50-char API name truncation with ellipsis), sanitizeFilename (strips filesystem-unsafe characters from an API name), buildDefaultFilename (export filename builder, supports a partial-result suffix), countToBucket (maps a component count to a complexity bucket label), and renderPills (converts Dependency_Context__c JSON into plain-English pill text). No Apex calls, no UI, no state. Import specific named exports only.</description>
     <isExposed>false</isExposed>
 </LightningComponentBundle>

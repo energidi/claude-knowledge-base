@@ -1,7 +1,8 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Scan_Batch_Size__c</fullName>
-    <description>Number of unprocessed dependency records fetched and analyzed per scan processing cycle (non-Flow scans). Lower this value if scans pause due to complexity or governor limit errors. Default: 50.</description>
+    <description
+  >Number of unprocessed dependency records fetched and analyzed per scan processing cycle (non-Flow scans). Lower this value if scans pause due to complexity or governor limit errors. Default: 50.</description>
     <label>Analysis Speed (Standard)</label>
     <precision>10</precision>
     <required>false</required>

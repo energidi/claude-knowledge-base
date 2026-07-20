@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Publishes Dependency_Scan_Status__e Platform Events and sends completion notifications. Invoked by DependencyQueueable once per execution. Must NOT publish inside a try-catch that swallows exceptions. Auto-suppresses PE publish when org daily limit is above 80% consumed and flips the CMDT flag.</description>
+    <description
+  >Publishes Dependency_Scan_Status__e Platform Events and sends completion notifications. Invoked by DependencyQueueable once per execution. Must NOT publish inside a try-catch that swallows exceptions. Auto-suppresses PE publish when org daily limit is above 80% consumed and flips the CMDT flag.</description>
     <status>Active</status>
 </ApexClass>

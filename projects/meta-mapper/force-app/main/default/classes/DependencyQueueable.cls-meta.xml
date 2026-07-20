@@ -1,6 +1,7 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Async scan engine. Self-chains to traverse the metadata dependency graph. Enqueued by DependencyJobController.createJob() initially; self-enqueues for continuation. Must NOT transition Status to Completed - that belongs to ScanResultFileQueueable. Checks Status on entry for cancellation; uses Savepoint/rollback pattern for failure isolation.</description>
+    <description
+  >Async scan engine. Self-chains to traverse the metadata dependency graph. Enqueued by DependencyJobController.createJob() initially; self-enqueues for continuation. Must NOT transition Status to Completed - that belongs to ScanResultFileQueueable. Checks Status on entry for cancellation; uses Savepoint/rollback pattern for failure isolation.</description>
     <status>Active</status>
 </ApexClass>

@@ -1,5 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <CustomPermission xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Grants access to the MetaMapper application. Checked by ToolingApiHealthCheck.verify() before any Tooling API callout - users without this permission receive PERMISSION_SET_MISSING and cannot trigger Named Credential network calls. Included in the MetaMapper_Admin permission set. Do not assign directly; assign the MetaMapper_Admin permission set instead.</description>
+    <description
+  >Grants access to the MetaMapper application. Checked by ToolingApiHealthCheck.verify() before any Tooling API callout - users without this permission receive PERMISSION_SET_MISSING and cannot trigger Named Credential network calls. Included in the MetaMapper_Admin permission set. Do not assign directly; assign the MetaMapper_Admin permission set instead.</description>
     <label>MetaMapper Application Access</label>
 </CustomPermission>

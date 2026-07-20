@@ -9,8 +9,7 @@
  *
  */
 public without sharing class DependencyCleanupScheduler implements Schedulable {
-
-    public void execute(SchedulableContext ctx) {
-        Database.executeBatch(new DependencyCleanupBatch(), 10);
-    }
+  public void execute(SchedulableContext ctx) {
+    Database.executeBatch(new DependencyCleanupBatch(), 10);
+  }
 }

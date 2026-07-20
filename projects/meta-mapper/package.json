@@ -39,7 +39,7 @@
       "eslint"
     ],
     "**/lwc/**": [
-        "sfdx-lwc-jest -- --bail --findRelatedTests"
+      "sfdx-lwc-jest -- --bail --findRelatedTests"
     ]
   }
 }

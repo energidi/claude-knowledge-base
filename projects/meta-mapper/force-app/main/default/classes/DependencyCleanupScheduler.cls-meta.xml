@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <ApexClass xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Schedules DependencyCleanupBatch to run at 02:00 daily. If the scheduled job is lost (e.g. after a sandbox refresh), re-schedule via anonymous Apex: System.schedule('MetaMapper Nightly Cleanup', '0 0 2 * * ?', new DependencyCleanupScheduler());</description>
+    <description
+  >Schedules DependencyCleanupBatch to run at 02:00 daily. If the scheduled job is lost (e.g. after a sandbox refresh), re-schedule via anonymous Apex: System.schedule('MetaMapper Nightly Cleanup', '0 0 2 * * ?', new DependencyCleanupScheduler());</description>
     <status>Active</status>
 </ApexClass>

@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
-    <description>Input form for starting a new metadata dependency scan. Calls DependencyJobController.createJob() and getObjectList(). Renders metadata type picklist, API name input with type-responsive placeholder, target object typeahead, active flows checkbox, and complexity preview. Fires jobcreated event to metaMapperApp on successful job creation.</description>
+    <description
+  >Input form for starting a new metadata dependency scan. Calls DependencyJobController.createJob() and getObjectList(). Renders metadata type picklist, API name input with type-responsive placeholder, target object typeahead, active flows checkbox, and complexity preview. Fires jobcreated event to metaMapperApp on successful job creation.</description>
     <isExposed>false</isExposed>
 </LightningComponentBundle>

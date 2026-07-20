@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
     <isExposed>false</isExposed>
-    <description>Filter controls for the Tree/Graph shared filter state owned by metaMapperResults: type multi-select, level range, confidence threshold, and circular/dynamic/supplemental toggles. Fires a filterschange event with the updated filters object; does not persist state itself - metaMapperResults owns sessionStorage persistence via metaMapperFilters. No direct Apex calls.</description>
+    <description
+  >Filter controls for the Tree/Graph shared filter state owned by metaMapperResults: type multi-select, level range, confidence threshold, and circular/dynamic/supplemental toggles. Fires a filterschange event with the updated filters object; does not persist state itself - metaMapperResults owns sessionStorage persistence via metaMapperFilters. No direct Apex calls.</description>
 </LightningComponentBundle>

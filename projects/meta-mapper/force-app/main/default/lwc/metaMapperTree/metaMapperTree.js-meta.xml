@@ -1,6 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>66.0</apiVersion>
     <isExposed>false</isExposed>
-    <description>Virtual-rendered SLDS tree for browsing dependencies. Receives node list as a prop from metaMapperResults. No direct Apex calls. Fires nodeselected and tabready events. ARIA requirements: role=tree on the container; role=treeitem on every rendered row; each row carries aria-expanded and aria-level.</description>
+    <description
+  >Virtual-rendered SLDS tree for browsing dependencies. Receives node list as a prop from metaMapperResults. No direct Apex calls. Fires nodeselected and tabready events. ARIA requirements: role=tree on the container; role=treeitem on every rendered row; each row carries aria-expanded and aria-level.</description>
 </LightningComponentBundle>

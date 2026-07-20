@@ -1,7 +1,8 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Ancestor_Id_Index__c</fullName>
-    <description>Internal engine field. Stores pipe-delimited 6-character tails (last 6 characters, via .right(6)) of each ancestor Metadata_Id__c value as a fast pre-screen index for cycle detection. Uses the auto-number suffix portion of the 18-char ID, which is unique per component - unlike the entity key prefix (left 6 chars) which is identical for all components of the same type. Before running the expensive full Ancestor_Path__c containment check, the engine checks this index. A match triggers the conclusive full-string check; no match skips it entirely. Do not edit manually.</description>
+    <description
+  >Internal engine field. Stores pipe-delimited 6-character tails (last 6 characters, via .right(6)) of each ancestor Metadata_Id__c value as a fast pre-screen index for cycle detection. Uses the auto-number suffix portion of the 18-char ID, which is unique per component - unlike the entity key prefix (left 6 chars) which is identical for all components of the same type. Before running the expensive full Ancestor_Path__c containment check, the engine checks this index. A match triggers the conclusive full-string check; no match skips it entirely. Do not edit manually.</description>
     <label>Ancestor ID Index</label>
     <length>32768</length>
     <type>LongTextArea</type>
