@@ -166,6 +166,18 @@
             </div>
         </template>
 
+        <!-- Filter panel -->
+        <template lwc:if={showTabs}>
+            <div class="filter-panel-container slds-var-m-bottom_small">
+                <c-meta-mapper-filter-panel
+                    available-types={availableTypes}
+                    max-depth-value={maxDepthValue}
+                    filters={filters}
+                    onfilterschange={handleFiltersChange}>
+                </c-meta-mapper-filter-panel>
+            </div>
+        </template>
+
         <!-- Tab container -->
         <template lwc:if={showTabs}>
             <lightning-tabset active-tab-value={activeTab} onactive={handleTabActivate}>

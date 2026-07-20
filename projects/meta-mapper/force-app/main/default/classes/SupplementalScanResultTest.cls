@@ -1,3 +1,12 @@
+/**
+ * SupplementalScanResultTest
+ *
+ * Unit tests for SupplementalScanResult. Covers the two permitted Scan_Diagnostic_Log__c
+ * write paths: appendNoticeSafe (static single-notice append, including blank/oversized-log
+ * truncation edge cases) and appendErrorsSafe (instance bulk-append of accumulated handler
+ * errors, including dedup of identical base messages, overflow truncation, and pre-truncation
+ * of an already-oversized existing log).
+ */
 @IsTest
 private class SupplementalScanResultTest {
 

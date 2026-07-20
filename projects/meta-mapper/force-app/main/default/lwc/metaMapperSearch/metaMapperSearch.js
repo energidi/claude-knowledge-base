@@ -210,7 +210,7 @@ export default class MetaMapperSearch extends LightningElement {
                 metadataType: this.selectedType,
                 apiName: this.apiName.trim(),
                 targetObject: this.targetObject.trim() || null,
-                activeFlowsOnly: this.activeFlowsOnly
+                isActiveFlowsOnly: this.activeFlowsOnly
             });
             this.dispatchEvent(new CustomEvent('jobcreated', { detail: { jobId }, bubbles: true, composed: true }));
         } catch (e) {

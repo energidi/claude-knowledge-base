@@ -291,6 +291,61 @@ private class DependencyQueueableTest {
     }
 
     @IsTest
+    static void execute_uncaughtExceptionAfterSavepoint_transitionsToFailedViaRollbackGuard() {
+        // Finding #9: exercises the genuine uncaught-exception Savepoint/rollback path in
+        // execute() - every other "failure" test in this class goes through
+        // MetadataDependencyService's internally-caught HTTP error handling, which returns
+        // gracefully and never reaches the catch block in execute().
+        //
+        // Trigger: RootIdResolveInvalidLengthMock returns a 15-char Id (not the required 18)
+        // for the Step 5a root-ID-resolution callout. DependencyQueueable.runEngine() applies
+        // this value directly to node.Metadata_Id__c and issues a plain `update node;` with
+        // no try/catch (unlike the bulk upsert steps, which use Database.upsert(..., false)).
+        // The Metadata_Id_Must_Be_18_Characters validation rule rejects the update, throwing
+        // an uncaught DmlException. Because the resolveRootId() callout fires AFTER
+        // Database.setSavepoint() (savepoint is set before runEngine() is called), this also
+        // exercises the delta-based rollback guard: Limits.getCallouts() != calloutsAtSavepoint,
+        // so Database.rollback(sp) is correctly skipped (rollback after a callout would itself
+        // throw), and control falls straight through to updateJobFailed().
+        Metadata_Scan_Job__c job = makeJob('Processing');
+        Metadata_Dependency__c root = new Metadata_Dependency__c(
+            Metadata_Scan_Job__c    = job.Id,
+            Metadata_Id__c          = '',
+            Metadata_Type__c        = 'CustomField',
+            Metadata_Name__c        = 'Account.MyField__c',
+            Unique_Component_Key__c = job.Id + ':',
+            Has_Fetched_Dependencies__c   = false
+        );
+        insert root;
+        Test.setMock(HttpCalloutMock.class, new RootIdResolveInvalidLengthMock());
+
+        Test.startTest();
+        System.enqueueJob(new DependencyQueueable(job.Id, false, null));
+        Test.stopTest();
+
+        Metadata_Scan_Job__c refreshed = [
+            SELECT Status__c, Scan_Diagnostic_Log__c, Status_Closed_At__c
+            FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+        ];
+        Assert.areEqual('Failed', refreshed.Status__c,
+            'Job must transition to Failed when an uncaught DmlException reaches execute()');
+        Assert.isTrue(refreshed.Scan_Diagnostic_Log__c.contains('Metadata_Id_Must_Be_18_Characters')
+            || refreshed.Scan_Diagnostic_Log__c.contains('18 characters'),
+            'Scan_Diagnostic_Log__c should contain the exception detail from updateJobFailed()');
+        Assert.isNotNull(refreshed.Status_Closed_At__c,
+            'Status_Closed_At__c must be stamped when updateJobFailed() transitions the job to Failed');
+
+        AsyncApexJob asyncJob = [
+            SELECT NumberOfErrors FROM AsyncApexJob
+            WHERE ApexClass.Name = 'DependencyQueueable'
+            ORDER BY CreatedDate DESC LIMIT 1
+        ];
+        Assert.areEqual(0, asyncJob.NumberOfErrors,
+            'The Savepoint/rollback + updateJobFailed() pattern must prevent the exception '
+            + 'from propagating out of execute() - the Queueable job itself must not error');
+    }
+
+    @IsTest
     static void execute_ancestorPathNear32000Chars_setsMaxDepthExceededNotCircular() {
         // The ancestor path depth guard (ANCESTOR_PATH_MARGIN/ANCESTOR_PATH_MAX) must stop
         // traversal via Has_Fetched_Dependencies__c = true and a maxDepthExceeded context flag,
@@ -613,6 +668,18 @@ private class DependencyQueueableTest {
             } else {
                 res.setBody('{"done":true,"totalSize":0,"records":[]}');
             }
+            return res;
+        }
+    }
+
+    // Returns a malformed (15-char, not 18) root Id on the first callout to deterministically
+    // trip the Metadata_Id_Must_Be_18_Characters validation rule on the uncaught `update node;`
+    // in Step 5a. Used by execute_uncaughtExceptionAfterSavepoint_transitionsToFailedViaRollbackGuard.
+    private class RootIdResolveInvalidLengthMock implements HttpCalloutMock {
+        public HttpResponse respond(HttpRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setStatusCode(200);
+            res.setBody('{"done":true,"totalSize":1,"records":[{"Id":"a00100000001AAA"}]}');
             return res;
         }
     }

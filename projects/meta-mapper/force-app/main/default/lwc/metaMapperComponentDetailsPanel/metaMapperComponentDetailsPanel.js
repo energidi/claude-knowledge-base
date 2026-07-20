@@ -266,7 +266,7 @@ export default class MetaMapperComponentDetailsPanel extends LightningElement {
             return;
         }
         if (this.setupUrl) {
-            window.open(this.setupUrl, '_blank');
+            window.open(this.setupUrl, '_blank', 'noopener,noreferrer');
         }
     }
 

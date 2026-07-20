@@ -60,6 +60,7 @@
 }
 
 .tree-row:focus {
+    /* SLDS2: no verified equivalent hook for 2px outline width/offset in this codebase's token set */
     outline: 2px solid var(--slds-g-color-brand-base-60, #0176d3);
     outline-offset: -2px;
 }

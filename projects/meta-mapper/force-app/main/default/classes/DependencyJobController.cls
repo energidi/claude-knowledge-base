@@ -57,9 +57,12 @@ public with sharing class DependencyJobController {
     private static final Integer OBJECT_LIST_LIMIT = 10;
 
     // ---- Supported metadata types (for input validation) ----
+    // 'Report' intentionally excluded: Report is not queryable via the Tooling API
+    // (/tooling/query), so MetadataDependencyService.buildRootIdQuery() cannot resolve a
+    // root Id for it - not implemented.
     private static final Set<String> SUPPORTED_TYPES = new Set<String>{
         'ApexClass', 'ApexTrigger', 'Flow', 'CustomField',
-        'ValidationRule', 'WorkflowRule', 'Report'
+        'ValidationRule', 'WorkflowRule'
     };
 
     // -----------------------------------------------------------------------
@@ -73,7 +76,7 @@ public with sharing class DependencyJobController {
      * @param metadataType    API type name (e.g. ApexClass, CustomField)
      * @param apiName         Developer name of the target component
      * @param targetObject    Parent object API name (required for CustomField)
-     * @param activeFlowsOnly When true, Flow traversal skips inactive versions
+     * @param isActiveFlowsOnly When true, Flow traversal skips inactive versions
      * @return                Id of the created Metadata_Scan_Job__c
      */
     @AuraEnabled
@@ -81,7 +84,7 @@ public with sharing class DependencyJobController {
         String  metadataType,
         String  apiName,
         String  targetObject,
-        Boolean activeFlowsOnly
+        Boolean isActiveFlowsOnly
     ) {
         // ---- Async context guard ----
         if (System.isQueueable() || System.isBatch() || System.isFuture()) {
@@ -184,7 +187,7 @@ public with sharing class DependencyJobController {
             Target_Metadata_Type__c = metadataType,
             Target_API_Name__c      = apiName,
             Target_Parent_Object__c        = targetObject,
-            Is_Active_Flows_Only__c    = activeFlowsOnly == true,
+            Is_Active_Flows_Only__c    = isActiveFlowsOnly == true,
             Status__c               = STATUS_INITIALIZING,
             Job_Type__c             = 'Dependency_Map',
             Components_Analyzed__c  = 0,
@@ -222,7 +225,7 @@ public with sharing class DependencyJobController {
         // ---- Enqueue engine ----
         System.enqueueJob(new DependencyQueueable(
             job.Id,
-            activeFlowsOnly == true,
+            isActiveFlowsOnly == true,
             null
         ));
 

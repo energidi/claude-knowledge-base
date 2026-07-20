@@ -69,6 +69,9 @@ private class MetadataDependencyServiceTest {
         Map<String, List<Metadata_Dependency__c>> result = svc.fetchDependencies(ids, opts);
         Assert.isNotNull(result, 'Should not throw on 414');
         Assert.isFalse(opts.errors.isEmpty(), 'Should log 414 error after max split depth');
+        Assert.isTrue(opts.failedParentMetaIds.contains('a001000000000001AAA')
+            || opts.failedParentMetaIds.contains('a001000000000002AAA'),
+            'Split-exhausted batch must populate failedParentMetaIds so the parent is re-queried next execution');
     }
 
     @IsTest

@@ -3,7 +3,7 @@ import getNodeHierarchy from '@salesforce/apex/DependencyJobController.getNodeHi
 import getJobStatus from '@salesforce/apex/DependencyJobController.getJobStatus';
 import isCopilotEnabled from '@salesforce/apex/DependencyJobController.isCopilotEnabled';
 import { loadFilters, saveFilters, validateFilters, DEFAULT_FILTERS } from 'c/metaMapperFilters';
-import { buildTypeCounts, applyFilters, buildNodeMap, extractTypes } from 'c/metaMapperNodeServices';
+import { buildTypeCounts, applyFilters, buildNodeMap, extractTypes, maxDepth } from 'c/metaMapperNodeServices';
 import { truncateAt } from 'c/metaMapperFormatters';
 
 const SUMMARY_POLL_INTERVAL = 5000;
@@ -259,6 +259,9 @@ export default class MetaMapperResults extends LightningElement {
         return this._nodeMapCache;
     }
 
+    get availableTypes() { return extractTypes(this.allNodes); }
+    get maxDepthValue() { return maxDepth(this.allNodes); }
+
     get selectedNode() {
         if (!this.selectedNodeId) return null;
         return this.nodeMap.get(this.selectedNodeId) || null;
@@ -376,6 +379,12 @@ export default class MetaMapperResults extends LightningElement {
                 }
             })
             .catch(() => { /* reconciliation is best-effort */ });
+    }
+
+    handleFiltersChange(event) {
+        this.filters = event.detail;
+        this._invalidateCaches();
+        saveFilters(this.filters);
     }
 
     handleNodeSelected(event) {

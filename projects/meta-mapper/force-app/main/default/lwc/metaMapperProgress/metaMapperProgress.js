@@ -181,6 +181,9 @@ export default class MetaMapperProgress extends LightningElement {
     get resumeCurrentActive() { return this.resumeLoading && !this.resumeSlowerActive; }
 
     get pauseBannerText() {
+        if (this.resumeLoading) {
+            return 'Resuming analysis...';
+        }
         const reason = this.job && this.job.Pause_Reason__c;
         if (reason === 'ComponentLimitReached') {
             return 'Analysis paused - the component limit was reached. Raise Max_Components__c in MetaMapper Settings to continue.';
@@ -254,6 +257,8 @@ export default class MetaMapperProgress extends LightningElement {
                     this.showLongRunningBanner = false;
                     this.showPollingNotice = false;
                     this._stopPolling();
+                    clearTimeout(this._cancelTimeoutTimer);
+                    this._cancelPhase = 'idle';
                 } else if (elapsed > LONG_RUN_THRESHOLD_SEC && this.isProcessing && !this.longRunningBannerDismissed) {
                     this.showLongRunningBanner = true;
                 }

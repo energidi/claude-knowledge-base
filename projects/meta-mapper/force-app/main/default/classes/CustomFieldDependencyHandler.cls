@@ -57,6 +57,10 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
     // fields can exceed it if all fields are OR-ed into a single query. Cap at 20 and run
     // multiple queries per entity when relevantFields exceeds this value.
     private static final Integer MAX_CMT_FIELDS_PER_QUERY = 20;
+    // Maximum number of CMT entities scanned per findCmtRecordReferences() call. SOQL call
+    // count otherwise scales unboundedly with the org's CMT entity count (each entity issues
+    // 1+ field-batched queries). Caps upfront regardless of the live SOQL budget checked below.
+    private static final Integer MAX_CMT_ENTITIES_PER_EXECUTION = 30;
 
     // Single source of truth for field-reference suffixes - defined in MetadataTypeDescribeService
     // so ApexClassDependencyHandler (class-reference suffixes) and any future handler share one definition.
@@ -487,7 +491,21 @@ public without sharing class CustomFieldDependencyHandler implements IDependency
             result.addError(descErr);
         }
 
+        Integer cmtEntitiesProcessed = 0;
         for (EntityDefinition entity : cmtEntities) {
+            // Upfront entity-count cap: independent of the live SOQL budget check below, this
+            // bounds SOQL call count so it never scales unboundedly with the org's CMT entity
+            // count. Deferred entities are picked up on a future scan execution.
+            if (cmtEntitiesProcessed >= MAX_CMT_ENTITIES_PER_EXECUTION) {
+                Integer remainingEntityCount = cmtEntities.size() - cmtEntitiesProcessed;
+                String capMsg = 'CustomFieldDependencyHandler.findCmtRecordReferences: CMT entity scan capped at '
+                    + MAX_CMT_ENTITIES_PER_EXECUTION + ' entities for this execution; '
+                    + remainingEntityCount + ' entities deferred.';
+                System.debug(LoggingLevel.WARN, capMsg);
+                result.addError(capMsg);
+                break;
+            }
+            cmtEntitiesProcessed++;
             // Real-time SOQL guard: each entity uses 1+ queries (field-batching means wide CMT
             // types run multiple queries). A pre-scan estimate based on entity count is inaccurate
             // when entities have many suffix-matching fields. Rely solely on the live limit check.

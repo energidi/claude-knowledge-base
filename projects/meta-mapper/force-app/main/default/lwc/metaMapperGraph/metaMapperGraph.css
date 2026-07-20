@@ -48,7 +48,7 @@
     border: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
     border-radius: var(--slds-g-radius-border-1, 4px);
     font-size: var(--slds-g-font-scale-base, 0.8125rem);
-    line-height: 1.5;
+    line-height: 1.5; /* SLDS2: no equivalent hook for this line-height value */
 }
 
 .graph-search-input:focus {
@@ -150,7 +150,7 @@
 
 .spanning-notice-text {
     flex: 1;
-    line-height: 1.4;
+    line-height: 1.4; /* SLDS2: no equivalent hook for this line-height value */
 }
 
 .spanning-notice-dismiss {
@@ -290,6 +290,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    /* SLDS2: no equivalent hook for 1.25rem horizontal padding */
     padding: var(--slds-g-spacing-4, 1rem) 1.25rem var(--slds-g-spacing-3, 0.75rem);
     border-bottom: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
 }
@@ -316,6 +317,7 @@
 }
 
 .modal-body {
+    /* SLDS2: no equivalent hook for 1.25rem horizontal padding */
     padding: var(--slds-g-spacing-4, 1rem) 1.25rem;
     font-size: var(--slds-g-font-scale-1, 0.875rem);
     color: var(--slds-g-color-neutral-base-10, #3e3e3c);
@@ -323,13 +325,14 @@
 
 .modal-body p {
     margin: 0;
-    line-height: 1.6;
+    line-height: 1.6; /* SLDS2: no equivalent hook for this line-height value */
 }
 
 .modal-footer {
     display: flex;
     justify-content: flex-end;
     gap: var(--slds-g-spacing-3, 0.75rem);
+    /* SLDS2: no equivalent hook for 1.25rem horizontal padding */
     padding: var(--slds-g-spacing-3, 0.75rem) 1.25rem;
     border-top: var(--slds-g-sizing-border-1, 1px) solid var(--slds-g-color-border-base-1, #dddbda);
 }
@@ -399,7 +402,7 @@ lightning-spinner {
     .legend-drawer-backdrop {
         position: absolute;
         inset: 0;
-        background: rgba(0, 0, 0, 0.3);
+        background: var(--metamapper-g-color-overlay-3, rgba(0, 0, 0, 0.3));
         z-index: 1000;
     }
 

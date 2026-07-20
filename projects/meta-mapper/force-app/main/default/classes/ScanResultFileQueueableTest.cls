@@ -87,13 +87,15 @@ private class ScanResultFileQueueableTest {
         Test.stopTest();
 
         Metadata_Scan_Job__c refreshed = [
-            SELECT Status__c, Scan_Diagnostic_Log__c
+            SELECT Status__c, Scan_Diagnostic_Log__c, Status_Closed_At__c
             FROM Metadata_Scan_Job__c WHERE Id = :job.Id
         ];
         Assert.areEqual('Failed', refreshed.Status__c,
             'Job should transition to Failed when heap check fails');
         Assert.isTrue(refreshed.Scan_Diagnostic_Log__c.contains('too large'),
             'Error message should mention size issue');
+        Assert.isNotNull(refreshed.Status_Closed_At__c,
+            'Status_Closed_At__c must be stamped when updateJobFailed() transitions the job to Failed');
     }
 
     @IsTest
@@ -190,7 +192,7 @@ private class ScanResultFileQueueableTest {
         Test.stopTest();
 
         Metadata_Scan_Job__c refreshed = [
-            SELECT Status__c, Scan_Diagnostic_Log__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id
+            SELECT Status__c, Scan_Diagnostic_Log__c, Status_Closed_At__c FROM Metadata_Scan_Job__c WHERE Id = :job.Id
         ];
         Assert.areEqual('Failed', refreshed.Status__c,
             'Job should transition to Failed when the heap check fails');
@@ -198,6 +200,8 @@ private class ScanResultFileQueueableTest {
             'Prior diagnostic content must be preserved, not overwritten');
         Assert.isTrue(refreshed.Scan_Diagnostic_Log__c.contains('too large'),
             'New failure message must be appended alongside the prior message');
+        Assert.isNotNull(refreshed.Status_Closed_At__c,
+            'Status_Closed_At__c must be stamped when updateJobFailed() transitions the job to Failed');
     }
 
     @IsTest

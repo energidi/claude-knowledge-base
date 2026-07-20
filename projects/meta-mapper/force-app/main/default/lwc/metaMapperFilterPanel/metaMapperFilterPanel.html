@@ -1,0 +1,51 @@
+<template>
+    <lightning-card title="Filters" icon-name="utility:filterList" class="filter-panel">
+        <div class="slds-var-p-around_medium">
+
+            <div class="slds-var-m-bottom_medium">
+                <h3 class="slds-text-title_caps slds-var-m-bottom_x-small">Type</h3>
+                <template lwc:if={hasTypes}>
+                    <template for:each={typeOptions} for:item="opt">
+                        <div key={opt.value} class="slds-var-m-bottom_xx-small">
+                            <lightning-input type="checkbox" label={opt.label} checked={opt.checked}
+                                data-type={opt.value} onchange={handleTypeToggle}></lightning-input>
+                        </div>
+                    </template>
+                </template>
+                <template lwc:else>
+                    <p class="slds-text-body_small slds-text-color_weak">No types available.</p>
+                </template>
+            </div>
+
+            <div class="slds-var-m-bottom_medium">
+                <h3 class="slds-text-title_caps slds-var-m-bottom_x-small">Level range</h3>
+                <div class="slds-grid slds-gutters_x-small">
+                    <div class="slds-col">
+                        <lightning-input type="number" label="Min level" min="0" max={maxDepthValue}
+                            value={minLevel} onchange={handleMinLevelChange}></lightning-input>
+                    </div>
+                    <div class="slds-col">
+                        <lightning-input type="number" label="Max level" min="0" max={maxDepthValue}
+                            value={maxLevel} onchange={handleMaxLevelChange}></lightning-input>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slds-var-m-bottom_medium">
+                <lightning-input type="number" label="Confidence threshold (0-100)" min="0" max="100"
+                    value={confidenceThreshold} onchange={handleConfidenceChange}></lightning-input>
+            </div>
+
+            <div class="slds-var-m-bottom_medium">
+                <lightning-input type="toggle" label="Show circular dependencies" checked={showCircular}
+                    onchange={handleShowCircularChange}></lightning-input>
+                <lightning-input type="toggle" label="Show dynamic references" checked={showDynamic}
+                    onchange={handleShowDynamicChange} class="slds-var-m-top_x-small"></lightning-input>
+                <lightning-input type="toggle" label="Show supplemental results" checked={showSupplemental}
+                    onchange={handleShowSupplementalChange} class="slds-var-m-top_x-small"></lightning-input>
+            </div>
+
+            <lightning-button label="Reset Filters" variant="neutral" onclick={handleReset}></lightning-button>
+        </div>
+    </lightning-card>
+</template>

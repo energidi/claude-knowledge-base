@@ -127,7 +127,7 @@ describe('c-meta-mapper-search', () => {
                 metadataType: 'ApexClass',
                 apiName: 'MyClass',
                 targetObject: null,
-                activeFlowsOnly: true
+                isActiveFlowsOnly: true
             });
             expect(handler).toHaveBeenCalledTimes(1);
             expect(handler.mock.calls[0][0].detail.jobId).toBe('a0Xxx0000000001');

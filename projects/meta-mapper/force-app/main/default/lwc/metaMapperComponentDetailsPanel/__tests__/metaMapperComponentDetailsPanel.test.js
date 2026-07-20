@@ -133,7 +133,7 @@ describe('c-meta-mapper-component-details-panel', () => {
 
             const openSpy = jest.spyOn(window, 'open').mockImplementation(() => {});
             btn.dispatchEvent(new CustomEvent('click'));
-            expect(openSpy).toHaveBeenCalledWith(`/${orgId}/lightning/setup/ApexClasses/home`, '_blank');
+            expect(openSpy).toHaveBeenCalledWith(`/${orgId}/lightning/setup/ApexClasses/home`, '_blank', 'noopener,noreferrer');
             openSpy.mockRestore();
         });
 
@@ -155,7 +155,8 @@ describe('c-meta-mapper-component-details-panel', () => {
             element.shadowRoot.querySelector('.setup-btn').dispatchEvent(new CustomEvent('click'));
             expect(openSpy).toHaveBeenCalledWith(
                 `/${orgId}/lightning/setup/ObjectManager/Account/FieldsAndRelationships/view`,
-                '_blank'
+                '_blank',
+                'noopener,noreferrer'
             );
             openSpy.mockRestore();
         });

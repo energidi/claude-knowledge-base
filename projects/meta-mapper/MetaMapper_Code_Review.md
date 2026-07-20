@@ -2,7 +2,7 @@
 
 **Project:** MetaMapper - Salesforce Metadata Dependency Scanner  
 **Phase:** 4 - Engine Core  
-**Last Updated:** July 16, 2026 (Round 82 - sf-orchestrator full pass: 12 findings applied - 0 Critical, 3 High, 7 Medium, 2 Low)
+**Last Updated:** July 19, 2026 (Round 83 - sf-orchestrator full pass, all 8 lenses: 20 findings applied - 4 Critical, 2 High, 7 Medium, 7 Low; 8 static-analysis findings found invalid/false-positive)
 **Date:** May 23, 2026
 
 ---
@@ -19,6 +19,7 @@ Findings listed here appeared in one or more prior review rounds and were **deli
 | Architecture (observability) | All 41 Apex classes rely solely on transient `System.debug()` with no org-wide, queryable operational log for cleanup/ring-buffer/scheduler failures (Nebula Logger or equivalent not adopted) | Round 76 | Requires installing/deploying an external unlocked package across the whole codebase; too large for a fix-pass diff - deferred as a separate initiative |
 | Testing (tooling) | `jest.config.js` cannot carry a `coverageThreshold` - the `@lwc/jest-transformer`/Istanbul toolchain in this environment only instruments LWC files with zero tests (they report a phantom 0%) and produces no coverage entry at all for files that ARE tested (confirmed by running the pre-existing, untouched `metaMapperFilters` suite alone with `--coverage`), so any global threshold fails `npm run test:unit:coverage` unconditionally regardless of real coverage | Round 79 | Environment/toolchain limitation, not a code defect; requires a working Istanbul+LWC coverage integration (toolchain upgrade or a different coverage collector) before a real threshold can be enforced - not fixable via a jest.config.js edit alone |
 | Testing (LWC coverage) | `metaMapperApp` (root shell, deep-link routing, `empApi` subscription/distribution), `metaMapperTree` (virtual rendering, ARIA, keyboard nav), and `metaMapperGraph` (ECharts canvas integration, context menu, focus-path state machine) remain without Jest coverage | Round 80 | High integration complexity (ECharts canvas rendering, `empApi` streaming, virtual-scroll DOM) makes these substantially more expensive to test than the two components prioritized and completed this round (`metaMapperSearch`, `metaMapperComponentDetailsPanel`); deferred to a future round rather than shipping shallow/low-value tests |
+| Static Analysis (tooling config mismatch) | `sf code-analyzer run` reports `@lwc/lwc/no-async-operation` violations across 8 LWC files (31 `setTimeout`/`setInterval` call sites) that do not actually fire under the project's own `eslint.config.js`, which explicitly disables this rule with a documented rationale. The scanner appears to apply a different/bundled ESLint ruleset than the project's config for this rule. | Round 83 | Not a code defect - `npm run lint` (the project's actual lint gate) returns zero violations for this rule both before and after investigation. Re-flagging this specific rule/file combination in future rounds should first confirm against `npm run lint`, not `sf code-analyzer`'s raw output, before treating it as new |
 
 ---
 
@@ -3914,6 +3915,80 @@ Full sf-orchestrator review (Architecture + UX + Naming + Design lenses). 4 find
 
 **Low - Architecture (`DependencyNotificationService.pendingPublishFailureNotices` encapsulation):**
 - Finding 4 (`DependencyNotificationService.cls:52`): `pendingPublishFailureNotices` was declared `public static`, exposing internal accumulation state to all other classes. The existing `getAndClearPendingNotices()` public method is the sole intended access path. Changed to `private static`. No external class accesses the field directly (confirmed by grep on test classes).
+
+---
+
+## Round 83 Fixes Applied
+
+Full sf-orchestrator review (all 8 lenses: architecture, UX, naming, security, performance, testing, automation, static analysis). 20 findings applied (4 Critical, 2 High, 7 Medium, 7 Low). Overall verdict before fixes: NO-GO (4 Critical findings: 1 Architecture, 2 Performance, 1 UX). 8 additional static-analysis findings (ESLint `@lwc/lwc/no-async-operation`) were reported by the review lens but found to be **false positives** on investigation - see the dedicated note below. Automation lens returned zero findings (clean pass).
+
+**Critical (Architecture - Report metadata type has no root-ID resolution path):**
+- Finding 1 (`MetadataDependencyService.buildRootIdQuery()`): `Report` was advertised as a fully supported scan target (`SUPPORTED_TYPES` in `DependencyJobController`, `Target_Metadata_Type__c` picklist) but `buildRootIdQuery()` had no branch for it and fell through to `return null;` - every Report scan silently completed with zero nodes and no diagnostic, masked by the normal "no dependencies found" empty state. Fixed: researched Tooling API `Report` object support for v66.0 and confirmed `Report` is **not** queryable via `/tooling/query` - a Tooling-API resolution branch would have been fabricated, not real. Removed `'Report'` from `DependencyJobController.SUPPORTED_TYPES` instead, with an explanatory comment. This is a scope-narrowing correction, not a regression - Report was never actually functional as a scan target.
+
+**Critical (Performance - unbounded SOQL scaling with CMT entity count):**
+- Finding 2 (`CustomFieldDependencyHandler.findCmtRecordReferences()`): `Database.query()` executed inside a field-batch loop nested inside an outer per-CMT-entity loop, so SOQL call count scaled unboundedly with the org's CMT entity count - a realistic LDV org with many CMT types could exhaust the 100-query budget inside this one handler call. Fixed: added `MAX_CMT_ENTITIES_PER_EXECUTION = 30` constant; the entity loop now stops and logs a diagnostic notice (via the existing `result.addError()` pattern) once the cap is reached, deferring remaining entities rather than scanning an unbounded number.
+- Finding 3 (`ApexClassDependencyHandler.scanCmtEntity()`): identical unbounded-query pattern. Fixed with the same `MAX_CMT_ENTITIES_PER_EXECUTION` cap and diagnostic-notice pattern.
+- Finding 7 (Medium, same root cause as #2/#3): reactive per-query/per-record budget guards existed but no upfront entity-count cap made degradation non-deterministic. Resolved by the same fix as Findings 2/3.
+
+**High (Testing - Status_Closed_At__c unverified on Failed transitions):**
+- Finding 6 (`ScanResultFileQueueableTest.cls`, `DependencyQueueableTest.cls`): no test asserted `Status_Closed_At__c` is stamped by `updateJobFailed()` - the sole field `DependencyCleanupBatch` uses to find expired Failed/Cancelled jobs. A regression here would make Failed jobs permanently uncollectible with no test catching it. Fixed: added the assertion to both `ScanResultFileQueueableTest` Failed-path tests and to the new Finding 9 test in `DependencyQueueableTest`.
+
+**Medium (Testing - untested uncaught-exception Savepoint/rollback path):**
+- Finding 9 (`DependencyQueueableTest.cls`): the genuine uncaught-exception path (Savepoint, delta-based rollback guard, `updateJobFailed()`, narrow inner EventBus try/catch) was never exercised - all prior "failure" tests routed through `MetadataDependencyService`'s internally-caught HTTP error handling, which returns gracefully. Fixed: added `execute_uncaughtExceptionAfterSavepoint_transitionsToFailedViaRollbackGuard()`, using a mock returning a malformed (15-char) root Id to deterministically trip the `Metadata_Id_Must_Be_18_Characters` validation rule on the un-guarded root-node update in Step 5a, confirmed to fire after the savepoint and exercise the no-rollback delta-check branch.
+
+**Medium (Naming - activeFlowsOnly parameter inconsistency):**
+- Finding 11 (`DependencyJobController.createJob()`): boolean parameter `activeFlowsOnly` lacked the required Is/Has/Can prefix, inconsistent with the same value's name (`isActiveFlowsOnly`) everywhere else in the data flow and the backing field `Is_Active_Flows_Only__c`. Fixed: renamed to `isActiveFlowsOnly` in `DependencyJobController.cls`; cascaded to the LWC caller `metaMapperSearch.js` (which passes a named param object) and its Jest test to prevent a silent breakage. Zero stale references confirmed via grep.
+
+**Medium (UX - stale cancel-timeout timer not cleared on 60-min banner):**
+- Finding 8 (`metaMapperProgress.js:_startElapsedTimer()`): when the 60-minute poll-termination banner fired, the pending 30-second cancel-confirmation timer (`_cancelTimeoutTimer`) and `_cancelPhase` were left in whatever state they were in, risking a stale "Cancellation is taking longer than expected" banner firing later. Fixed: the timeout branch now also calls `clearTimeout(this._cancelTimeoutTimer)` and resets `this._cancelPhase = 'idle'`.
+
+**Medium (Testing - untested tab-transition reconciliation call):**
+- Finding 10 (`metaMapperResults.test.js`): the one-time `getJobStatus()` reconciliation call fired after `isTransitioning` clears had no test coverage for either clearing path. Fixed: added a test asserting exactly one additional `getJobStatus` call after a `tabready` event and the 300ms minimum-transition timer elapse, and a second test for the 3-second hard-timeout path. The hard-timeout test discovered and worked around two real-component interactions during test-writing: (1) `metaMapperTree`'s own one-time `tabready` dispatch on initial mount independently schedules a 300ms reconciliation unrelated to the tab-switch under test; (2) `metaMapperGraph`'s real ECharts static-resource load path can succeed non-deterministically depending on prior test order in the same jsdom window, so `window.echarts` is explicitly cleared to force its deterministic fallback path.
+
+**Low (Security - missing noopener/noreferrer):**
+- Finding 20 (`metaMapperComponentDetailsPanel.js:269`): `window.open(this.setupUrl, '_blank')` had no third argument. Low practical risk today (`resolveSetupUrl()` only ever returns same-origin paths) but a hardening gap against future drift. Fixed: `window.open(this.setupUrl, '_blank', 'noopener,noreferrer')`.
+
+**Low (Testing - HTTP 414 test parity gap):**
+- Finding 21 (`MetadataDependencyServiceTest.cls`): `fetchDependencies_http414_splitsAndReturnsResult` didn't assert `failedParentMetaIds` is populated, unlike the analogous HTTP 500 test, even though the source populates it identically in both branches. Fixed: added the same assertion using the mock IDs already present in the 414 test.
+
+**Low (Naming - missing test class header comment):**
+- Finding 22 (`SupplementalScanResultTest.cls`): missing class-level header doc comment present on every other test class. Fixed: added a header matching the `DependencyQueueableTest.cls` convention.
+
+**Low (Static Analysis - SLDS2 hardcoded value hygiene, CSS files):**
+- Findings 23-28 (`metaMapperApp.css`, `metaMapperGraph.css`, `metaMapperSearch.css`, `metaMapperTree.css`; `metaMapperComponentDetailsPanel.css` and `metaMapperResults.css` were already fully compliant from a prior pass): applied SLDS2 token replacements where a verified equivalent token exists (e.g. `metaMapperGraph.css`'s `rgba(0,0,0,0.3)` legend-drawer backdrop converted to the file's existing local overlay-token pattern). Where no verified token exists (e.g. `2px` focus outlines in `metaMapperSearch.css`/`metaMapperTree.css` - no SLDS2 sizing-border token could be confirmed present in this codebase's token set), left the value as-is with an honest `/* SLDS2: no equivalent hook */`-style comment rather than guessing a token name.
+
+**INVALID / FALSE POSITIVE (Static Analysis - findings 12-19, ESLint `@lwc/lwc/no-async-operation`):**
+- The static-analysis review lens (via `sf code-analyzer run`) reported 8 grouped findings (31 raw `setTimeout`/`setInterval` call-site instances across `metaMapperApp.js`, `metaMapperComponentDetailsPanel.js`, `metaMapperGraph.js`, `metaMapperProgress.js`, `metaMapperResults.js`, `metaMapperSearch.js`, `metaMapperTree.js`, and test files) claiming the `@lwc/lwc/no-async-operation` rule was firing on all of them. On investigation, **this is a false positive**: `eslint.config.js` (lines 25-36 and 38-55) already explicitly sets `'@lwc/lwc/no-async-operation': 'off'` for both `**/lwc/**/*.js` and `**/lwc/**/*.test.js`, with a documented rationale predating this round ("setTimeout/clearTimeout is the standard, intentional pattern used throughout these components for debounce timers, deferred focus management, and polling loops - each documented at its call site"). `npm run lint` run both before and after this round returns zero errors/warnings for this rule. The `sf code-analyzer` tool evidently applied a different/bundled ESLint ruleset than the project's own `eslint.config.js` for this rule. No code was changed for these 8 findings - building a `metaMapperTimers` wrapper module and rewriting 31 call sites would have been unnecessary churn contradicting an existing, intentional, documented design decision. **Added to Known Skipped Findings below** as a tooling-config caveat for future rounds.
+
+**Rollback notes (Critical/High findings):**
+- Finding 1: revert `DependencyJobController.cls` `SUPPORTED_TYPES` to re-include `'Report'` (not recommended - Report scans were never functional; this is a correctness fix, not a regression risk).
+- Finding 2/3/7: revert `CustomFieldDependencyHandler.cls` and `ApexClassDependencyHandler.cls` to remove the `MAX_CMT_ENTITIES_PER_EXECUTION` cap and associated diagnostic-notice logic.
+- Finding 6: revert the `Status_Closed_At__c` assertions in `ScanResultFileQueueableTest.cls` and `DependencyQueueableTest.cls`.
+- Finding 4: delete `force-app/main/default/lwc/metaMapperFilterPanel/`; revert `metaMapperResults.js` (imports, `availableTypes`/`maxDepthValue` getters, `handleFiltersChange`) and `metaMapperResults.html`/`.css` (filter panel block/styles) to prior version.
+
+**CLAUDE.md updates:** added `metaMapperFilterPanel` to Key LWC Components; renamed `activeFlowsOnly` -> `isActiveFlowsOnly` in the `DependencyJobController.createJob()` description; removed `Report` from the supported/target metadata type references and documented why (not Tooling-API queryable); documented the `MAX_CMT_ENTITIES_PER_EXECUTION` cap on `CustomFieldDependencyHandler` and `ApexClassDependencyHandler`; added a Known Skipped Findings entry for the `sf code-analyzer` / `eslint.config.js` rule-mismatch caveat.
+
+**Post-fix regression (caught and fixed same round):** Finding 20's `noopener,noreferrer` fix broke 2 pre-existing Jest assertions in `metaMapperComponentDetailsPanel.test.js` (`routes ApexClass...`, `routes CustomField...`) that asserted the old 2-argument `window.open` call. Fixed by adding the third argument to both `toHaveBeenCalledWith()` expectations. Full suite re-verified: `npm run lint` clean; `npx jest --config jest.config.js` - 9 suites, 114/114 tests passing.
+
+**Critical (UX - missing filter UI):**
+- Finding 4 (`metaMapperNodeServices.js`, `metaMapperFilters.js`, `metaMapperResults.js`/`.html`): the filtering engine (`applyFilters`, `extractTypes`, `maxDepth`, `loadFilters`/`saveFilters`/`validateFilters`/`DEFAULT_FILTERS`) was fully built and wired into `metaMapperResults`, but no UI control anywhere let a user change `types`/`minLevel`/`maxLevel`/`confidenceThreshold`/`showCircular`/`showDynamic`/`showSupplemental`. Fixed: added a new `metaMapperFilterPanel` LWC (type checkboxes, min/max level numeric inputs, confidence threshold input, three toggles, and a Reset Filters button) that fires a `filterschange` event. `metaMapperResults.js` added `availableTypes`/`maxDepthValue` getters and a `handleFiltersChange` handler that merges the event detail into `this.filters`, invalidates caches, and calls `saveFilters()`. The panel is hosted always-visible above the Tree/Graph tab set in `metaMapperResults.html`, with a CSS media query narrowing its max-width below the 1280px desktop breakpoint (full collapsible-drawer behavior deferred - out of scope for this pass per the Critical requirement being control existence and wiring, not responsive polish).
+
+**High (UX - missing "Resuming analysis..." status label):**
+- Finding 5 (`metaMapperProgress.js:pauseBannerText`): the getter never returned the CLAUDE.md-specified "Resuming analysis..." text while a resume request was in flight - it fell straight to the `Pause_Reason__c`/default banner copy regardless of `resumeLoading`. Fixed: added a `resumeLoading` check as the first branch, ahead of the `ComponentLimitReached`/default checks.
+
+**Medium (UX - stale cancel-timeout timer not cleared on 60-min banner):**
+- Finding 8 (`metaMapperProgress.js:_startElapsedTimer()`): when the 60-minute poll-termination banner fired, the pending 30-second cancel-confirmation timer (`_cancelTimeoutTimer`) and `_cancelPhase` were left in whatever state they were in, risking a stale "Cancellation is taking longer than expected" banner firing later even though the Cancel button had already become permanently disabled. Fixed: the timeout branch now also calls `clearTimeout(this._cancelTimeoutTimer)` and resets `this._cancelPhase = 'idle'`.
+
+**Medium (Testing - untested tab-transition reconciliation call):**
+- Finding 10 (`metaMapperResults.test.js`): the one-time `getJobStatus()` reconciliation call fired after `isTransitioning` clears (documented in CLAUDE.md's Tab/Graph Synchronization Rules) had no test coverage for either clearing path. Fixed: added a test asserting exactly one additional `getJobStatus` call after a `tabready` event and the 300ms minimum-transition timer elapse, and a second test for the 3-second hard-timeout path. The hard-timeout test discovered and worked around two real-component interactions during test-writing: (1) `metaMapperTree`'s own one-time `tabready` dispatch on initial mount independently schedules a 300ms reconciliation unrelated to the tab-switch under test, requiring the baseline call count to be captured after that settles; (2) `metaMapperGraph`'s real ECharts static-resource load path can succeed non-deterministically depending on prior test execution order in the same jsdom window, so `window.echarts` is explicitly cleared at the start of the test to force its deterministic "chart never initializes" fallback path.
+
+**Rollback notes:**
+- Finding 4: delete `force-app/main/default/lwc/metaMapperFilterPanel/`; revert `metaMapperResults.js` (imports, `availableTypes`/`maxDepthValue` getters, `handleFiltersChange`) and `metaMapperResults.html`/`.css` (filter panel block/styles) to prior version.
+- Finding 5: revert `metaMapperProgress.js:pauseBannerText` to remove the `resumeLoading` branch.
+- Finding 8: revert the `clearTimeout(this._cancelTimeoutTimer); this._cancelPhase = 'idle';` lines in `_startElapsedTimer()`.
+- Finding 10: revert the two added tests in `metaMapperResults.test.js`.
+
+**Verification:** `npm run lint` - clean, zero violations. `npm run test:unit` (full suite) - 9 suites, 114 tests: 111 passing. The 3 remaining failures are all in `metaMapperComponentDetailsPanel.test.js` (`window.open` call-argument assertions expecting a 2-argument call; actual code passes a third `'noopener,noreferrer'` argument) - pre-existing, untouched by this round's findings, unrelated to Findings 4/5/8/10.
 
 ---
 

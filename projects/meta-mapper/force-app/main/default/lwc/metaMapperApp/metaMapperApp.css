@@ -6,4 +6,4 @@
     box-shadow: 0 2px 8px var(--metamapper-g-color-shadow-1, rgba(0,0,0,0.25));
 }
 .meta-mapper-tour-container { max-width: 600px; /* SLDS2: no equivalent hook */ }
-.setup-modal-content ol { margin-left: var(--slds-g-spacing-5, 1.5rem); line-height: 1.8; }
+.setup-modal-content ol { margin-left: var(--slds-g-spacing-5, 1.5rem); line-height: 1.8; /* SLDS2: no equivalent hook for this line-height value */ }

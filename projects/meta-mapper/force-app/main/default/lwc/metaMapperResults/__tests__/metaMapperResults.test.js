@@ -156,6 +156,57 @@ describe('c-meta-mapper-results', () => {
             expect(el.shadowRoot.querySelector('.tab-load-error')).not.toBeNull();
             jest.useRealTimers();
         });
+
+        it('issues exactly one getJobStatus reconciliation call after tabready clears isTransitioning', async () => {
+            const el = makeElement();
+            el.job = { Status__c: 'Processing', Target_API_Name__c: 'MyClass', Components_Analyzed__c: 1 };
+            await flushPromises();
+
+            const callsBeforeTransition = getJobStatus.mock.calls.length;
+
+            const tabset = el.shadowRoot.querySelector('lightning-tabset');
+            tabset.dispatchEvent(new CustomEvent('active', { detail: { value: 'graph' } }));
+            await Promise.resolve();
+
+            const graphEl = el.shadowRoot.querySelector('c-meta-mapper-graph');
+            graphEl.dispatchEvent(new CustomEvent('tabready'));
+            // handleTabReady defers clearing isTransitioning by TAB_TRANSITION_MIN_MS (300ms);
+            // the reconciliation getJobStatus() call fires once that clears.
+            await new Promise((resolve) => setTimeout(resolve, 350));
+
+            expect(getJobStatus.mock.calls.length).toBe(callsBeforeTransition + 1);
+        });
+
+        it('issues exactly one getJobStatus reconciliation call via the 3-second hard timeout path', async () => {
+            // Real timers (not fake) deliberately used here so metaMapperGraph's own internal
+            // async chart initialization (ECharts static resource load) settles at its natural
+            // pace rather than racing the parent's hard-timeout callback within one fake-timer
+            // tick. window.echarts is also cleared: an earlier test in this file may have caused
+            // the real echarts.min.js to actually load into this jsdom window (loadScript stub
+            // execs the real static resource), which would let metaMapperGraph's chart init
+            // succeed and fire its own tabready/finished timers - polluting the call count this
+            // test is isolating. Clearing it forces the deterministic "chart never initializes"
+            // path, so the only reconciliation source is metaMapperResults' own hard timeout.
+            delete window.echarts;
+            const el = makeElement();
+            el.job = { Status__c: 'Processing', Target_API_Name__c: 'MyClass', Components_Analyzed__c: 1 };
+            await flushPromises();
+            // metaMapperTree also mounts on initial render and fires its own one-time tabready
+            // (independent of any tab switch), which schedules a 300ms reconciliation timer.
+            // Let that settle before measuring the baseline so it isn't conflated with the
+            // hard-timeout reconciliation under test.
+            await new Promise((resolve) => setTimeout(resolve, 400));
+
+            const callsBeforeTransition = getJobStatus.mock.calls.length;
+
+            const tabset = el.shadowRoot.querySelector('lightning-tabset');
+            tabset.dispatchEvent(new CustomEvent('active', { detail: { value: 'graph' } }));
+
+            await new Promise((resolve) => setTimeout(resolve, 3100));
+
+            expect(el.shadowRoot.querySelector('.tab-load-error')).not.toBeNull();
+            expect(getJobStatus.mock.calls.length).toBe(callsBeforeTransition + 1);
+        }, 10000);
     });
 
     describe('notifyStatusChange gating (@api)', () => {
