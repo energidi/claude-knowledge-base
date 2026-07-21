@@ -1,6 +1,6 @@
 /**
  * Apex controller for the icdLookup LWC. Provides ICD-10 code search via live callout
- * to the NIH Clinical Tables API and CMT-driven configuration. No DML performed.
+ * to the NIH Clinical Tables API. No DML performed.
  * Called imperatively from icdLookup.js. Must not be invoked from Batch, Queueable,
  * or @future contexts that cannot support callouts.
  */
@@ -108,40 +108,6 @@ public with sharing class ICDLookupController {
     }
 
     return results;
-  }
-
-  /**
-   * Returns the active ICD_Lookup__mdt record for the given Flow API name.
-   * SOQL only - no callouts. Safe for @AuraEnabled(cacheable=true) context.
-   * On failure, notifies the IS team by email and returns null so the component
-   * falls back to its @api property defaults silently - no user-facing message,
-   * since a config load failure is an admin/config issue, not something the
-   * person filling out the Flow can act on.
-   * @param flowApiName API name of the Screen Flow using the icdLookup component.
-   * @return Matching active ICD_Lookup__mdt record, or null if none found or on error.
-   */
-  @AuraEnabled(cacheable=true)
-  public static ICD_Lookup__mdt getIcdLookupConfig(String flowApiName) {
-    if (String.isBlank(flowApiName))
-      return null;
-    try {
-      List<ICD_Lookup__mdt> configs = [
-        SELECT
-          DeveloperName,
-          MasterLabel,
-          Field_Placeholder__c,
-          No_Matching_Codes_Found_Message__c,
-          Required__c,
-          Help_Text__c
-        FROM ICD_Lookup__mdt
-        WHERE Flow_API_Name__c = :flowApiName AND Active__c = TRUE
-        LIMIT 1
-      ];
-      return configs.isEmpty() ? null : configs[0];
-    } catch (Exception e) {
-      notifyOnError('Config Load (Flow API Name: ' + flowApiName + ')', e);
-      return null;
-    }
   }
 
   private static void notifyOnError(String context, Exception e) {

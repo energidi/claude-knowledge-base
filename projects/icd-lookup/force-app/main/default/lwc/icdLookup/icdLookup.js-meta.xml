@@ -4,7 +4,7 @@
     <isExposed>true</isExposed>
     <masterLabel>ICD Lookup</masterLabel>
     <description
-  >Single-selection ICD-10 code typeahead for Screen Flows. Searches the NIH Clinical Tables API live; emits code-only selectedCode plus selectedDescription as separate outputs. Configure per-flow behavior via ICD_Lookup__mdt Custom Metadata.</description>
+  >Single-selection ICD-10 code typeahead for Screen Flows. Searches the NIH Clinical Tables API live; emits code-only selectedCode plus selectedDescription as separate outputs.</description>
     <targets>
         <target>lightning__FlowScreen</target>
     </targets>
@@ -32,7 +32,7 @@
         role="inputOnly"
         label="3. Required"
         default="false"
-        description="When true, blocks Flow progression if no code is selected. Overridden by ICD_Lookup__mdt.Required__c when Flow API Name is set."
+        description="When true, blocks Flow progression if no code is selected."
       />
             <!-- default here must stay in sync with the JS class-field default in icdLookup.js. Flow Builder reads defaults from THIS file, not from JS - do not remove default when reformatting. -->
             <property
@@ -50,37 +50,32 @@
         label="5. Default Value"
         description="Pre-populates the field with an existing ICD-10 code (e.g., from a record). Format must match the output format: CODE: Description."
       />
-            <property
-        name="flowApiName"
-        type="String"
-        role="inputOnly"
-        label="6. Flow API Name"
-        description="API name of the Screen Flow using this component. Used to load configuration from the ICD_Lookup__mdt Custom Metadata Type. Overrides fields 7, 8, and 9 when a matching record exists."
-      />
+            <!-- default here must stay in sync with the JS class-field default in icdLookup.js. Flow Builder reads defaults from THIS file, not from JS - do not remove default when reformatting. -->
             <property
         name="helpText"
         type="String"
         role="inputOnly"
-        label="7. Help Text"
-        description="Help text displayed next to the field label via a help icon. Overridden by ICD_Lookup__mdt.Help_Text__c when Flow API Name is set."
+        label="6. Help Text"
+        default="You can search the ICD-10 code by typing the code or the code description."
+        description="Help text displayed next to the field label via a help icon."
       />
             <!-- default here must stay in sync with the JS class-field default in icdLookup.js. Flow Builder reads defaults from THIS file, not from JS - do not remove default when reformatting. -->
             <property
         name="noResultsMessage"
         type="String"
         role="inputOnly"
-        label="8. No Results Message"
+        label="7. No Results Message"
         default="No matching codes found."
-        description="Message shown when the search returns no results. Defaults to 'No matching codes found.' Overridden by ICD_Lookup__mdt.No_Matching_Codes_Found_Message__c when Flow API Name is set."
+        description="Message shown when the search returns no results. Defaults to 'No matching codes found.'"
       />
             <!-- default here must stay in sync with the JS class-field default in icdLookup.js. Flow Builder reads defaults from THIS file, not from JS - do not remove default when reformatting. -->
             <property
         name="fieldPlaceholder"
         type="String"
         role="inputOnly"
-        label="9. Placeholder Text"
+        label="8. Placeholder Text"
         default="Search by code or description (e.g. 'Hypertension')"
-        description="Placeholder text inside the search input. Defaults to 'Search by code or description (e.g. Hypertension)'. Overridden by ICD_Lookup__mdt.Field_Placeholder__c when Flow API Name is set."
+        description="Placeholder text inside the search input. Defaults to 'Search by code or description (e.g. Hypertension)'."
       />
             <property
         name="selectedCode"

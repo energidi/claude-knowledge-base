@@ -1,6 +1,5 @@
 import { LightningElement, api } from "lwc";
 import searchIcd10 from "@salesforce/apex/ICDLookupController.searchIcd10";
-import getIcdLookupConfig from "@salesforce/apex/ICDLookupController.getIcdLookupConfig";
 import { FlowAttributeChangeEvent } from "lightning/flowSupport";
 import labelSearchFailed from "@salesforce/label/c.ICD_Lookup_Error_API_Unavailable";
 import labelValidationRequired from "@salesforce/label/c.ICD_Lookup_Validation_Required";
@@ -21,12 +20,12 @@ import labelSRKeyboardHint from "@salesforce/label/c.ICD_Lookup_SR_Keyboard_Hint
 export default class IcdLookup extends LightningElement {
   @api uniquenessKey = "";
   @api label = "";
-  @api flowApiName;
   @api mandatory = false;
   @api defaultValue;
   @api disabled = false;
 
-  _helpText;
+  _helpText =
+    "You can search the ICD-10 code by typing the code or the code description.";
   @api get helpText() {
     return this._helpText;
   }
@@ -90,16 +89,14 @@ export default class IcdLookup extends LightningElement {
   _shouldCheckTruncation = false;
   _resultsReady = false;
   _shouldScrollToFocused = false;
-  _mandatory = null;
   _requestSeq = 0;
   _dropdownDismissed = false;
   _searchIsSlow = false;
   _slowSearchTimer;
   _uid = `icd-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  // CMT-driven mandatory overrides @api mandatory when loaded; @api mandatory is the fallback on CMT failure.
   get isMandatory() {
-    return this._mandatory !== null ? this._mandatory : this.mandatory;
+    return this.mandatory;
   }
 
   get _labelId() {
@@ -201,29 +198,6 @@ export default class IcdLookup extends LightningElement {
     } else if (this.uniquenessKey) {
       this._restorePersistedValue();
     }
-
-    if (this.flowApiName) {
-      getIcdLookupConfig({ flowApiName: this.flowApiName })
-        .then((config) => {
-          if (config) {
-            if (config.Field_Placeholder__c)
-              this._fieldPlaceholder = config.Field_Placeholder__c;
-            if (config.No_Matching_Codes_Found_Message__c)
-              this._noResultsMessage =
-                config.No_Matching_Codes_Found_Message__c;
-            if (config.Help_Text__c) this._helpText = config.Help_Text__c;
-            if (
-              config.Required__c !== null &&
-              config.Required__c !== undefined
-            ) {
-              this._mandatory = config.Required__c;
-            }
-          }
-        })
-        .catch(() => {
-          // Config load failure falls back to @api defaults silently; no user-facing banner.
-        });
-    }
   }
 
   disconnectedCallback() {
@@ -234,7 +208,7 @@ export default class IcdLookup extends LightningElement {
   // Legacy record values arrive via defaultValue with no guarantee they came from the API
   // (pre-existing eTRF data entered before this component existed). Re-verify against the
   // NIH API on load; only a confirmed non-match is flagged invalid - a failed/unreachable
-  // API call must not falsely flag valid legacy data, so it fails silently like getIcdLookupConfig.
+  // API call must not falsely flag valid legacy data, so it fails silently.
   // codePart is already split from defaultValue by the caller.
   _verifyDefaultValue(codePart) {
     searchIcd10({ searchTerm: codePart })

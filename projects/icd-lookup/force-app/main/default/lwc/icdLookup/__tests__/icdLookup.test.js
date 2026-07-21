@@ -1,15 +1,9 @@
 import { createElement } from "lwc";
 import IcdLookup from "c/icdLookup";
 import searchIcd10 from "@salesforce/apex/ICDLookupController.searchIcd10";
-import getIcdLookupConfig from "@salesforce/apex/ICDLookupController.getIcdLookupConfig";
 
 jest.mock(
   "@salesforce/apex/ICDLookupController.searchIcd10",
-  () => ({ default: jest.fn() }),
-  { virtual: true }
-);
-jest.mock(
-  "@salesforce/apex/ICDLookupController.getIcdLookupConfig",
   () => ({ default: jest.fn() }),
   { virtual: true }
 );
@@ -308,7 +302,6 @@ describe("selection", () => {
   it("commits selectedCode and fires FlowAttributeChangeEvent on result click", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -353,7 +346,6 @@ describe("selection", () => {
 describe("focusout behavior", () => {
   it("does not close dropdown when relatedTarget is inside the component", async () => {
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -373,7 +365,6 @@ describe("focusout behavior", () => {
   it("clears results but retains searchTerm when focus leaves the component with no selection", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -464,7 +455,6 @@ describe("handleRetry()", () => {
   it("calls searchIcd10 again after a failed search", async () => {
     jest.useFakeTimers();
     searchIcd10.mockRejectedValue(new Error("API error"));
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -543,7 +533,6 @@ describe("disabled state", () => {
   it("does not re-trigger a search when handleRetry fires while disabled", async () => {
     jest.useFakeTimers();
     searchIcd10.mockRejectedValue(new Error("API error"));
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -570,7 +559,6 @@ describe("disabled state", () => {
   it("does not commit a selection when handleSelect fires while disabled", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -598,7 +586,6 @@ describe("Escape key behavior", () => {
   it("clears results and sets screenReaderStatus to dismissed without clearing searchTerm", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -638,7 +625,6 @@ describe("Enter key behavior", () => {
   it("does not preventDefault or commit a selection when Enter is pressed with no option focused", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -667,7 +653,6 @@ describe("Enter key behavior", () => {
   it("commits the focused option when Enter is pressed with an option focused", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -701,7 +686,6 @@ describe("Enter key behavior", () => {
   it("ignores unhandled keys without changing state", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -732,7 +716,6 @@ describe("ArrowDown keyboard tooltip", () => {
   it("shows a custom tooltip only for the focused option when its text is truncated", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -775,7 +758,6 @@ describe("handleOptionMouseEnter tooltip", () => {
   it("sets the native title attribute to the full label when the option text is truncated", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -802,7 +784,6 @@ describe("handleOptionMouseEnter tooltip", () => {
   it("clears the native title attribute when the option text is not truncated", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -832,7 +813,6 @@ describe("ArrowUp keyboard navigation", () => {
   it("returns focus to the input and clears the active option when ArrowUp is pressed with no option above (keyboard trap regression, Round 5 #8)", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -865,7 +845,6 @@ describe("ArrowUp keyboard navigation", () => {
   it("moves focus up to the previous option (not back to the input) when an option above is available", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -905,7 +884,6 @@ describe("renderedCallback scroll-into-view", () => {
   it("scrolls the list up when the focused option is above the visible area", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -945,7 +923,6 @@ describe("renderedCallback scroll-into-view", () => {
   it("scrolls the list down when the focused option is below the visible area", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -992,7 +969,6 @@ describe("still searching indicator", () => {
         resolveSearch = resolve;
       })
     );
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -1083,7 +1059,6 @@ describe("max char error", () => {
 describe("search request handling", () => {
   it("ignores a stale response when a newer search has already started", async () => {
     jest.useFakeTimers();
-    getIcdLookupConfig.mockResolvedValue(null);
     let resolveFirst;
     searchIcd10.mockImplementationOnce(
       () =>
@@ -1125,7 +1100,6 @@ describe("search request handling", () => {
   it("shows the singular result label when exactly one result is returned", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue([MOCK_RESULTS[0]]);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({});
     await Promise.resolve();
 
@@ -1165,7 +1139,6 @@ describe("search request handling", () => {
 
   it("clamps focus to no-selection and resets truncation when ArrowDown is pressed while results are still loading", async () => {
     jest.useFakeTimers();
-    getIcdLookupConfig.mockResolvedValue(null);
     searchIcd10.mockReturnValue(new Promise(() => {}));
     const el = createElement_icdLookup({});
     await Promise.resolve();
@@ -1237,87 +1210,10 @@ describe("_restoreDescriptionForCode", () => {
   });
 });
 
-describe("config load failure", () => {
-  it("falls back silently with no warning banner when getIcdLookupConfig rejects", async () => {
-    getIcdLookupConfig.mockRejectedValue(new Error("load failed"));
-    const el = createElement_icdLookup({ flowApiName: "Some_Flow" });
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const banner = el.shadowRoot.querySelector(".slds-theme_warning");
-    expect(banner).toBeNull();
-  });
-});
-
-describe("CMT config override (getIcdLookupConfig success)", () => {
-  it("applies fieldPlaceholder and helpText from CMT, and Required__c overrides @api mandatory", async () => {
-    getIcdLookupConfig.mockResolvedValue({
-      Field_Placeholder__c: "Search CMT placeholder",
-      No_Matching_Codes_Found_Message__c: "CMT no results message",
-      Help_Text__c: "CMT help text",
-      Required__c: true
-    });
-    const el = createElement_icdLookup({
-      flowApiName: "Some_Flow",
-      mandatory: false
-    });
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const input = el.shadowRoot.querySelector("input");
-    expect(input.placeholder).toBe("Search CMT placeholder");
-
-    const helptext = el.shadowRoot.querySelector("lightning-helptext");
-    expect(helptext).not.toBeNull();
-    expect(helptext.content).toBe("CMT help text");
-
-    // @api mandatory was false; CMT Required__c=true must take precedence
-    const result = el.validate();
-    expect(result.isValid).toBe(false);
-  });
-
-  it("applies noResultsMessage from CMT config to the rendered no-results message", async () => {
-    jest.useFakeTimers();
-    searchIcd10.mockResolvedValue([]);
-    getIcdLookupConfig.mockResolvedValue({
-      No_Matching_Codes_Found_Message__c: "CMT no results message"
-    });
-    const el = createElement_icdLookup({ flowApiName: "Some_Flow" });
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const input = el.shadowRoot.querySelector("input");
-    input.value = "zzz";
-    input.dispatchEvent(new CustomEvent("input", { bubbles: true }));
-    await Promise.resolve();
-    jest.advanceTimersByTime(500);
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const noResultsEl = el.shadowRoot.querySelector(".no-results-message");
-    expect(noResultsEl.textContent).toBe("CMT no results message");
-    jest.useRealTimers();
-  });
-});
-
 describe("uniquenessKey / sessionStorage persistence", () => {
   it("writes the uncommitted typed value to sessionStorage (debounced alongside the search) when uniquenessKey is set", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({ uniquenessKey: "test-key-1" });
     await Promise.resolve();
 
@@ -1386,7 +1282,6 @@ describe("uniquenessKey / sessionStorage persistence", () => {
   it("persists the committed selection to sessionStorage once one is made", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({ uniquenessKey: "test-key-4" });
     await Promise.resolve();
 
@@ -1464,7 +1359,6 @@ describe("uniquenessKey / sessionStorage persistence", () => {
   it("clears the cached sessionStorage entry when handleClear() runs", async () => {
     jest.useFakeTimers();
     searchIcd10.mockResolvedValue(MOCK_RESULTS);
-    getIcdLookupConfig.mockResolvedValue(null);
     const el = createElement_icdLookup({ uniquenessKey: "test-key-5" });
     await Promise.resolve();
 

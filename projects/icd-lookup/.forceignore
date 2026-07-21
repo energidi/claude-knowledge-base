@@ -12,6 +12,3 @@ package.xml
 **/__tests__/**
 
 node_modules/
-
-# ICD_Lookup__mdt CMDT records are configured live per-org/per-flow - never track or deploy them
-force-app/main/default/customMetadata/ICD_Lookup.*.md-meta.xml

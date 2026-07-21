@@ -1,10 +1,10 @@
 /**
  * @description Unit tests for ICDLookupController. Covers ICD-10 search (success, no results,
- * short/blank/null/long term, 5xx retry, non-200 error) and CMT config retrieval (blank name,
- * unrecognized name). Uses HttpCalloutMock. Note: the CalloutException retry path in searchIcd10
- * is not directly testable via HttpCalloutMock (the framework cannot throw CalloutException from
- * respond()); after the doCallout() restructure, the 5xx retry test covers the same outer retry
- * code path and guards against a third callout being made.
+ * short/blank/null/long term, 5xx retry, non-200 error). Uses HttpCalloutMock. Note: the
+ * CalloutException retry path in searchIcd10 is not directly testable via HttpCalloutMock (the
+ * framework cannot throw CalloutException from respond()); after the doCallout() restructure,
+ * the 5xx retry test covers the same outer retry code path and guards against a third callout
+ * being made.
  */
 @isTest
 private class ICDLookupControllerTest {
@@ -265,24 +265,6 @@ private class ICDLookupControllerTest {
       exceptionThrown,
       'Expected AuraHandledException for non-200 HTTP response'
     );
-  }
-
-  @isTest
-  static void testGetConfigReturnsNullForBlank() {
-    Test.startTest();
-    ICD_Lookup__mdt config = ICDLookupController.getIcdLookupConfig('');
-    Test.stopTest();
-    Assert.isNull(config, 'Expected null for blank automationApiName');
-  }
-
-  @isTest
-  static void testGetConfigReturnsNullForUnrecognizedApiName() {
-    Test.startTest();
-    ICD_Lookup__mdt config = ICDLookupController.getIcdLookupConfig(
-      '__No_Such_Flow_XYZ_Test__'
-    );
-    Test.stopTest();
-    Assert.isNull(config, 'Expected null for unrecognized Flow API name');
   }
 
   @isTest
