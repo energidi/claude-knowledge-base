@@ -111,7 +111,7 @@ Sends a diagnostic email. Recipient and subject are environment-aware:
 
 Sandbox detected via `[SELECT IsSandbox FROM Organization LIMIT 1]`. Email body includes: running user name, email, user ID, profile ID, org name, environment, a `context` string describing which operation failed (e.g. search term length), error type, error message, stack trace, and UTC timestamp. Wrapped in its own try/catch - email failure never suppresses or replaces the original error being reported.
 
-**Named Credential required:** Deploy `NihClinicalTables` Named Credential (`force-app/main/default/namedCredentials/NihClinicalTables.namedCredential-meta.xml`) via `sf project deploy start` before callouts will succeed. The credential points to `https://clinicaltables.nlm.nih.gov` with no authentication (public API).
+**Named Credential required:** Deploy `NihClinicalTables` Named Credential (`force-app/main/default/namedCredentials/NihClinicalTables.namedCredential-meta.xml`) via `sf project deploy start` before callouts will succeed. The credential points to `https://clinicaltables.nlm.nih.gov` with no authentication (public API). This is a legacy (protocol-based) Named Credential - its Setup edit page has no Description field, so a `<description>` metadata element was tried and dropped; don't re-add one.
 
 ICD10-1 is mandatory for Insurance Billing. ICD10-2 through ICD10-5 are optional. Enforce this via Flow validation rules on the Flow screens, not inside the component.
 
